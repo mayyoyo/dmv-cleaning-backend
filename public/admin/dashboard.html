@@ -6,89 +6,41 @@
 
 <title>Admin Dashboard</title>
 
-<link rel="stylesheet" href="../css/admin-dashboard.css">
-<link rel="stylesheet" href="css/admin.css">
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="/socket.io/socket.io.js"></script>
+<link rel="stylesheet" href="dashboard.css">
 
 </head>
 
 <body>
 
-<div class="dashboard">
+<header>🔥 Live Admin Dashboard</header>
 
-  <h1>📊 Admin Revenue Dashboard</h1>
+<div class="container">
 
-  <div class="card">
-    <canvas id="revenueChart"></canvas>
+  <div class="stats">
+
+    <div class="card">
+      <h3>Bookings</h3>
+      <h2 id="bookings">0</h2>
+    </div>
+
+    <div class="card">
+      <h3>Revenue</h3>
+      <h2 id="revenue">$0</h2>
+    </div>
+
   </div>
 
-  <!-- FILTER + EXPORT BUTTONS -->
-  <div style="margin-top:10px;">
-    <button onclick="loadData('today')">Today</button>
-    <button onclick="loadData('week')">Week</button>
-    <button onclick="loadData('month')">Month</button>
-    <button onclick="exportPDF()">Export PDF</button>
+  <div class="card">
+    <h3>Actions</h3>
+
+    <button class="btn-blue" onclick="testBooking()">Test Booking</button>
+    <button class="btn-green" onclick="testPayment()">Test Payment</button>
   </div>
 
 </div>
 
-<script>
-const socket = io();
-
-let chart;
-
-/* =======================
-   RENDER CHART
-======================= */
-function renderChart(data) {
-
-  if (chart) chart.destroy();
-
-  chart = new Chart(document.getElementById("revenueChart"), {
-    type: "bar",
-    data: {
-      labels: ["Deposit", "Remaining", "Total Profit"],
-      datasets: [{
-        data: [
-          data.depositRevenue,
-          data.remainingRevenue,
-          data.totalRevenue
-        ]
-      }]
-    }
-  });
-}
-
-/* =======================
-   INITIAL LOAD
-======================= */
-fetch("/api/dashboard")
-  .then(res => res.json())
-  .then(renderChart);
-
-/* =======================
-   LIVE SOCKET UPDATES
-======================= */
-socket.on("dashboard-update", renderChart);
-
-/* =======================
-   FILTER (SAFE PLACEHOLDER)
-======================= */
-function loadData(type) {
-  fetch("/api/dashboard")
-    .then(res => res.json())
-    .then(renderChart);
-}
-
-/* =======================
-   EXPORT PDF
-======================= */
-function exportPDF() {
-  window.print();
-}
-</script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<script src="dashboard.js"></script>
 
 </body>
 </html>
