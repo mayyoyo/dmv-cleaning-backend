@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Invoice</title>
+<style>
+body { font-family: Arial; padding:40px;}
+.invoice { border:1px solid #ccc; padding:20px;}
+</style>
+</head>
+<body>
+
+<div class="invoice" id="invoice"></div>
+
+<script>
+const booking = JSON.parse(localStorage.getItem("lastBooking"));
+
+document.getElementById("invoice").innerHTML = `
+<h2>Invoice</h2>
+<p>Name: ${booking.name}</p>
+<p>Service: ${booking.service}</p>
+<p>Date: ${booking.date}</p>
+<p>Time: ${booking.timeSlot}</p>
+<p>Total: $${booking.total}</p>
+`;
+</script>
+
+</body>
+</html>

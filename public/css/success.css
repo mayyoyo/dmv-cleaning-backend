@@ -1,0 +1,105 @@
+/* ================= SUCCESS PAGE (MATCH HOME PAGE STYLE) ================= */
+
+body {
+  margin: 0;
+  background: #0b1220;
+  color: #e5e7eb;
+  font-family: Arial;
+  animation: fadeIn 0.5s ease;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+@keyframes fadeIn {
+  from {opacity: 0; transform: translateY(10px);}
+  to {opacity: 1; transform: translateY(0);}
+}
+
+/* ================= RECEIPT CARD ================= */
+
+.receipt-card {
+  background: #111a2e; /* same as your cards */
+  padding: 25px;
+  border-radius: 14px;
+  width: 380px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  text-align: center;
+  border: 1px solid #1f2a44;
+}
+
+/* ================= HEADER ================= */
+
+.business-header h1 {
+  font-size: 18px;
+  margin-bottom: 5px;
+  color: #ffffff;
+}
+
+.business-header p {
+  font-size: 14px;
+  color: #cbd5e1;
+}
+
+/* ================= RECEIPT CONTENT ================= */
+
+.section {
+  text-align: left;
+  margin: 12px 0;
+}
+
+.section p {
+  margin: 6px 0;
+  font-size: 14px;
+  color: #e5e7eb;
+}
+
+/* ================= DIVIDER ================= */
+
+hr {
+  border: none;
+  border-top: 1px solid #1f2a44;
+  margin: 12px 0;
+}
+
+/* ================= TITLE ================= */
+
+h2 {
+  color: #3b82f6;
+  margin-bottom: 10px;
+}
+
+/* ================= BUTTONS ================= */
+
+.buttons {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  cursor: pointer;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4f46e5, #3b82f6);
+  color: white;
+  font-size: 14px;
+  transition: 0.2s ease;
+}
+
+button:hover {
+  transform: scale(1.03);
+}
+
+/* ================= MOBILE ================= */
+
+@media (max-width: 768px) {
+  .receipt-card {
+    width: 90%;
+  }
+}

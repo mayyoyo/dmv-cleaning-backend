@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Admin Login</title>
+<style>
+body { font-family: Arial; background:#f4f4f4; display:flex; justify-content:center; align-items:center; height:100vh;}
+.box { background:white; padding:30px; width:300px; border-radius:10px;}
+input, button { width:100%; padding:10px; margin:10px 0;}
+</style>
+</head>
+
+<body>
+
+<div class="box">
+<h2>🔐 Admin Login</h2>
+
+<input id="email" placeholder="Email">
+<input id="password" type="password" placeholder="Password">
+
+<button onclick="login()">Login</button>
+
+<p id="msg"></p>
+</div>
+
+<script>
+const API = "http://127.0.0.1:3006";
+
+async function login() {
+  const email = document.getElementById("email").value;
+  const password = document.getElementById("password").value;
+
+  try {
+    const res = await fetch(API + "/api/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      localStorage.setItem("admin", "true");
+      window.location.href = "dashboard.html";
+    } else {
+      document.getElementById("msg").innerText = "Invalid login";
+    }
+
+  } catch (err) {
+    document.getElementById("msg").innerText = "Server error";
+  }
+}
+</script>
+
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Admin Dashboard</title>
+
+<link rel="stylesheet" href="../css/admin-dashboard.css">
+<link rel="stylesheet" href="css/admin.css">
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/socket.io/socket.io.js"></script>
+
+</head>
+
+<body>
+
+<div class="dashboard">
+
+  <h1>📊 Admin Revenue Dashboard</h1>
+
+  <div class="card">
+    <canvas id="revenueChart"></canvas>
+  </div>
+
+  <!-- FILTER + EXPORT BUTTONS -->
+  <div style="margin-top:10px;">
+    <button onclick="loadData('today')">Today</button>
+    <button onclick="loadData('week')">Week</button>
+    <button onclick="loadData('month')">Month</button>
+    <button onclick="exportPDF()">Export PDF</button>
+  </div>
+
+</div>
+
+<script>
+const socket = io();
+
+let chart;
+
+/* =======================
+   RENDER CHART
+======================= */
+function renderChart(data) {
+
+  if (chart) chart.destroy();
+
+  chart = new Chart(document.getElementById("revenueChart"), {
+    type: "bar",
+    data: {
+      labels: ["Deposit", "Remaining", "Total Profit"],
+      datasets: [{
+        data: [
+          data.depositRevenue,
+          data.remainingRevenue,
+          data.totalRevenue
+        ]
+      }]
+    }
+  });
+}
+
+/* =======================
+   INITIAL LOAD
+======================= */
+fetch("/api/dashboard")
+  .then(res => res.json())
+  .then(renderChart);
+
+/* =======================
+   LIVE SOCKET UPDATES
+======================= */
+socket.on("dashboard-update", renderChart);
+
+/* =======================
+   FILTER (SAFE PLACEHOLDER)
+======================= */
+function loadData(type) {
+  fetch("/api/dashboard")
+    .then(res => res.json())
+    .then(renderChart);
+}
+
+/* =======================
+   EXPORT PDF
+======================= */
+function exportPDF() {
+  window.print();
+}
+</script>
+
+</body>
+</html>

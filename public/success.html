@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Receipt - Booking Confirmed</title>
+
+<link rel="stylesheet" href="css/success.css">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+.receipt-card {
+  max-width: 600px;
+  margin: auto;
+  padding: 20px;
+}
+
+.status {
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: white;
+  display: inline-block;
+  margin-top: 10px;
+}
+
+.paid { background: green; }
+.pending { background: orange; }
+</style>
+
+</head>
+
+<body>
+
+<div class="receipt-card" id="receipt">
+
+  <h1>🧼 DMV Cleaning Services LLC</h1>
+  <h2>✔ Booking Receipt</h2>
+
+  <div>
+    <b>Status:</b> <span id="statusBadge" class="status"></span>
+  </div>
+
+  <hr>
+
+  <p><b>Name:</b> <span id="name"></span></p>
+  <p><b>Email:</b> <span id="email"></span></p>
+  <p><b>Service:</b> <span id="service"></span></p>
+  <p><b>Date:</b> <span id="date"></span></p>
+  <p><b>Time:</b> <span id="time"></span></p>
+  <p><b>Total:</b> $<span id="total"></span></p>
+
+  <hr>
+
+<button onclick="downloadPDF()">🧾 Download PDF</button> <button onclick="window.print()">🖨 Print</button>
+
+</div>
+
+<script>
+const API = window.location.origin;
+
+/* GET BOOKING ID */
+const params = new URLSearchParams(window.location.search);
+const bookingId = params.get("bookingId");
+
+async function loadBooking() {
+
+  if (!bookingId) {
+    document.body.innerHTML = "<h2>Missing booking ID ❌</h2>";
+    return;
+  }
+
+  try {
+    const res = await fetch(API + "/api/admin-bookings");
+    const bookings = await res.json();
+
+    const booking = bookings.find(b => b._id === bookingId);
+
+    if (!booking) {
+      document.body.innerHTML = "<h2>Booking not found ❌</h2>";
+      return;
+    }
+
+    const badge = document.getElementById("statusBadge");
+
+    if (booking.paid) {
+      badge.innerText = "PAID";
+      badge.classList.add("paid");
+    } else {
+      badge.innerText = "PENDING";
+      badge.classList.add("pending");
+    }
+
+    document.getElementById("name").innerText = booking.customer.name;
+    document.getElementById("email").innerText = booking.customer.email;
+    document.getElementById("service").innerText = booking.customer.service;
+    document.getElementById("date").innerText = booking.date;
+    document.getElementById("time").innerText = booking.timeSlot;
+    document.getElementById("total").innerText = booking.total;
+
+  } catch (err) {
+    console.error(err);
+    document.body.innerHTML = "<h2>Error loading booking ❌</h2>";
+  }
+}
+
+loadBooking();
+
+/* PDF */
+function downloadPDF() {
+  const element = document.getElementById("receipt");
+  html2pdf().from(element).save("receipt.pdf");
+}
+</script>
+
+</body>
+</html>

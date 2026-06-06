@@ -1,0 +1,80 @@
+body {
+  font-family: Arial, sans-serif;
+  background: #0f172a;
+  color: white;
+  margin: 0;
+}
+
+/* HEADER */
+.header {
+  padding: 20px;
+  background: #111827;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* CONTAINER */
+.container {
+  padding: 20px;
+}
+
+/* BOOKING CARD */
+.card {
+  background: #1e293b;
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid #334155;
+}
+
+/* BUTTONS */
+button {
+  margin: 5px;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+/* EDIT BUTTON */
+.edit {
+  background: #3b82f6;
+  color: white;
+}
+
+.edit:hover {
+  background: #2563eb;
+}
+
+/* DELETE BUTTON */
+.delete {
+  background: #ef4444;
+  color: white;
+}
+
+.delete:hover {
+  background: #dc2626;
+}
+
+/* =========================
+   DASHBOARD (SAFE ADD-ON)
+========================= */
+
+.dashboard {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.dashboard h1 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+/* Chart size fix (important for Chart.js) */
+canvas {
+  width: 100% !important;
+  height: 400px !important;
+}
