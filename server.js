@@ -4,12 +4,21 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 // ================== APP INIT ==================
 const app = express();
 
-// ================== STRIPE WEBHOOK (MUST BE FIRST) ==================
+// ================== MIDDLEWARE ==================
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+
+// static files
+app.use(express.static(path.join(__dirname, "public")));
+
+// ================== STRIPE WEBHOOK (FIRST) ==================
 app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
   const sig = req.headers["stripe-signature"];
 
@@ -21,9 +30,7 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
     );
 
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-
-      console.log("✅ Payment received:", session.id);
+      console.log("✅ Payment received:", event.data.object.id);
     }
 
     res.json({ received: true });
@@ -33,36 +40,24 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
   }
 });
 
-// ================== MIDDLEWARE ==================
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-// ================== STATIC FILES ==================
-app.use(express.static(path.join(__dirname, "public")));
-
-// ================== PORT ==================
-const PORT = process.env.PORT || 3000;
-
-// ================== DASHBOARD ROUTE ==================
-app.get("/dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
-});
-
-// ================== AUTH MIDDLEWARE ==================
+// ================== AUTH (COOKIE SYSTEM) ==================
 function auth(req, res, next) {
-  const token = req.headers.authorization;
+  const token = req.cookies.token;
 
-  if (!token) return res.status(401).send("Unauthorized");
+  if (!token) {
+    return res.redirect("/login.html");
+  }
 
   try {
     jwt.verify(token, process.env.JWT_SECRET);
     next();
   } catch {
-    res.status(403).send("Invalid token");
+    res.clearCookie("token");
+    return res.redirect("/login.html");
   }
 }
 
-// ================== ADMIN LOGIN ==================
+// ================== LOGIN ==================
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -74,38 +69,115 @@ app.post("/api/admin/login", (req, res) => {
       expiresIn: "2h",
     });
 
-    return res.json({ token });
+    // 🔥 COOKIE LOGIN (SAAS LEVEL)
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+    });
+
+    return res.json({ success: true });
   }
 
-  res.status(401).send("Invalid credentials");
+  res.status(401).json({ success: false });
 });
 
-// ================== PROTECTED ADMIN DATA ==================
-app.get("/api/admin/data", auth, (req, res) => {
-  res.json({ message: "Secure dashboard data" });
+// ================== PROTECTED DASHBOARD ==================
+app.get("/dashboard", auth, (req, res) => {
+  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-// ================== STRIPE CHECKOUT (FIXED 10% DEPOSIT) ==================
+// ================== LOGOUT ==================
+app.get("/logout", (req, res) => {
+  res.clearCookie("token");
+  res.redirect("/login.html");
+});
+
+// ================== DASHBOARD DATA (REAL PROFIT) ==================
+app.get("/api/dashboard", auth, async (req, res) => {
+  const bookings = await require("./models/Booking").find();
+
+  let depositRevenue = 0;
+  let remainingRevenue = 0;
+  let expenses = 0;
+
+  bookings.forEach(b => {
+    depositRevenue += b.depositAmount || 0;
+
+    if (b.remainingPaid) {
+      remainingRevenue += (b.total - (b.depositAmount || 0));
+    }
+
+    expenses += b.expenses || 0;
+  });
+
+  const profit = (depositRevenue + remainingRevenue) - expenses;
+
+  res.json({
+    depositRevenue,
+    remainingRevenue,
+    expenses,
+    profit
+  });
+});
+
+// ================== LIVE DASHBOARD (SOCKET UPDATE) ==================
+setInterval(async () => {
+  const bookings = await require("./models/Booking").find();
+
+  let depositRevenue = 0;
+  let remainingRevenue = 0;
+  let expenses = 0;
+
+  bookings.forEach(b => {
+    depositRevenue += b.depositAmount || 0;
+
+    if (b.remainingPaid) {
+      remainingRevenue += (b.total - (b.depositAmount || 0));
+    }
+
+    expenses += b.expenses || 0;
+  });
+
+  const profit = (depositRevenue + remainingRevenue) - expenses;
+
+  io.emit("dashboard-update", {
+    depositRevenue,
+    remainingRevenue,
+    expenses,
+    profit
+  });
+
+}, 10000);
+
+// ================== MONTHLY GRAPH FIX ==================
+app.get("/api/revenue-monthly", auth, async (req, res) => {
+  const data = await require("./models/Booking").aggregate([
+    {
+      $group: {
+        _id: { $substr: ["$date", 0, 7] },
+        total: { $sum: "$total" }
+      }
+    },
+    { $sort: { _id: 1 } }
+  ]);
+
+  res.json(data);
+});
+
+// ================== STRIPE CHECKOUT ==================
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     let { amount, bookingId } = req.body;
 
-    // FORCE CLEAN NUMBER
     const total = Number(amount);
 
     if (isNaN(total)) {
       return res.status(400).json({ error: "Invalid amount" });
     }
 
-    // 10% deposit
     const deposit = total * 0.10;
-
-    // convert to cents ONCE
     const depositInCents = Math.round(deposit * 100);
-
-    console.log("TOTAL:", total);
-    console.log("DEPOSIT:", deposit);
-    console.log("CENTS:", depositInCents);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -141,12 +213,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-// ================== TEST ROUTE ==================
-app.get("/api", (req, res) => {
-  res.send("✅ API working");
-});
+// ================== START ==================
+const PORT = process.env.PORT || 3000;
 
-// ================== START SERVER ==================
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log("🚀 SaaS Server running on", PORT);
 });
