@@ -1,53 +1,49 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Admin Login</title>
-<style>
-body { font-family: Arial; background:#f4f4f4; display:flex; justify-content:center; align-items:center; height:100vh;}
-.box { background:white; padding:30px; width:300px; border-radius:10px;}
-input, button { width:100%; padding:10px; margin:10px 0;}
-</style>
+
+<link rel="stylesheet" href="../css/admin-login.css">
 </head>
 
 <body>
 
-<div class="box">
-<h2>🔐 Admin Login</h2>
+<div class="login-container">
+  <div class="login-box">
 
-<input id="email" placeholder="Email">
-<input id="password" type="password" placeholder="Password">
+    <h2>Admin Login</h2>
 
-<button onclick="login()">Login</button>
+    <input id="user" placeholder="Username">
+    <input id="pass" type="password" placeholder="Password">
 
-<p id="msg"></p>
+    <button onclick="login()">Login</button>
+
+    <a href="/admin/forgot-password.html">Forgot Password?</a>
+
+  </div>
 </div>
 
 <script>
-const API = "http://127.0.0.1:3006";
-
-async function login() {
-  const email = document.getElementById("email").value;
-  const password = document.getElementById("password").value;
-
-  try {
-    const res = await fetch(API + "/api/admin-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password })
-    });
-
-    const data = await res.json();
-
+function login() {
+  fetch("/api/admin/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: document.getElementById("user").value,
+      password: document.getElementById("pass").value
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
     if (data.success) {
-      localStorage.setItem("admin", "true");
-      window.location.href = "dashboard.html";
+      window.location.href = "/dashboard";
     } else {
-      document.getElementById("msg").innerText = "Invalid login";
+      alert("Login failed");
     }
-
-  } catch (err) {
-    document.getElementById("msg").innerText = "Server error";
-  }
+  });
 }
 </script>
 

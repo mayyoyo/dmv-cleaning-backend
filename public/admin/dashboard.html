@@ -7,14 +7,27 @@
 <title>Admin Dashboard</title>
 
 <link rel="stylesheet" href="../css/admin-dashboard.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 </head>
 
-<body>
+<body class="dark">
 
-<header>🔥 Live Admin Dashboard</header>
+<!-- SIDEBAR -->
+<div class="sidebar" id="sidebar">
+  <h2>DMV Admin</h2>
 
-<div class="container">
+  <a href="#">Dashboard</a>
+  <a href="#">Bookings</a>
+  <a href="#">Revenue</a>
+
+  <button onclick="toggleSidebar()">☰ Collapse</button>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="main">
+
+  <h1>🔥 SaaS Dashboard V6</h1>
 
   <div class="stats">
 
@@ -28,19 +41,29 @@
       <h2 id="revenue">$0</h2>
     </div>
 
+    <div class="card">
+      <h3>Profit</h3>
+      <h2 id="profit">$0</h2>
+    </div>
+
   </div>
 
   <div class="card">
-    <h3>Actions</h3>
-
-    <button class="btn-blue" onclick="testBooking()">Test Booking</button>
-    <button class="btn-green" onclick="testPayment()">Test Payment</button>
+    <canvas id="revenueChart"></canvas>
   </div>
 
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script src="dashboard.js"></script>
+<script src="/dashboard.js"></script>
+
+<!-- SIDEBAR ANIMATION -->
+<script>
+function toggleSidebar() {
+  document.getElementById("sidebar").classList.toggle("collapsed");
+  document.getElementById("main").classList.toggle("expanded");
+}
+</script>
 
 </body>
 </html>

@@ -1,56 +1,51 @@
 body {
-  font-family: Arial, sans-serif;
-  /* background: #111; */
-    background: #0b1220;
-  color: #fff;
   margin: 0;
-  padding: 0;
+  font-family: Arial;
+  transition: 0.3s;
 }
 
-header {
-  background: #1f1f1f;
+/* SIDEBAR */
+.sidebar {
+  width: 220px;
+  height: 100vh;
+  background: #111;
+  position: fixed;
+  left: 0;
+  top: 0;
+  color: white;
   padding: 20px;
-  font-size: 22px;
-  font-weight: bold;
-  text-align: center;
+  transition: 0.3s;
 }
 
-.container {
-  max-width: 900px;
-  margin: auto;
+/* COLLAPSED SIDEBAR */
+.sidebar.collapsed {
+  width: 70px;
+}
+
+/* MAIN */
+.main {
+  margin-left: 240px;
   padding: 20px;
+  transition: 0.3s;
 }
 
+/* SHIFT WHEN COLLAPSED */
+.main.expanded {
+  margin-left: 90px;
+}
+
+/* CARDS */
 .card {
   background: #1e1e1e;
   padding: 20px;
   margin: 15px 0;
-  border-radius: 12px;
-  text-align: center;
-  box-shadow: 0 0 10px rgba(0,0,0,0.3);
+  border-radius: 10px;
+  color: white;
 }
 
+/* GRID */
 .stats {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 15px;
-}
-
-button {
-  padding: 12px 18px;
-  margin: 10px 5px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.btn-blue {
-  background: #3498db;
-  color: white;
-}
-
-.btn-green {
-  background: #2ecc71;
-  color: white;
 }

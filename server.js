@@ -1,36 +1,31 @@
+```javascript
 require("dotenv").config();
 
 const express = require("express");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
+const nodemailer = require("nodemailer");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
-const http = require("http");
-const { Server } = require("socket.io");
-
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, {
-  cors: { origin: "*" }
-});
 
 // ================== MIDDLEWARE ==================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
 
-// ================== SOCKET ==================
-io.on("connection", (socket) => {
-  console.log("⚡ Client connected");
-
-  socket.on("disconnect", () => {
-    console.log("❌ Client disconnected");
-  });
+// ⚠️ IMPORTANT: allow cross-domain (IONOS → Render)
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", process.env.FRONTEND_URL || "*");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  next();
 });
 
-// ================== STRIPE WEBHOOK (MUST BE FIRST LOGIC) ==================
+app.use(express.static(path.join(__dirname, "public")));
+
+// ================== STRIPE WEBHOOK ==================
 app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
   const sig = req.headers["stripe-signature"];
 
@@ -43,43 +38,39 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
-
-      console.log("💰 Payment success:", session.id);
-
-      io.emit("payment-success", {
-        amount: session.amount_total / 100
-      });
+      console.log("✅ Payment received:", session.id);
     }
 
     res.json({ received: true });
 
   } catch (err) {
-    console.log("Webhook error:", err.message);
-    res.status(400).send("Webhook error");
+    console.log("❌ Webhook error:", err.message);
+    res.status(400).send(err.message);
   }
 });
 
-// ================== DASHBOARD ROUTE (SECURED) ==================
+// ================== AUTH MIDDLEWARE ==================
 function auth(req, res, next) {
   const token = req.cookies.token;
 
-  if (!token) return res.redirect("/login.html");
+  if (!token) return res.status(401).json({ error: "Not logged in" });
 
   try {
-    const verified = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = verified;
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.role !== "admin") {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    req.user = decoded;
     next();
+
   } catch {
-    return res.redirect("/login.html");
+    return res.status(401).json({ error: "Invalid session" });
   }
 }
 
-// 🔐 PROTECTED DASHBOARD
-app.get("/dashboard", auth, (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
-});
-
-// ================== ADMIN LOGIN (COOKIE SESSION) ==================
+// ================== ADMIN LOGIN ==================
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -87,96 +78,118 @@ app.post("/api/admin/login", (req, res) => {
     username === process.env.ADMIN_USER &&
     password === process.env.ADMIN_PASS
   ) {
-    const token = jwt.sign({ username }, process.env.JWT_SECRET, {
-      expiresIn: "2h"
-    });
+    const token = jwt.sign(
+      { user: username, role: "admin" },
+      process.env.JWT_SECRET,
+      { expiresIn: "2h" }
+    );
 
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,
-      sameSite: "strict"
+      secure: true,          // REQUIRED on Render (HTTPS)
+      sameSite: "none"       // REQUIRED for cross-domain (IONOS)
     });
 
     return res.json({ success: true });
   }
 
-  res.status(401).json({ success: false });
+  res.status(401).json({ error: "Invalid credentials" });
 });
 
-// ================== STRIPE CHECKOUT (FIXED 10% SAFE VERSION) ==================
-app.post("/api/create-checkout-session", async (req, res) => {
-  try {
-    let { amount, bookingId } = req.body;
-
-    const total = Number(amount);
-    if (isNaN(total)) return res.status(400).json({ error: "Invalid amount" });
-
-    const deposit = total * 0.10;
-    const depositInCents = Math.round(deposit * 100);
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-
-      metadata: {
-        bookingId,
-        type: "deposit"
-      },
-
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: "Cleaning Deposit (10%)"
-            },
-            unit_amount: depositInCents
-          },
-          quantity: 1
-        }
-      ],
-
-      success_url: `${process.env.DOMAIN}/success.html`,
-      cancel_url: `${process.env.DOMAIN}/cancel.html`
-    });
-
-    res.json({ url: session.url });
-
-  } catch (err) {
-    console.log("Stripe error:", err.message);
-    res.status(500).json({ error: err.message });
-  }
+// ================== LOGOUT ==================
+app.post("/api/admin/logout", (req, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none"
+  });
+  res.json({ success: true });
 });
 
-// ================== MONTHLY REVENUE GRAPH API ==================
-app.get("/api/revenue-monthly", (req, res) => {
-  res.json([
-    { month: "Jan", revenue: 1200 },
-    { month: "Feb", revenue: 1800 },
-    { month: "Mar", revenue: 2400 }
-  ]);
-});
-
-// ================== DASHBOARD STATS (REAL TIME READY) ==================
-app.get("/api/dashboard", (req, res) => {
+// ================== DASHBOARD API ==================
+app.get("/api/dashboard", auth, (req, res) => {
   res.json({
-    depositRevenue: 1000,
-    remainingRevenue: 500,
-    expenses: 200,
-    profit: 1300
+    totalBookings: 25,
+    totalCustomers: 18,
+    totalProfit: 1250,
+    depositRevenue: 600
   });
 });
 
-// ================== EMAIL HOOK (READY FOR NODEMAILER) ==================
-app.post("/api/send-email", (req, res) => {
-  console.log("📧 Email trigger:", req.body);
+// ================== PROTECTED PAGE ==================
+app.get("/dashboard", auth, (req, res) => {
+  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
+});
 
-  res.json({ success: true });
+// ================== EMAIL SETUP ==================
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+// ================== FORGOT PASSWORD ==================
+app.post("/api/admin/forgot-password", async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const token = jwt.sign(
+      { email },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    const resetLink = `${process.env.FRONTEND_URL}/admin/reset-password.html?token=${token}`;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: "Password Reset",
+      html: `
+        <h2>Reset Password</h2>
+        <p>Click below:</p>
+        <a href="${resetLink}">Reset Password</a>
+      `
+    });
+
+    res.json({ message: "Reset email sent" });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Email failed" });
+  }
+});
+
+// ================== RESET PASSWORD ==================
+app.post("/api/admin/reset-password", (req, res) => {
+  const { token, newPassword } = req.body;
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    if (decoded.email === process.env.ADMIN_EMAIL) {
+      process.env.ADMIN_PASS = newPassword;
+      return res.json({ message: "Password updated" });
+    }
+
+    res.status(400).json({ error: "Invalid token" });
+
+  } catch {
+    res.status(400).json({ error: "Expired token" });
+  }
+});
+
+// ================== TEST API ==================
+app.get("/api", (req, res) => {
+  res.send("✅ API Working");
 });
 
 // ================== START SERVER ==================
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log("🚀 SaaS Server running on", PORT);
+app.listen(PORT, () => {
+  console.log("🚀 Server running on port " + PORT);
 });
+```
