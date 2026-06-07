@@ -1,5 +1,5 @@
 {
-  "name": "dmv7",
+  "name": "my-dmv-backend",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
