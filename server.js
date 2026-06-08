@@ -1,6 +1,5 @@
 
-// VERSION 2 FIX
-console.log("🚀 THIS IS THE NEW SERVER FILE RUNNING");
+console.log("🚀 SERVER STARTING...");
 
 require("dotenv").config();
 
@@ -11,12 +10,12 @@ const cookieParser = require("cookie-parser");
 
 const app = express();
 
-// ================== MIDDLEWARE ==================
+// ================== SAFE MIDDLEWARE ==================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS (SAFE + FIXED) ==================
+// ================== CORS (RENDER SAFE) ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -34,14 +33,12 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
+  if (req.method === "OPTIONS") return res.sendStatus(200);
 
   next();
 });
 
-// ================== TEST ==================
+// ================== TEST ROUTE ==================
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
@@ -50,11 +47,6 @@ app.get("/api", (req, res) => {
 app.post("/api/admin/login", (req, res) => {
   try {
     const { username, password } = req.body;
-
-    if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS || !process.env.JWT_SECRET) {
-      console.error("❌ Missing ENV");
-      return res.status(500).json({ error: "Server config error" });
-    }
 
     if (
       username === process.env.ADMIN_USER &&
@@ -79,7 +71,7 @@ app.post("/api/admin/login", (req, res) => {
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    return res.status(500).json({ error: "Server error ❌" });
+    return res.status(500).json({ error: "Server error" });
   }
 });
 
@@ -120,10 +112,10 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
-// ================== STATIC ==================
+// ================== STATIC FILES ==================
 app.use(express.static(path.join(__dirname, "public")));
 
-// ================== START ==================
+// ================== RENDER FIX (IMPORTANT) ==================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
