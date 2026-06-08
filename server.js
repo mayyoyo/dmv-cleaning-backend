@@ -16,7 +16,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS (FINAL FIX) ==================
+// ================== CORS ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -44,7 +44,7 @@ app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
 
-// ================== LOGIN (FINAL CLEAN VERSION) ==================
+// ================== LOGIN ==================
 app.post("/api/admin/login", (req, res) => {
   try {
     const { username, password } = req.body;
@@ -120,7 +120,6 @@ app.get("/api/admin/logout", (req, res) => {
 // ================== BOOKINGS ==================
 let bookings = [];
 
-// SIMPLE BOOKING (NO PAYMENT SYSTEM)
 app.post("/api/book", (req, res) => {
   const booking = {
     id: Date.now(),
