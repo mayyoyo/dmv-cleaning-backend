@@ -1,4 +1,3 @@
-
 console.log("🚀 SERVER STARTING...");
 
 require("dotenv").config();
@@ -15,7 +14,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS ==================
+// ================== CORS FIX (PRODUCTION SAFE) ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -25,7 +24,7 @@ const allowedOrigins = [
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (origin && allowedOrigins.includes(origin)) {
+  if (allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
@@ -33,19 +32,17 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
+  if (req.method === "OPTIONS") return res.sendStatus(200);
 
   next();
 });
 
-// ================== TEST API ==================
+// ================== TEST ROUTE ==================
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
 
-// ================== LOGIN ==================
+// ================== LOGIN ROUTE ==================
 app.post("/api/admin/login", (req, res) => {
   try {
     const { username, password } = req.body;
@@ -77,7 +74,7 @@ app.post("/api/admin/login", (req, res) => {
   }
 });
 
-// ================== AUTH ==================
+// ================== AUTH MIDDLEWARE ==================
 function auth(req, res, next) {
   try {
     const token = req.cookies.token;
@@ -94,7 +91,7 @@ function auth(req, res, next) {
   }
 }
 
-// ================== DASHBOARD ==================
+// ================== DASHBOARD (PROTECTED) ==================
 app.get("/api/dashboard", auth, (req, res) => {
   res.json({
     totalBookings: 25,
@@ -114,10 +111,10 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
-// ================== BOOKINGS (ADMIN STORAGE) ==================
+// ================== BOOKINGS (NO PAYMENT SYSTEM) ==================
 let bookings = [];
 
-app.post("/api/bookings", (req, res) => {
+app.post("/api/book", (req, res) => {
   try {
     const booking = {
       id: Date.now(),
@@ -129,26 +126,16 @@ app.post("/api/bookings", (req, res) => {
 
     console.log("📩 New Booking:", booking);
 
-    res.json({
-      success: true,
-      message: "Booking received"
-    });
+    res.json({ success: true });
 
   } catch (err) {
-    console.error("BOOKING ERROR:", err);
-    res.status(500).json({ error: "Failed to save booking" });
+    console.error(err);
+    res.status(500).json({ error: "Booking failed" });
   }
 });
 
-// ================== GET BOOKINGS (ADMIN PANEL) ==================
 app.get("/api/bookings", (req, res) => {
   res.json(bookings);
-});
-
-// ================== FRONTEND COMPATIBILITY ROUTE ==================
-app.post("/api/book", (req, res) => {
-  console.log("📩 Booking (legacy route):", req.body);
-  res.json({ success: true });
 });
 
 // ================== STATIC FILES ==================
@@ -160,4 +147,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("✅ Server running on port " + PORT);
 });
-```
