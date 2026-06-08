@@ -15,6 +15,20 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// ================== CORS FIX (IMPORTANT FOR IONOS + RENDER) ==================
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "https://mydmvcleaningservice.com");
+  res.header("Access-Control-Allow-Credentials", "true");
+  res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
 // ================== TEST API ==================
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
