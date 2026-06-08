@@ -1,3 +1,5 @@
+
+
 console.log("🚀 SERVER STARTING...");
 
 require("dotenv").config();
@@ -14,7 +16,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS FIX (PRODUCTION SAFE) ==================
+// ================== CORS (FINAL FIX) ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -37,15 +39,19 @@ app.use((req, res, next) => {
   next();
 });
 
-// ================== TEST ROUTE ==================
+// ================== TEST API ==================
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
 
-// ================== LOGIN ROUTE ==================
+// ================== LOGIN (FINAL CLEAN VERSION) ==================
 app.post("/api/admin/login", (req, res) => {
   try {
     const { username, password } = req.body;
+
+    if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS) {
+      return res.status(500).json({ error: "ENV missing" });
+    }
 
     if (
       username === process.env.ADMIN_USER &&
@@ -74,7 +80,7 @@ app.post("/api/admin/login", (req, res) => {
   }
 });
 
-// ================== AUTH MIDDLEWARE ==================
+// ================== AUTH ==================
 function auth(req, res, next) {
   try {
     const token = req.cookies.token;
@@ -91,7 +97,7 @@ function auth(req, res, next) {
   }
 }
 
-// ================== DASHBOARD (PROTECTED) ==================
+// ================== DASHBOARD ==================
 app.get("/api/dashboard", auth, (req, res) => {
   res.json({
     totalBookings: 25,
@@ -111,27 +117,22 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
-// ================== BOOKINGS (NO PAYMENT SYSTEM) ==================
+// ================== BOOKINGS ==================
 let bookings = [];
 
+// SIMPLE BOOKING (NO PAYMENT SYSTEM)
 app.post("/api/book", (req, res) => {
-  try {
-    const booking = {
-      id: Date.now(),
-      ...req.body,
-      createdAt: new Date()
-    };
+  const booking = {
+    id: Date.now(),
+    ...req.body,
+    createdAt: new Date()
+  };
 
-    bookings.push(booking);
+  bookings.push(booking);
 
-    console.log("📩 New Booking:", booking);
+  console.log("📩 Booking received:", booking);
 
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Booking failed" });
-  }
+  res.json({ success: true });
 });
 
 app.get("/api/bookings", (req, res) => {
@@ -147,3 +148,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("✅ Server running on port " + PORT);
 });
+```
