@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -15,7 +16,6 @@
 <body>
 
 <!-- ================= NAVBAR ================= -->
-
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
 
@@ -24,48 +24,45 @@
     <a href="booking.html">Booking</a>
   </nav>
 
-<a class="back-btn" href="index.html">⬅ Back</a>
-
+  <a class="back-btn" href="index.html">⬅ Back</a>
 </header>
 
 <!-- ================= BOOKING ================= -->
-
 <section class="booking-page">
   <div class="booking-card">
 
-<h2>📅 Book Cleaning Service</h2>
+    <h2>📅 Book Cleaning Service</h2>
 
-<div id="calendar"></div>
+    <div id="calendar"></div>
 
-<p id="selectedDate">No date selected</p>
+    <p id="selectedDate">No date selected</p>
 
-<select id="timeSlot" class="input">
-  <option value="08:00-10:00">08:00 - 10:00</option>
-  <option value="10:00-12:00">10:00 - 12:00</option>
-  <option value="12:00-14:00">12:00 - 14:00</option>
-  <option value="14:00-16:00">14:00 - 16:00</option>
-  <option value="16:00-18:00">16:00 - 18:00</option>
-</select>
+    <select id="timeSlot" class="input">
+      <option value="08:00-10:00">08:00 - 10:00</option>
+      <option value="10:00-12:00">10:00 - 12:00</option>
+      <option value="12:00-14:00">12:00 - 14:00</option>
+      <option value="14:00-16:00">14:00 - 16:00</option>
+      <option value="16:00-18:00">16:00 - 18:00</option>
+    </select>
 
-<input id="name" class="input" placeholder="Full Name">
-<input id="phone" class="input" placeholder="Phone">
-<input id="email" class="input" placeholder="Email">
-<input id="address" class="input" placeholder="Address">
+    <input id="name" class="input" placeholder="Full Name">
+    <input id="phone" class="input" placeholder="Phone">
+    <input id="email" class="input" placeholder="Email">
+    <input id="address" class="input" placeholder="Address">
 
-<select id="service" class="input">
-  <option value="Home Cleaning">Home Cleaning - $120</option>
-  <option value="Deep Cleaning">Deep Cleaning - $200</option>
-  <option value="Office Cleaning">Office Cleaning - $150</option>
-  <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
-</select>
+    <select id="service" class="input">
+      <option value="Home Cleaning">Home Cleaning - $120</option>
+      <option value="Deep Cleaning">Deep Cleaning - $200</option>
+      <option value="Office Cleaning">Office Cleaning - $150</option>
+      <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
+    </select>
 
-<button class="btn primary" onclick="bookNow()">💳 Pay & Book</button>
+    <button class="btn primary" onclick="bookNow()">📩 Book Now</button>
 
   </div>
 </section>
 
 <!-- ================= SCRIPT ================= -->
-
 <script>
 
 const API = window.location.origin;
@@ -80,7 +77,6 @@ function toggleMenu() {
 document.addEventListener("DOMContentLoaded", async function () {
 
   const calendarEl = document.getElementById("calendar");
-
   let bookedSlots = {};
 
   try {
@@ -117,10 +113,14 @@ document.addEventListener("DOMContentLoaded", async function () {
   calendar.render();
 });
 
-/* BOOK + PAY */
+/* =======================
+   BOOKING (NO PAYMENT)
+======================= */
 async function bookNow() {
 
-  if (!selectedDate) return alert("Select a date");
+  if (!selectedDate) {
+    return alert("Select a date");
+  }
 
   const service = document.getElementById("service").value;
   const name = document.getElementById("name").value.trim();
@@ -133,54 +133,31 @@ async function bookNow() {
     return alert("Fill all fields");
   }
 
-  let total = 120;
-  if (service === "Deep Cleaning") total = 200;
-  if (service === "Office Cleaning") total = 150;
-  if (service === "Move In/Out Cleaning") total = 180;
-
-  /* ========================
-     🔥 ONLY CHANGE HERE
-     Deposit = 10%
-  ======================== */
-  const depositAmount = total * 0.10;
-
   const customer = {
-    name, phone, email, address,
+    name,
+    phone,
+    email,
+    address,
     date: selectedDate,
-    timeSlot, service, total
+    timeSlot,
+    service
   };
 
   try {
 
-    const bookingRes = await fetch(API + "/api/book", {
+    const res = await fetch(API + "/api/book", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customer,
-        date: selectedDate,
-        timeSlot,
-        total,
-        depositAmount   // optional tracking
-      })
+      body: JSON.stringify(customer)
     });
 
-    const booking = await bookingRes.json();
+    const data = await res.json();
 
-    const payRes = await fetch(API + "/api/create-checkout-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        bookingId: booking._id,
-        amount: depositAmount   // 🔥 NOW 10% ONLY
-      })
-    });
-
-    const data = await payRes.json();
-
-    if (data.url) {
-      window.location.href = data.url;
+    if (res.ok) {
+      alert("Booking successful! We will contact you soon.");
+      location.reload();
     } else {
-      alert("Payment failed");
+      alert(data.error || "Booking failed");
     }
 
   } catch (err) {
@@ -193,3 +170,4 @@ async function bookNow() {
 
 </body>
 </html>
+```
