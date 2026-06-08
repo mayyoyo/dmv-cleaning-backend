@@ -114,6 +114,43 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
+// ================== BOOKINGS (ADMIN STORAGE) ==================
+let bookings = [];
+
+app.post("/api/bookings", (req, res) => {
+  try {
+    const booking = {
+      id: Date.now(),
+      ...req.body,
+      createdAt: new Date()
+    };
+
+    bookings.push(booking);
+
+    console.log("📩 New Booking:", booking);
+
+    res.json({
+      success: true,
+      message: "Booking received"
+    });
+
+  } catch (err) {
+    console.error("BOOKING ERROR:", err);
+    res.status(500).json({ error: "Failed to save booking" });
+  }
+});
+
+// ================== GET BOOKINGS (ADMIN PANEL) ==================
+app.get("/api/bookings", (req, res) => {
+  res.json(bookings);
+});
+
+// ================== FRONTEND COMPATIBILITY ROUTE ==================
+app.post("/api/book", (req, res) => {
+  console.log("📩 Booking (legacy route):", req.body);
+  res.json({ success: true });
+});
+
 // ================== STATIC FILES ==================
 app.use(express.static(path.join(__dirname, "public")));
 
