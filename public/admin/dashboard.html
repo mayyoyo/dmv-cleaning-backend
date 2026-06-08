@@ -1,71 +1,79 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard</title>
 
-<title>Admin Dashboard</title>
+<style>
+body {
+  font-family: Arial;
+  background: #f5f6f8;
+  padding: 20px;
+}
 
-<link rel="stylesheet" href="../css/admin-dashboard.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+.card {
+  background: white;
+  padding: 20px;
+  margin: 10px 0;
+  border-radius: 10px;
+}
+
+button {
+  padding: 10px 20px;
+  background: red;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+</style>
 
 </head>
 
-<body class="dark">
-<!-- 🔥 ADD SPINNER (NEW - DO NOT REPLACE ANYTHING) -->
-<div id="spinner" class="spinner hidden"></div>
+<body>
 
-<!-- SIDEBAR -->
-<div class="sidebar" id="sidebar">
-  <h2>DMV Admin</h2>
+<h1>Admin Dashboard</h1>
 
-  <a href="#">Dashboard</a>
-  <a href="#">Bookings</a>
-  <a href="#">Revenue</a>
+<button onclick="logout()">Logout</button>
 
-  <button onclick="toggleSidebar()">☰ Collapse</button>
-</div>
+<div class="card" id="data">Loading...</div>
 
-<!-- MAIN -->
-<div class="main" id="main">
-
-  <h1>🔥 SaaS Dashboard V6</h1>
-
-  <div class="stats">
-
-    <div class="card">
-      <h3>Bookings</h3>
-      <h2 id="bookings">0</h2>
-    </div>
-
-    <div class="card">
-      <h3>Revenue</h3>
-      <h2 id="revenue">$0</h2>
-    </div>
-
-    <div class="card">
-      <h3>Profit</h3>
-      <h2 id="profit">$0</h2>
-    </div>
-
-  </div>
-
-  <div class="card">
-    <canvas id="revenueChart"></canvas>
-  </div>
-
-</div>
-
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<!-- <script src="/dashboard.js"></script> -->
- <script src="/admin/admin-dashboard.js"></script>
-
-<!-- SIDEBAR ANIMATION -->
 <script>
-function toggleSidebar() {
-  document.getElementById("sidebar").classList.toggle("collapsed");
-  document.getElementById("main").classList.toggle("expanded");
+async function checkAuth() {
+  try {
+    const res = await fetch("https://dmv-cleaning-backend.onrender.com/api/dashboard", {
+      credentials: "include"
+    });
+
+    if (!res.ok) {
+      window.location.href = "/admin/login.html";
+      return;
+    }
+
+    const data = await res.json();
+
+    document.getElementById("data").innerHTML = `
+      <p>Total Bookings: ${data.totalBookings}</p>
+      <p>Total Customers: ${data.totalCustomers}</p>
+      <p>Total Profit: $${data.totalProfit}</p>
+    `;
+
+  } catch (err) {
+    console.error(err);
+    window.location.href = "/admin/login.html";
+  }
 }
+
+async function logout() {
+  await fetch("https://dmv-cleaning-backend.onrender.com/api/admin/logout", {
+    credentials: "include"
+  });
+
+  window.location.href = "/admin/login.html";
+}
+
+checkAuth();
 </script>
 
 </body>
