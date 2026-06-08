@@ -1,4 +1,4 @@
-// ================== DEBUG ==================
+
 console.log("🚀 THIS IS THE NEW SERVER FILE RUNNING");
 
 require("dotenv").config();
@@ -15,9 +15,19 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS FIX (IMPORTANT FOR IONOS + RENDER) ==================
+// ================== CORS FIX (FINAL + FLEXIBLE) ==================
+const allowedOrigins = [
+  "https://mydmvcleaningservice.com",
+  "http://localhost:3000"
+];
+
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://mydmvcleaningservice.com");
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+  }
+
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Access-Control-Allow-Headers", "Content-Type");
   res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -34,49 +44,54 @@ app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
 
-// ================== LOGIN ROUTE ==================
+// ================== LOGIN ==================
 app.post("/api/admin/login", (req, res) => {
-  const { username, password } = req.body;
+  try {
+    const { username, password } = req.body;
 
-  if (
-    username === process.env.ADMIN_USER &&
-    password === process.env.ADMIN_PASS
-  ) {
-    const token = jwt.sign(
-      { user: username },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
+    if (
+      username === process.env.ADMIN_USER &&
+      password === process.env.ADMIN_PASS
+    ) {
+      const token = jwt.sign(
+        { user: username },
+        process.env.JWT_SECRET,
+        { expiresIn: "1h" }
+      );
 
-    res.cookie("token", token, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "none"
-    });
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: "none"
+      });
 
-    return res.json({ success: true });
+      return res.json({ success: true });
+    }
+
+    return res.status(401).json({ error: "Invalid credentials" });
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ error: "Server error ❌" });
   }
-
-  res.status(401).json({ error: "Invalid credentials" });
 });
 
-// ================== AUTH MIDDLEWARE ==================
+// ================== AUTH ==================
 function auth(req, res, next) {
-  const token = req.cookies.token;
-
-  if (!token) {
-    return res.status(401).json({ error: "Not logged in" });
-  }
-
   try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ error: "Not logged in" });
+    }
+
     jwt.verify(token, process.env.JWT_SECRET);
     next();
-  } catch {
+  } catch (err) {
     return res.status(401).json({ error: "Invalid session" });
   }
 }
 
-// ================== DASHBOARD (PROTECTED) ==================
+// ================== DASHBOARD ==================
 app.get("/api/dashboard", auth, (req, res) => {
   res.json({
     totalBookings: 25,
@@ -96,12 +111,13 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
-// ================== STATIC FILES ==================
+// ================== STATIC ==================
 app.use(express.static(path.join(__dirname, "public")));
 
-// ================== START SERVER ==================
+// ================== SERVER ==================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("Server running on port " + PORT);
 });
+```
