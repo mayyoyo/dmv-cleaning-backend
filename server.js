@@ -15,7 +15,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS FIX (FINAL REAL FIX) ==================
+// ================== CORS (SAFE + FIXED) ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -25,13 +25,13 @@ const allowedOrigins = [
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
-  res.header("Access-Control-Allow-Credentials", "true");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
-  res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
   if (req.method === "OPTIONS") {
     return res.sendStatus(200);
@@ -40,7 +40,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ================== TEST API ==================
+// ================== TEST ==================
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
@@ -49,6 +49,11 @@ app.get("/api", (req, res) => {
 app.post("/api/admin/login", (req, res) => {
   try {
     const { username, password } = req.body;
+
+    if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS || !process.env.JWT_SECRET) {
+      console.error("❌ Missing ENV");
+      return res.status(500).json({ error: "Server config error" });
+    }
 
     if (
       username === process.env.ADMIN_USER &&
@@ -73,7 +78,7 @@ app.post("/api/admin/login", (req, res) => {
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    res.status(500).json({ error: "Server error ❌" });
+    return res.status(500).json({ error: "Server error ❌" });
   }
 });
 
@@ -117,10 +122,10 @@ app.get("/api/admin/logout", (req, res) => {
 // ================== STATIC ==================
 app.use(express.static(path.join(__dirname, "public")));
 
-// ================== SERVER ==================
+// ================== START ==================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
+  console.log("✅ Server running on port " + PORT);
 });
 ```
