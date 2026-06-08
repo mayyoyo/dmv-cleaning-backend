@@ -1,4 +1,3 @@
-```javascript
 require("dotenv").config();
 
 const express = require("express");
@@ -15,21 +14,26 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ⚠️ IMPORTANT: allow cross-domain (IONOS → Render)
+// ================== CORS (IONOS + RENDER FIX) ==================
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", process.env.FRONTEND_URL || "*");
+  res.header("Access-Control-Allow-Origin", process.env.FRONTEND_URL);
   res.header("Access-Control-Allow-Credentials", "true");
   res.header("Access-Control-Allow-Headers", "Content-Type");
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+
   next();
 });
 
+// ================== STATIC FILES ==================
 app.use(express.static(path.join(__dirname, "public")));
 
 // ================== STRIPE WEBHOOK ==================
 app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
-  const sig = req.headers["stripe-signature"];
-
   try {
+    const sig = req.headers["stripe-signature"];
+
     const event = stripe.webhooks.constructEvent(
       req.body,
       sig,
@@ -37,19 +41,18 @@ app.post("/webhook", express.raw({ type: "application/json" }), (req, res) => {
     );
 
     if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      console.log("✅ Payment received:", session.id);
+      console.log("Payment:", event.data.object.id);
     }
 
     res.json({ received: true });
 
   } catch (err) {
-    console.log("❌ Webhook error:", err.message);
-    res.status(400).send(err.message);
+    console.log(err.message);
+    res.status(400).send("Webhook error");
   }
 });
 
-// ================== AUTH MIDDLEWARE ==================
+// ================== AUTH ==================
 function auth(req, res, next) {
   const token = req.cookies.token;
 
@@ -70,7 +73,7 @@ function auth(req, res, next) {
   }
 }
 
-// ================== ADMIN LOGIN ==================
+// ================== LOGIN ==================
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -84,10 +87,11 @@ app.post("/api/admin/login", (req, res) => {
       { expiresIn: "2h" }
     );
 
+    // ✅ FINAL COOKIE FIX (IMPORTANT)
     res.cookie("token", token, {
       httpOnly: true,
-      secure: true,          // REQUIRED on Render (HTTPS)
-      sameSite: "none"       // REQUIRED for cross-domain (IONOS)
+      secure: true,
+      sameSite: "none"
     });
 
     return res.json({ success: true });
@@ -103,6 +107,7 @@ app.post("/api/admin/logout", (req, res) => {
     secure: true,
     sameSite: "none"
   });
+
   res.json({ success: true });
 });
 
@@ -121,75 +126,9 @@ app.get("/dashboard", auth, (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-// ================== EMAIL SETUP ==================
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
-// ================== FORGOT PASSWORD ==================
-app.post("/api/admin/forgot-password", async (req, res) => {
-  const { email } = req.body;
-
-  try {
-    const token = jwt.sign(
-      { email },
-      process.env.JWT_SECRET,
-      { expiresIn: "15m" }
-    );
-
-    const resetLink = `${process.env.FRONTEND_URL}/admin/reset-password.html?token=${token}`;
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: "Password Reset",
-      html: `
-        <h2>Reset Password</h2>
-        <p>Click below:</p>
-        <a href="${resetLink}">Reset Password</a>
-      `
-    });
-
-    res.json({ message: "Reset email sent" });
-
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Email failed" });
-  }
-});
-
-// ================== RESET PASSWORD ==================
-app.post("/api/admin/reset-password", (req, res) => {
-  const { token, newPassword } = req.body;
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    if (decoded.email === process.env.ADMIN_EMAIL) {
-      process.env.ADMIN_PASS = newPassword;
-      return res.json({ message: "Password updated" });
-    }
-
-    res.status(400).json({ error: "Invalid token" });
-
-  } catch {
-    res.status(400).json({ error: "Expired token" });
-  }
-});
-
-// ================== TEST API ==================
-app.get("/api", (req, res) => {
-  res.send("✅ API Working");
-});
-
 // ================== START SERVER ==================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log("🚀 Server running on port " + PORT);
+  console.log("Server running on " + PORT);
 });
-```

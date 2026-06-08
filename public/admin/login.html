@@ -19,30 +19,54 @@
     <input id="user" placeholder="Username">
     <input id="pass" type="password" placeholder="Password">
 
-    <button onclick="login()">Login</button>
+    <button id="loginBtn" onclick="login()">Login</button>
 
-    <a href="/admin/forgot-password.html">Forgot Password?</a>
+    <p>
+      <a href="/admin/forgot-password.html">Forgot Password?</a>
+    </p>
 
   </div>
 </div>
 
 <script>
 function login() {
-  fetch("/api/admin/login", {
+  const btn = document.getElementById("loginBtn");
+
+  btn.disabled = true;
+  btn.innerText = "Logging in...";
+
+  fetch("https://dmv-cleaning-backend.onrender.com/api/admin/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({
       username: document.getElementById("user").value,
       password: document.getElementById("pass").value
     })
   })
-  .then(res => res.json())
+  .then(async (res) => {
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      throw new Error(data.error || "Login failed");
+    }
+
+    return data;
+  })
   .then(data => {
     if (data.success) {
       window.location.href = "/dashboard";
     } else {
       alert("Login failed");
     }
+  })
+  .catch(err => {
+    console.error("LOGIN ERROR:", err.message);
+    alert("Server error ❌ Check backend");
+  })
+  .finally(() => {
+    btn.disabled = false;
+    btn.innerText = "Login";
   });
 }
 </script>

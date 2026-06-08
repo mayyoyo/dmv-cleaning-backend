@@ -1,21 +1,64 @@
-const API_URL = "https://my-dmv-backend.onrender.com/api/dashboard";
+const API_URL = "https://dmv-cleaning-backend.onrender.com/api/dashboard";
 
 let timer;
 
 // ===============================
-// LOAD DASHBOARD DATA
+// SHOW / HIDE SPINNER
 // ===============================
-async function loadDashboard() {
+function showSpinner() {
+  const spinner = document.getElementById("spinner");
+  if (spinner) spinner.classList.remove("hidden");
+}
+
+function hideSpinner() {
+  const spinner = document.getElementById("spinner");
+  if (spinner) spinner.classList.add("hidden");
+}
+
+// ===============================
+// AUTH CHECK (NEW ADDED)
+// ===============================
+async function checkAuth() {
   try {
     const res = await fetch(API_URL, {
       credentials: "include"
     });
 
-    if (!res.ok) throw new Error("API error");
+    if (!res.ok) {
+      window.location.href = "/admin/login.html";
+      return;
+    }
 
     const data = await res.json();
+    console.log("Dashboard loaded:", data);
 
-    console.log("Dashboard:", data);
+    document.getElementById("bookings").innerText = data.totalBookings;
+    document.getElementById("customers").innerText = data.totalCustomers;
+    document.getElementById("profit").innerText = "$" + data.totalProfit;
+
+  } catch (err) {
+    console.error(err);
+    window.location.href = "/admin/login.html";
+  }
+}
+
+// ===============================
+// LOAD DASHBOARD DATA (WITH LOADING)
+// ===============================
+async function loadDashboard() {
+  try {
+    showSpinner();
+
+    const res = await fetch(API_URL, {
+      credentials: "include"
+    });
+
+    if (!res.ok) {
+      window.location.href = "/admin/login.html";
+      return;
+    }
+
+    const data = await res.json();
 
     document.getElementById("revenue").innerText =
       "$" + (data.depositRevenue || 0);
@@ -27,12 +70,15 @@ async function loadDashboard() {
       "$" + (data.totalProfit || 0);
 
   } catch (err) {
-    console.error("Dashboard load error:", err);
+    console.error("Dashboard error:", err);
+    window.location.href = "/admin/login.html";
+  } finally {
+    hideSpinner();
   }
 }
 
 // ===============================
-// AUTO LOGOUT TIMER (15 MIN)
+// AUTO LOGOUT TIMER
 // ===============================
 function resetTimer() {
   clearTimeout(timer);
@@ -40,15 +86,14 @@ function resetTimer() {
   timer = setTimeout(() => {
     alert("Session expired");
 
-    fetch("https://my-dmv-backend.onrender.com/api/admin/logout", {
+    fetch("https://dmv-cleaning-backend.onrender.com/api/admin/logout", {
       method: "POST",
       credentials: "include"
-    })
-    .then(() => {
+    }).then(() => {
       window.location.href = "/admin/login.html";
     });
 
-  }, 15 * 60 * 1000); // 15 minutes
+  }, 15 * 60 * 1000);
 }
 
 // ===============================
@@ -59,14 +104,15 @@ document.addEventListener("keydown", resetTimer);
 document.addEventListener("click", resetTimer);
 
 // ===============================
-// INIT DASHBOARD
+// INIT PAGE
 // ===============================
 document.addEventListener("DOMContentLoaded", () => {
-  loadDashboard();
-  resetTimer();
+  checkAuth();        // 🔥 NEW (AUTH FIRST)
+  loadDashboard();    // LOAD DATA
+  resetTimer();       // START TIMER
 });
 
 // ===============================
-// AUTO REFRESH
+// AUTO REFRESH DASHBOARD
 // ===============================
 setInterval(loadDashboard, 30000);
