@@ -10,12 +10,12 @@ const cookieParser = require("cookie-parser");
 
 const app = express();
 
-// ================== SAFE MIDDLEWARE ==================
+// ================== MIDDLEWARE ==================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS (RENDER SAFE) ==================
+// ================== CORS ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -33,12 +33,14 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
 
-  if (req.method === "OPTIONS") return res.sendStatus(200);
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
 
   next();
 });
 
-// ================== TEST ROUTE ==================
+// ================== TEST API ==================
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
@@ -115,7 +117,7 @@ app.get("/api/admin/logout", (req, res) => {
 // ================== STATIC FILES ==================
 app.use(express.static(path.join(__dirname, "public")));
 
-// ================== RENDER FIX (IMPORTANT) ==================
+// ================== START SERVER ==================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
