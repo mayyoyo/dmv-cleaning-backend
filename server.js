@@ -15,9 +15,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS FIX (FINAL + FLEXIBLE) ==================
+// ================== CORS FIX (FINAL REAL FIX) ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
+  "https://www.mydmvcleaningservice.com",
   "http://localhost:3000"
 ];
 
@@ -69,6 +70,7 @@ app.post("/api/admin/login", (req, res) => {
     }
 
     return res.status(401).json({ error: "Invalid credentials" });
+
   } catch (err) {
     console.error("LOGIN ERROR:", err);
     res.status(500).json({ error: "Server error ❌" });
@@ -86,6 +88,7 @@ function auth(req, res, next) {
 
     jwt.verify(token, process.env.JWT_SECRET);
     next();
+
   } catch (err) {
     return res.status(401).json({ error: "Invalid session" });
   }
