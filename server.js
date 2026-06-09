@@ -30,8 +30,7 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= IMPORTANT FIX ================= */
-/* MUST BE GLOBAL (Render restart safe) */
+/* ================= GLOBAL DB (RENDER SAFE) ================= */
 global.bookings = global.bookings || [];
 
 /* ================= PRICE MAP ================= */
@@ -42,7 +41,7 @@ const prices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= BOOKING API ================= */
+/* ================= CREATE BOOKING ================= */
 app.post("/api/book", (req, res) => {
 
   try {
@@ -57,6 +56,7 @@ app.post("/api/book", (req, res) => {
       service
     } = req.body;
 
+    /* ================= VALIDATION ================= */
     if (!name || !email || !phone || !address || !date || !timeSlot || !service) {
       return res.status(400).json({ error: "All fields required" });
     }
@@ -72,8 +72,10 @@ app.post("/api/book", (req, res) => {
       });
     }
 
+    /* ================= CALCULATE TOTAL ================= */
     const total = prices[service] || 0;
 
+    /* ================= CREATE BOOKING ================= */
     const booking = {
       id: Date.now(),
       name,
@@ -84,16 +86,18 @@ app.post("/api/book", (req, res) => {
       timeSlot,
       service,
       total,
-      status: "Pending"
+      status: "Pending",
+      createdAt: new Date()
     };
 
     global.bookings.push(booking);
 
     console.log("BOOKING CREATED:", booking);
 
-    /* ================= LIVE UPDATE ================= */
+    /* ================= SOCKET LIVE UPDATE ================= */
     io.emit("new-booking", booking);
 
+    /* ================= RESPONSE ================= */
     return res.json({
       success: true,
       bookingId: booking.id,
@@ -101,14 +105,26 @@ app.post("/api/book", (req, res) => {
     });
 
   } catch (err) {
-    console.error("RENDER ERROR:", err);
+    console.error("BOOKING ERROR:", err);
     return res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= GET BOOKINGS ================= */
+/* ================= GET ALL BOOKINGS ================= */
 app.get("/api/bookings", (req, res) => {
   res.json(global.bookings);
+});
+
+/* ================= GET SINGLE BOOKING (IMPORTANT FIX) ================= */
+app.get("/api/booking/:id", (req, res) => {
+
+  const booking = global.bookings.find(b => b.id == req.params.id);
+
+  if (!booking) {
+    return res.status(404).json({ error: "Booking not found" });
+  }
+
+  res.json(booking); // ✅ includes total
 });
 
 /* ================= HEALTH CHECK ================= */
@@ -116,7 +132,15 @@ app.get("/health", (req, res) => {
   res.json({ status: "Server running ✅" });
 });
 
-/* ================= START ================= */
+/* ================= 404 HANDLER ================= */
+app.use((req, res) => {
+  res.status(404).json({
+    message: "Route not found ❌",
+    path: req.originalUrl
+  });
+});
+
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
