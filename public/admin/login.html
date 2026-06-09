@@ -13,7 +13,7 @@
 
 <body>
 
-<!-- LOGIN -->
+<!-- ================= LOGIN ================= -->
 <div class="login-container" id="loginBox">
 
   <div class="login-card">
@@ -29,7 +29,7 @@
 
 </div>
 
-<!-- DASHBOARD -->
+<!-- ================= DASHBOARD ================= -->
 <div class="dashboard" id="dashboard">
 
   <header class="dash-header">
@@ -47,7 +47,7 @@
 
 </div>
 
-<!-- SOCKET -->
+<!-- ================= SOCKET.IO ================= -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
@@ -55,7 +55,7 @@
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 const socket = io("https://dmv-cleaning-backend.onrender.com");
 
-/* LOGIN */
+/* ================= LOGIN ================= */
 async function login() {
 
   const username = document.getElementById("username").value.trim();
@@ -83,11 +83,12 @@ async function login() {
     loadBookings();
 
   } catch (err) {
+    console.error(err);
     document.getElementById("msg").innerText = "❌ Server error";
   }
 }
 
-/* LOAD BOOKINGS */
+/* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
 
   try {
@@ -104,16 +105,17 @@ async function loadBookings() {
         <div class="booking-item">
           <b>${b.name}</b> — ${b.service}<br>
           📅 ${b.date} | ⏰ ${b.timeSlot}<br>
-          📍 ${b.address}
+          📍 ${b.address}<br>
+          💰 $${b.total || 0}
         </div>
       `).join("");
 
   } catch (err) {
-    console.error(err);
+    console.error("LOAD ERROR:", err);
   }
 }
 
-/* LIVE UPDATES */
+/* ================= LIVE SOCKET UPDATES ================= */
 socket.on("new-booking", (booking) => {
 
   document.getElementById("liveStatus").innerHTML =
