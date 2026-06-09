@@ -1,132 +1,90 @@
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-let timer;
+/* SOCKET REALTIME */
+const socket = io("https://dmv-cleaning-backend.onrender.com");
 
-/* ================= AUTH ================= */
-async function checkAuth() {
-  try {
-    const res = await fetch(API + "/dashboard", {
-      credentials: "include"
-    });
-
-    if (!res.ok) {
-      window.location.href = "/admin/login.html";
-      return;
-    }
-
-    const data = await res.json();
-
-    document.getElementById("bookings").innerText = data.totalBookings || 0;
-    document.getElementById("customers").innerText = data.totalCustomers || 0;
-    document.getElementById("profit").innerText = "$" + (data.totalProfit || 0);
-
-  } catch (err) {
-    window.location.href = "/admin/login.html";
-  }
-}
-
-/* ================= LOAD BOOKINGS ================= */
-async function loadBookings() {
-  try {
-    const res = await fetch(API + "/bookings", {
-      credentials: "include"
-    });
-
-    if (!res.ok) return;
-
-    const bookings = await res.json();
-
-    const table = document.getElementById("bookingTable");
-    table.innerHTML = "";
-
-    bookings.forEach(b => {
-      const row = document.createElement("tr");
-
-      row.innerHTML = `
-        <td>${b.name}</td>
-        <td>${b.phone}</td>
-        <td>${b.service}</td>
-        <td>${b.date}</td>
-        <td>${b.timeSlot}</td>
-        <td>
-          <select class="status" data-id="${b.id}">
-            <option value="Pending" ${b.status === "Pending" ? "selected" : ""}>Pending</option>
-            <option value="Confirmed" ${b.status === "Confirmed" ? "selected" : ""}>Confirmed</option>
-            <option value="Done" ${b.status === "Done" ? "selected" : ""}>Done</option>
-          </select>
-        </td>
-      `;
-
-      table.appendChild(row);
-    });
-
-    bindStatusEvents();
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-/* ================= UPDATE STATUS ================= */
-function bindStatusEvents() {
-  document.querySelectorAll(".status").forEach(select => {
-    select.addEventListener("change", async function () {
-      const id = this.dataset.id;
-      const status = this.value;
-
-      await fetch(API + "/update-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        credentials: "include",
-        body: JSON.stringify({ id, status })
-      });
-    });
+/* ================= DASHBOARD ================= */
+async function loadDashboard() {
+  const res = await fetch(API + "/dashboard", {
+    credentials: "include"
   });
+
+  const data = await res.json();
+
+  document.getElementById("bookings").innerText = data.totalBookings;
+  document.getElementById("pending").innerText = data.pending;
+  document.getElementById("approved").innerText = data.approved;
+  document.getElementById("rejected").innerText = data.rejected;
+}
+
+/* ================= BOOKINGS LIST ================= */
+async function loadBookings() {
+  const res = await fetch(API + "/bookings");
+  const data = await res.json();
+
+  const list = document.getElementById("bookingList");
+  list.innerHTML = "";
+
+  data.forEach(b => {
+    const div = document.createElement("div");
+    div.className = "booking";
+
+    div.innerHTML = `
+      <p><b>${b.name}</b> - ${b.service}</p>
+      <p>${b.date} | ${b.timeSlot}</p>
+      <p>Status: <b>${b.status}</b></p>
+
+      <button onclick="approveBooking(${b.id})">Approve</button>
+      <button onclick="rejectBooking(${b.id})">Reject</button>
+    `;
+
+    list.appendChild(div);
+  });
+}
+
+/* ================= APPROVE ================= */
+async function approveBooking(id) {
+  await fetch(API + "/bookings/approve", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+
+  loadDashboard();
+  loadBookings();
+}
+
+/* ================= REJECT ================= */
+async function rejectBooking(id) {
+  await fetch(API + "/bookings/reject", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+
+  loadDashboard();
+  loadBookings();
 }
 
 /* ================= LOGOUT ================= */
-function setupLogout() {
-  const btn = document.getElementById("logoutBtn");
-
-  if (!btn) return;
-
-  btn.addEventListener("click", async () => {
-    await fetch(API + "/admin/logout", {
-      credentials: "include"
-    });
-
-    window.location.href = "/admin/login.html";
+document.getElementById("logoutBtn").addEventListener("click", async () => {
+  await fetch(API + "/admin/logout", {
+    credentials: "include"
   });
-}
 
-/* ================= AUTO LOGOUT ================= */
-function resetTimer() {
-  clearTimeout(timer);
-
-  timer = setTimeout(async () => {
-    alert("Session expired");
-
-    await fetch(API + "/admin/logout", {
-      credentials: "include"
-    });
-
-    window.location.href = "/admin/login.html";
-  }, 15 * 60 * 1000);
-}
-
-document.addEventListener("mousemove", resetTimer);
-document.addEventListener("keydown", resetTimer);
-document.addEventListener("click", resetTimer);
-
-/* ================= INIT ================= */
-document.addEventListener("DOMContentLoaded", () => {
-  checkAuth();
-  loadBookings();
-  setupLogout();
-  resetTimer();
+  window.location.href = "/admin/login.html";
 });
 
-/* ================= AUTO REFRESH ================= */
-setInterval(loadBookings, 30000);
+/* ================= REALTIME ================= */
+socket.on("new-booking", () => {
+  loadDashboard();
+  loadBookings();
+});
+
+/* ================= INIT ================= */
+loadDashboard();
+loadBookings();
+setInterval(() => {
+  loadDashboard();
+  loadBookings();
+}, 30000);
