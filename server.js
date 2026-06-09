@@ -9,12 +9,12 @@ const cookieParser = require("cookie-parser");
 
 const app = express();
 
-// ================== MIDDLEWARE ==================
+/* ================== MIDDLEWARE ================== */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS FIX ==================
+/* ================== CORS FIX ================== */
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -24,7 +24,7 @@ const allowedOrigins = [
 app.use((req, res, next) => {
   const origin = req.headers.origin;
 
-  if (allowedOrigins.includes(origin)) {
+  if (origin && allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
   }
 
@@ -37,17 +37,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// ================== TEST API ==================
+/* ================== TEST API ================== */
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
 
-// ================== LOGIN ==================
+/* ================== LOGIN ================== */
 app.post("/api/admin/login", (req, res) => {
   try {
     const { username, password } = req.body;
 
-    if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS) {
+    if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS || !process.env.JWT_SECRET) {
       return res.status(500).json({ error: "ENV missing" });
     }
 
@@ -78,7 +78,7 @@ app.post("/api/admin/login", (req, res) => {
   }
 });
 
-// ================== AUTH (SAFE VERSION) ==================
+/* ================== AUTH ================== */
 function auth(req, res, next) {
   try {
     const token = req.cookies.token;
@@ -100,7 +100,7 @@ function auth(req, res, next) {
   }
 }
 
-// ================== DASHBOARD ==================
+/* ================== DASHBOARD ================== */
 app.get("/api/dashboard", auth, (req, res) => {
   res.json({
     totalBookings: 25,
@@ -109,7 +109,7 @@ app.get("/api/dashboard", auth, (req, res) => {
   });
 });
 
-// ================== LOGOUT ==================
+/* ================== LOGOUT ================== */
 app.get("/api/admin/logout", (req, res) => {
   res.clearCookie("token", {
     httpOnly: true,
@@ -120,14 +120,15 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
-// ================== BOOKINGS ==================
+/* ================== BOOKINGS SYSTEM ================== */
 let bookings = [];
 
-// simple booking endpoint
+/* 🔥 CREATE BOOKING (NO PAYMENT VERSION) */
 app.post("/api/book", (req, res) => {
   const booking = {
     id: Date.now(),
     ...req.body,
+    status: "Pending",
     createdAt: new Date()
   };
 
@@ -135,18 +136,28 @@ app.post("/api/book", (req, res) => {
 
   console.log("📩 Booking received:", booking);
 
-  res.json({ success: true });
+  res.json({ success: true, booking });
 });
 
-// get all bookings (admin)
+/* 🔥 GET ALL BOOKINGS (ADMIN LIST) */
 app.get("/api/bookings", (req, res) => {
   res.json(bookings);
 });
 
-// ================== STATIC FILES ==================
+/* 🔥 CALENDAR EVENTS (FULLCALENDAR SUPPORT) */
+app.get("/api/booked-dates", (req, res) => {
+  const events = bookings.map(b => ({
+    title: b.service || "Booked",
+    start: b.date
+  }));
+
+  res.json(events);
+});
+
+/* ================== STATIC FILES ================== */
 app.use(express.static(path.join(__dirname, "public")));
 
-// ================== SERVER START ==================
+/* ================== START SERVER ================== */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {

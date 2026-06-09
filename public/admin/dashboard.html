@@ -1,80 +1,62 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Dashboard</title>
+<title>Admin Dashboard</title>
 
-<style>
-body {
-  font-family: Arial;
-  background: #f5f6f8;
-  padding: 20px;
-}
-
-.card {
-  background: white;
-  padding: 20px;
-  margin: 10px 0;
-  border-radius: 10px;
-}
-
-button {
-  padding: 10px 20px;
-  background: red;
-  color: white;
-  border: none;
-  cursor: pointer;
-}
-</style>
-
+<link rel="stylesheet" href="../css/dashboard.css">
+<script defer src="../js/dashboard.js"></script>
 </head>
 
 <body>
 
-<h1>Admin Dashboard</h1>
+<header class="navbar">
+  <h2>DMV Cleaning Admin</h2>
+  <button id="logoutBtn" class="btn logout">Logout</button>
+</header>
 
-<button onclick="logout()">Logout</button>
+<main class="container">
 
-<div class="card" id="data">Loading...</div>
+  <!-- STATS -->
+  <section class="stats">
+    <div class="card">
+      <h3>Total Bookings</h3>
+      <p id="bookings">0</p>
+    </div>
 
-<script>
-async function checkAuth() {
-  try {
-    const res = await fetch("https://dmv-cleaning-backend.onrender.com/api/dashboard", {
-      credentials: "include"
-    });
+    <div class="card">
+      <h3>Customers</h3>
+      <p id="customers">0</p>
+    </div>
 
-    if (!res.ok) {
-      window.location.href = "/admin/login.html";
-      return;
-    }
+    <div class="card">
+      <h3>Total Profit</h3>
+      <p id="profit">$0</p>
+    </div>
+  </section>
 
-    const data = await res.json();
+  <!-- BOOKINGS TABLE -->
+  <section class="table-section">
+    <h2>All Bookings</h2>
 
-    document.getElementById("data").innerHTML = `
-      <p>Total Bookings: ${data.totalBookings}</p>
-      <p>Total Customers: ${data.totalCustomers}</p>
-      <p>Total Profit: $${data.totalProfit}</p>
-    `;
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Service</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Status</th>
+        </tr>
+      </thead>
 
-  } catch (err) {
-    console.error(err);
-    window.location.href = "/admin/login.html";
-  }
-}
+      <tbody id="bookingTable"></tbody>
+    </table>
+  </section>
 
-async function logout() {
-  await fetch("https://dmv-cleaning-backend.onrender.com/api/admin/logout", {
-    credentials: "include"
-  });
-
-  window.location.href = "/admin/login.html";
-}
-
-checkAuth();
-</script>
+</main>
 
 </body>
 </html>

@@ -1,122 +1,64 @@
-const API = "http://127.0.0.1:3006";
-const socket = io(API);
+const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-let selectedDate = null;
-let selectedSlot = null;
-
-/* ================= MENU ================= */
-function toggleMenu() {
-  document.getElementById("navLinks").classList.toggle("active");
-}
-
-/* ================= LOAD SLOTS ================= */
-window.loadSlots = async function(date) {
-
-  selectedDate = date;
-  selectedSlot = null;
-
-  const container = document.getElementById("timeSlots");
-  container.innerHTML = "";
-
-  const res = await fetch(API + "/api/availability/" + date);
-  const data = await res.json();
-
-  const allSlots = [
-    "08:00-10:00",
-    "10:00-12:00",
-    "12:00-14:00",
-    "14:00-16:00",
-    "16:00-18:00"
-  ];
-
-  allSlots.forEach(slot => {
-
-    const btn = document.createElement("button");
-    btn.className = "slot-btn";
-    btn.textContent = slot;
-
-    if (data.taken.includes(slot)) {
-      btn.disabled = true;
-      btn.textContent = slot + " (Booked)";
-    } else {
-      btn.onclick = () => selectSlot(slot, btn);
-    }
-
-    container.appendChild(btn);
-  });
-
-  if (data.fullyBooked) {
-    container.innerHTML = `<p style="color:red;">❌ Fully Booked</p>`;
-  }
-};
-
-/* ================= SELECT SLOT ================= */
-function selectSlot(slot, btn) {
-  selectedSlot = slot;
-
-  document.querySelectorAll(".slot-btn").forEach(b => {
-    b.classList.remove("active");
-  });
-
-  btn.classList.add("active");
-}
+let selectedDate = "";
 
 /* ================= CALENDAR ================= */
-function loadCalendar() {
+document.addEventListener("DOMContentLoaded", function () {
+
   const calendarEl = document.getElementById("calendar");
 
   const calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
-    dateClick: function(info) {
+    selectable: true,
+
+    dateClick: function (info) {
       selectedDate = info.dateStr;
 
-      document.getElementById("selectedDate").textContent =
-        "Selected: " + selectedDate;
-
-      loadSlots(selectedDate);
+      document.getElementById("selectedDate").innerText =
+        "Selected Date: " + selectedDate;
     }
   });
 
   calendar.render();
-}
 
-document.addEventListener("DOMContentLoaded", loadCalendar);
+});
 
-/* ================= BOOK ================= */
-async function submitBooking() {
+/* ================= BOOKING ================= */
+document.getElementById("bookingForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
 
-  if (!selectedDate || !selectedSlot) {
-    alert("Select date + slot");
+  if (!selectedDate) {
+    alert("Please select a date");
     return;
   }
 
-  const customer = {
+  const data = {
     name: document.getElementById("name").value,
     phone: document.getElementById("phone").value,
     email: document.getElementById("email").value,
     address: document.getElementById("address").value,
+    service: document.getElementById("service").value,
     date: selectedDate,
-    timeSlot: selectedSlot
+    timeSlot: document.getElementById("timeSlot").value
   };
 
-  const service = document.getElementById("service").value;
+  try {
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data)
+    });
 
-  const res = await fetch(API + "/api/create-checkout-session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ service, total: 120, customer })
-  });
+    if (!res.ok) throw new Error("Booking failed");
 
-  const data = await res.json();
+    alert("✅ Booking Confirmed!");
+    document.getElementById("bookingForm").reset();
+    document.getElementById("selectedDate").innerText = "No date selected";
 
-  if (data.url) {
-    window.location.href = data.url;
-  } else {
-    alert(data.error || "Booking failed");
+  } catch (err) {
+    console.error(err);
+    alert("❌ Error booking service");
   }
-}
-
-/* ================= REALTIME ================= */
-socket.on("booking-updated", () => {
-  if (selectedDate) loadSlots(selectedDate);
 });

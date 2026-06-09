@@ -1,16 +1,18 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Book Cleaning Service</title>
 
-<title>Book Cleaning Service</title>
+  <!-- Styles -->
+  <link rel="stylesheet" href="css/booking.css">
 
-<link rel="stylesheet" href="css/booking.css">
+  <!-- FullCalendar -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
-
+  <!-- Main Script -->
+  <script defer src="js/booking.js"></script>
 </head>
 
 <body>
@@ -19,17 +21,17 @@
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
 
-  <nav class="nav-links" id="navLinks">
+  <nav class="nav-links">
     <a href="index.html">Home</a>
-    <a href="booking.html">Booking</a>
+    <a href="booking.html" class="active">Booking</a>
   </nav>
 
   <a class="back-btn" href="index.html">⬅ Back</a>
 </header>
 
 <!-- ================= BOOKING ================= -->
-<section class="booking-page">
-  <div class="booking-card">
+<main class="booking-page">
+  <section class="booking-card">
 
     <h2>📅 Book Cleaning Service</h2>
 
@@ -37,137 +39,35 @@
 
     <p id="selectedDate">No date selected</p>
 
-    <select id="timeSlot" class="input">
-      <option value="08:00-10:00">08:00 - 10:00</option>
-      <option value="10:00-12:00">10:00 - 12:00</option>
-      <option value="12:00-14:00">12:00 - 14:00</option>
-      <option value="14:00-16:00">14:00 - 16:00</option>
-      <option value="16:00-18:00">16:00 - 18:00</option>
-    </select>
+    <form id="bookingForm">
 
-    <input id="name" class="input" placeholder="Full Name">
-    <input id="phone" class="input" placeholder="Phone">
-    <input id="email" class="input" placeholder="Email">
-    <input id="address" class="input" placeholder="Address">
+      <select id="timeSlot" class="input" required>
+        <option value="">Select Time</option>
+        <option value="08:00-10:00">08:00 - 10:00</option>
+        <option value="10:00-12:00">10:00 - 12:00</option>
+        <option value="12:00-14:00">12:00 - 14:00</option>
+        <option value="14:00-16:00">14:00 - 16:00</option>
+        <option value="16:00-18:00">16:00 - 18:00</option>
+      </select>
 
-    <select id="service" class="input">
-      <option value="Home Cleaning">Home Cleaning - $120</option>
-      <option value="Deep Cleaning">Deep Cleaning - $200</option>
-      <option value="Office Cleaning">Office Cleaning - $150</option>
-      <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
-    </select>
+      <input id="name" class="input" placeholder="Full Name" required>
+      <input id="phone" class="input" placeholder="Phone" required>
+      <input id="email" class="input" type="email" placeholder="Email" required>
+      <input id="address" class="input" placeholder="Address" required>
 
-    <button class="btn primary" onclick="bookNow()">📩 Book Now</button>
+      <select id="service" class="input" required>
+        <option value="Home Cleaning">Home Cleaning - $120</option>
+        <option value="Deep Cleaning">Deep Cleaning - $200</option>
+        <option value="Office Cleaning">Office Cleaning - $150</option>
+        <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
+      </select>
 
-  </div>
-</section>
+      <button type="submit" class="btn primary">📩 Book Now</button>
 
-<!-- ================= SCRIPT ================= -->
-<script>
+    </form>
 
-const API = window.location.origin;
-let selectedDate = null;
-
-/* MENU */
-function toggleMenu() {
-  document.getElementById("navLinks").classList.toggle("active");
-}
-
-/* CALENDAR */
-document.addEventListener("DOMContentLoaded", async function () {
-
-  const calendarEl = document.getElementById("calendar");
-  let bookedSlots = {};
-
-  try {
-    const res = await fetch(API + "/api/booked-dates");
-    bookedSlots = await res.json();
-  } catch (err) {
-    console.error(err);
-  }
-
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
-    height: 500,
-
-    events: Object.keys(bookedSlots).map(date => ({
-      title: "Booked",
-      date: date,
-      color: "red"
-    })),
-
-    dateClick: function (info) {
-
-      selectedDate = info.dateStr;
-      document.getElementById("selectedDate").innerText = selectedDate;
-
-      const slot = document.getElementById("timeSlot");
-      const booked = bookedSlots[selectedDate] || [];
-
-      Array.from(slot.options).forEach(opt => {
-        opt.disabled = booked.includes(opt.value);
-      });
-    }
-  });
-
-  calendar.render();
-});
-
-/* =======================
-   BOOKING (NO PAYMENT)
-======================= */
-async function bookNow() {
-
-  if (!selectedDate) {
-    return alert("Select a date");
-  }
-
-  const service = document.getElementById("service").value;
-  const name = document.getElementById("name").value.trim();
-  const phone = document.getElementById("phone").value.trim();
-  const email = document.getElementById("email").value.trim();
-  const address = document.getElementById("address").value.trim();
-  const timeSlot = document.getElementById("timeSlot").value;
-
-  if (!name || !phone || !email || !address) {
-    return alert("Fill all fields");
-  }
-
-  const customer = {
-    name,
-    phone,
-    email,
-    address,
-    date: selectedDate,
-    timeSlot,
-    service
-  };
-
-  try {
-
-    const res = await fetch(API + "/api/book", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(customer)
-    });
-
-    const data = await res.json();
-
-    if (res.ok) {
-      alert("Booking successful! We will contact you soon.");
-      location.reload();
-    } else {
-      alert(data.error || "Booking failed");
-    }
-
-  } catch (err) {
-    console.error(err);
-    alert("Server error ❌");
-  }
-}
-
-</script>
+  </section>
+</main>
 
 </body>
 </html>
-```
