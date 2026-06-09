@@ -1,15 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Book Cleaning Service</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="css/booking.css">
+<title>Book Cleaning Service</title>
 
-  <!-- FullCalendar -->
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
+<link rel="stylesheet" href="css/booking.css">
+
+<!-- FullCalendar -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
 </head>
 
@@ -37,6 +37,7 @@
 
     <p id="selectedDate">No date selected</p>
 
+    <!-- FORM -->
     <form id="bookingForm">
 
       <select id="timeSlot" class="input" required>
@@ -67,13 +68,19 @@
   </section>
 </main>
 
-<!-- ================= FIXED BOOKING SCRIPT ================= -->
+<!-- ================= SCRIPT ================= -->
 <script>
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 let selectedDate = null;
 
-/* ================= CALENDAR (OPTIONAL SAFE) ================= */
+/* ================= STOP PAGE RELOAD BUG ================= */
+document.getElementById("bookingForm").addEventListener("submit", function(e) {
+  e.preventDefault();   // 🚨 FIX REDIRECT ISSUE
+  bookNow();
+});
+
+/* ================= CALENDAR ================= */
 document.addEventListener("DOMContentLoaded", async function () {
 
   const calendarEl = document.getElementById("calendar");
@@ -83,7 +90,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     const res = await fetch(API + "/bookings");
     events = await res.json();
   } catch (err) {
-    console.error("Calendar load error:", err);
+    console.error("Calendar error:", err);
   }
 
   const calendar = new FullCalendar.Calendar(calendarEl, {
@@ -101,7 +108,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   calendar.render();
 });
 
-/* ================= BOOKING FUNCTION (FIXED) ================= */
+/* ================= BOOK NOW FUNCTION ================= */
 async function bookNow() {
   const name = document.getElementById("name").value.trim();
   const email = document.getElementById("email").value.trim();
@@ -153,7 +160,7 @@ async function bookNow() {
   }
 }
 
-console.log("🟢 Booking system loaded successfully");
+console.log("🟢 Booking system FIXED & WORKING");
 </script>
 
 </body>
