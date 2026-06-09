@@ -22,7 +22,12 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-/* ================= BOOKINGS ================= */
+/* ================= BASIC TEST ROUTE ================= */
+app.get("/api", (req, res) => {
+  res.json({ message: "API Working" });
+});
+
+/* ================= BOOKINGS STORAGE ================= */
 let bookings = [];
 
 /* ================= SOCKET REALTIME ================= */
@@ -30,7 +35,7 @@ io.on("connection", () => {
   console.log("⚡ Admin connected");
 });
 
-/* ================= EMAIL TEMPLATE ================= */
+/* ================= EMAIL SYSTEM ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -74,7 +79,7 @@ function auth(req, res, next) {
   }
 }
 
-/* ================= BOOKING ================= */
+/* ================= BOOKING CREATE ================= */
 app.post("/api/book", async (req, res) => {
   const booking = {
     id: Date.now(),
@@ -95,8 +100,8 @@ app.post("/api/book", async (req, res) => {
         <h2>🧼 Booking Received</h2>
         <p>Hi <b>${booking.name}</b>,</p>
         <p>Your booking is <b>Pending</b>.</p>
-        <p>Date: ${booking.date}</p>
-        <p>Time: ${booking.timeSlot}</p>
+        <p><b>Date:</b> ${booking.date}</p>
+        <p><b>Time:</b> ${booking.timeSlot}</p>
       </div>
     `
   );
@@ -109,7 +114,7 @@ app.get("/api/bookings", (req, res) => {
   res.json(bookings);
 });
 
-/* ================= APPROVE ================= */
+/* ================= APPROVE BOOKING ================= */
 app.post("/api/bookings/approve", async (req, res) => {
   const booking = bookings.find(b => b.id == req.body.id);
   if (!booking) return res.status(404).json({ error: "Not found" });
@@ -132,7 +137,7 @@ app.post("/api/bookings/approve", async (req, res) => {
   res.json({ success: true });
 });
 
-/* ================= REJECT ================= */
+/* ================= REJECT BOOKING ================= */
 app.post("/api/bookings/reject", async (req, res) => {
   const booking = bookings.find(b => b.id == req.body.id);
   if (!booking) return res.status(404).json({ error: "Not found" });
@@ -227,10 +232,10 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
-/* ================= STATIC ================= */
+/* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
