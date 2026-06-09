@@ -73,6 +73,7 @@
 </main>
 
 <script>
+/* ================= API ================= */
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 let selectedDate = null;
@@ -141,8 +142,9 @@ async function bookNow() {
     // ✅ SUCCESS MESSAGE (clean UX)
     alert("Booking confirmed successfully!");
 
-    // ✅ FIXED REDIRECT (IMPORTANT)
-    window.location.href = "/success.html?bookingId=" + data.bookingId;
+    // ✅ FINAL REDIRECT FIX (REQUIRED)
+    window.location.href =
+      "https://mydmvcleaningservice.com/success.html?bookingId=" + data.bookingId;
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
