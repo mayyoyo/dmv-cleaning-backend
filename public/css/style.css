@@ -417,3 +417,36 @@ body {
     display: block;
   }
 }
+/*  */
+@media (max-width: 768px) {
+
+  body {
+    padding: 0;
+  }
+
+  .section-box {
+    padding: 40px 15px;
+  }
+
+  .hero h1 {
+    font-size: 26px;
+  }
+
+  .hero {
+    height: auto;
+    min-height: 70vh;
+  }
+
+  .hero-buttons {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .pricing-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-map-wrapper {
+    grid-template-columns: 1fr;
+  }
+}

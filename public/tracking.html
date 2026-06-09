@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Track Your Booking</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+<h2>📍 Track Your Cleaning Service</h2>
+
+<input id="bookingId" placeholder="Enter Booking ID">
+<button onclick="track()">Track</button>
+
+<div id="result"></div>
+
+<script>
+
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+async function track() {
+
+  const id = document.getElementById("bookingId").value;
+
+  const res = await fetch(API + "/booking/" + id);
+  const data = await res.json();
+
+  if (!res.ok) {
+    return alert("Booking not found");
+  }
+
+  document.getElementById("result").innerHTML = `
+    <h3>Status: ${data.status}</h3>
+    <p>Service: ${data.service}</p>
+    <p>Date: ${data.date}</p>
+    <p>Total: $${data.total}</p>
+  `;
+}
+
+</script>
+
+</body>
+</html>

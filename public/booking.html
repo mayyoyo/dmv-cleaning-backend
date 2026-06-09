@@ -62,6 +62,12 @@
     <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
   </select>
 
+  <!-- ✅ PAYMENT TYPE ADDED HERE -->
+  <select id="paymentType" class="input" required>
+    <option value="pay_now">Pay Now</option>
+    <option value="pay_later">Pay After Service</option>
+  </select>
+
   <button type="button" class="btn primary" onclick="bookNow()">
     📩 Book Now
   </button>
@@ -73,6 +79,7 @@
 </main>
 
 <script>
+
 /* ================= API ================= */
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
@@ -110,6 +117,9 @@ async function bookNow() {
   const timeSlot = document.getElementById("timeSlot").value;
   const service = document.getElementById("service").value;
 
+  // ✅ NEW PAYMENT TYPE
+  const paymentType = document.getElementById("paymentType").value;
+
   if (!selectedDate) {
     return alert("❌ Please select a date");
   }
@@ -132,13 +142,13 @@ async function bookNow() {
         address,
         date: selectedDate,
         timeSlot,
-        service
+        service,
+        paymentType   // ✅ ADDED HERE
       })
     });
 
     const data = await res.json();
 
-    /* ================= DOUBLE BOOKING FIX ================= */
     if (res.status === 409) {
       alert("⚠ This time slot is already booked. Please choose another.");
       return;
@@ -150,7 +160,6 @@ async function bookNow() {
 
     alert("Booking confirmed successfully!");
 
-    // 🔥 FINAL REDIRECT FIX
     window.location.href =
       "https://mydmvcleaningservice.com/success.html?bookingId=" + data.bookingId;
 
@@ -159,6 +168,7 @@ async function bookNow() {
     alert("Server error");
   }
 }
+
 </script>
 
 </body>

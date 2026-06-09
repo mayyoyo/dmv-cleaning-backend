@@ -2,8 +2,6 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Booking Success</title>
 
 <link rel="stylesheet" href="css/success.css">
@@ -12,54 +10,35 @@
 
 <body>
 
-<div class="success-container">
-
-  <h1>🧼 DMV Cleaning Services LLC</h1>
-
-  <p><b>Business Phone:</b> 703-967-0674</p>
+<div class="container">
 
   <h2>✔ Booking Confirmed</h2>
 
-  <h3>Booking Receipt</h3>
+  <p>🧼 DMV Cleaning Services LLC</p>
+  <p><b>Business Phone:</b> 703-967-0674</p>
 
-  <p><b>Status:</b> Pending</p>
+  <hr>
 
-  <p><b>Name:</b> <span id="name"></span></p>
-  <p><b>Email:</b> <span id="email"></span></p>
-  <p><b>Customer Phone:</b> <span id="phone"></span></p>
+  <div class="row"><span class="label">Booking ID:</span> <span id="bookingId"></span></div>
+  <div class="row"><span class="label">Status:</span> Pending</div>
 
-  <p><b>Service:</b> <span id="service"></span></p>
-  <p><b>Date:</b> <span id="date"></span></p>
-  <p><b>Time:</b> <span id="time"></span></p>
+  <div class="row"><span class="label">Name:</span> <span id="name"></span></div>
+  <div class="row"><span class="label">Email:</span> <span id="email"></span></div>
+  <div class="row"><span class="label">Customer Phone:</span> <span id="phone"></span></div>
 
-  <h3><b>Amount Due:</b> $<span id="total"></span></h3>
+  <div class="row"><span class="label">Service:</span> <span id="service"></span></div>
+  <div class="row"><span class="label">Date:</span> <span id="date"></span></div>
+  <div class="row"><span class="label">Time:</span> <span id="time"></span></div>
+
+  <hr>
+
+  <div class="amount">
+    <b>Amount Due:</b> $<span id="total">0</span>
+  </div>
 
 </div>
 
-<script>
-const params = new URLSearchParams(window.location.search);
-
-const bookingId = params.get("bookingId");
-
-/* ================= FETCH FROM BACKEND (REAL FIX) ================= */
-fetch("https://dmv-cleaning-backend.onrender.com/api/booking/" + bookingId)
-  .then(res => res.json())
-  .then(data => {
-
-    document.getElementById("name").innerText = data.name || "";
-    document.getElementById("email").innerText = data.email || "";
-    document.getElementById("phone").innerText = data.phone || "";
-    document.getElementById("service").innerText = data.service || "";
-    document.getElementById("date").innerText = data.date || "";
-    document.getElementById("time").innerText = data.timeSlot || "";
-
-    document.getElementById("total").innerText = data.total || 0;
-
-  })
-  .catch(err => {
-    console.error("LOAD ERROR:", err);
-  });
-</script>
+<script src="js/success.js"></script>
 
 </body>
 </html>

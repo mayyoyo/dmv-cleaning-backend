@@ -2,57 +2,74 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Admin Dashboard</title>
 
-<link rel="stylesheet" href="../css/admin-dashboard.css">
+<link rel="stylesheet" href="../css/admin.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script defer src="../js/admin-dashboard.js"></script>
 
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-<script defer src="admin-dashboard.js"></script>
 </head>
 
 <body>
 
-<!-- ================= TOP BAR ================= -->
-<header class="topbar">
-  <h1>🧼 DMV Admin</h1>
-  <button id="logoutBtn">Logout</button>
+<header class="admin-header">
+  <h2>📊 DMV Cleaning Admin Dashboard</h2>
+  <button onclick="logout()">Logout</button>
 </header>
 
-<!-- ================= STATS ================= -->
 <section class="stats">
 
   <div class="card">
-    <h3>Total</h3>
-    <p id="total">0</p>
+    <h3>Total Revenue</h3>
+    <h2 id="revenue">$0</h2>
+  </div>
+
+  <div class="card">
+    <h3>Total Bookings</h3>
+    <h2 id="bookings">0</h2>
+  </div>
+
+  <div class="card">
+    <h3>Paid</h3>
+    <h2 id="paid">0</h2>
   </div>
 
   <div class="card">
     <h3>Pending</h3>
-    <p id="pending">0</p>
-  </div>
-
-  <div class="card">
-    <h3>Approved</h3>
-    <p id="approved">0</p>
-  </div>
-
-  <div class="card">
-    <h3>Rejected</h3>
-    <p id="rejected">0</p>
+    <h2 id="pending">0</h2>
   </div>
 
 </section>
 
-<!-- ================= BOOKINGS ================= -->
-<main class="container">
+<!-- ================= CHARTS ================= -->
+<section class="charts">
 
-  <h2>📅 Bookings</h2>
+  <canvas id="serviceChart"></canvas>
+  <canvas id="monthlyChart"></canvas>
 
-  <div id="bookingList"></div>
+</section>
 
-</main>
+<!-- ================= BOOKINGS TABLE ================= -->
+<section>
+
+  <h2>Bookings</h2>
+
+  <button onclick="exportCSV()">📥 Export CSV</button>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Service</th>
+        <th>Date</th>
+        <th>Total</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+</section>
 
 </body>
 </html>

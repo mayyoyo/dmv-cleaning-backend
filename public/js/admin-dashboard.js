@@ -1,85 +1,121 @@
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-/* SOCKET */
-const socket = io("https://dmv-cleaning-backend.onrender.com");
+const token = localStorage.getItem("adminToken");
 
-/* LOAD DASHBOARD */
-async function load() {
-  const res = await fetch(API + "/bookings");
+/* ================= SECURITY CHECK ================= */
+if (!token) {
+  window.location.href = "../admin/login.html";
+}
+
+/* ================= LOAD ANALYTICS ================= */
+async function loadAnalytics() {
+
+  try {
+
+    const res = await fetch(API + "/admin/analytics", {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    });
+
+    if (!res.ok) throw new Error("Unauthorized");
+
+    const data = await res.json();
+
+    document.getElementById("revenue").innerText = "$" + (data.revenue || 0);
+    document.getElementById("bookings").innerText = data.total || 0;
+
+    /* CHART 1 - SERVICE */
+    new Chart(document.getElementById("serviceChart"), {
+      type: "bar",
+      data: {
+        labels: Object.keys(data.services || {}),
+        datasets: [{
+          label: "Revenue by Service",
+          data: Object.values(data.services || {}),
+          backgroundColor: "#3b82f6"
+        }]
+      }
+    });
+
+    /* CHART 2 - MONTHLY */
+    new Chart(document.getElementById("monthlyChart"), {
+      type: "line",
+      data: {
+        labels: Object.keys(data.monthly || {}),
+        datasets: [{
+          label: "Monthly Revenue",
+          data: Object.values(data.monthly || {}),
+          borderColor: "#10b981",
+          fill: false
+        }]
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/* ================= LOAD BOOKINGS ================= */
+async function loadBookings() {
+
+  const res = await fetch(API + "/bookings", {
+    headers: {
+      Authorization: "Bearer " + token
+    }
+  });
+
   const data = await res.json();
 
-  renderBookings(data);
-  updateStats(data);
-}
+  const tbody = document.querySelector("#table tbody");
+  tbody.innerHTML = "";
 
-/* STATS */
-function updateStats(data) {
-  document.getElementById("total").innerText = data.length;
-  document.getElementById("pending").innerText = data.filter(b => b.status === "Pending").length;
-  document.getElementById("approved").innerText = data.filter(b => b.status === "Approved").length;
-  document.getElementById("rejected").innerText = data.filter(b => b.status === "Rejected").length;
-}
+  data.forEach(b => {
 
-/* BOOKINGS UI */
-function renderBookings(bookings) {
-  const container = document.getElementById("bookingList");
-  container.innerHTML = "";
+    const row = document.createElement("tr");
 
-  bookings.reverse().forEach(b => {
-
-    const div = document.createElement("div");
-    div.className = "booking";
-
-    div.innerHTML = `
-      <h4>${b.name} (${b.service})</h4>
-      <small>${b.date} | ${b.timeSlot}</small>
-      <p>Status: ${b.status}</p>
-
-      <div class="actions">
-        <button class="approve" onclick="approve(${b.id})">Approve</button>
-        <button class="reject" onclick="reject(${b.id})">Reject</button>
-      </div>
+    row.innerHTML = `
+      <td>${b.name || "-"}</td>
+      <td>${b.service || "-"}</td>
+      <td>${b.date || "-"}</td>
+      <td>$${b.total || 0}</td>
+      <td>${b.status || "Pending"}</td>
     `;
 
-    container.appendChild(div);
+    tbody.appendChild(row);
   });
 }
 
-/* APPROVE */
-async function approve(id) {
-  await fetch(API + "/bookings/approve", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id })
+/* ================= CSV EXPORT ================= */
+function exportCSV() {
+
+  let csv = "Name,Service,Date,Total,Status\n";
+
+  document.querySelectorAll("#table tbody tr").forEach(row => {
+
+    const cols = row.querySelectorAll("td");
+
+    csv += Array.from(cols)
+      .map(c => `"${c.innerText}"`)
+      .join(",") + "\n";
   });
 
-  load();
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "bookings.csv";
+  a.click();
 }
 
-/* REJECT */
-async function reject(id) {
-  await fetch(API + "/bookings/reject", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ id })
-  });
-
-  load();
+/* ================= LOGOUT ================= */
+function logout() {
+  localStorage.removeItem("adminToken");
+  window.location.href = "../admin/login.html";
 }
 
-/* REALTIME UPDATE */
-socket.on("new-booking", () => {
-  load();
-});
-
-/* LOGOUT */
-document.getElementById("logoutBtn").addEventListener("click", async () => {
-  await fetch(API + "/admin/logout", {
-    credentials: "include"
-  });
-
-  window.location.href = "/admin/login.html";
-});
-
-/* INIT */
-load();
+/* ================= INIT ================= */
+loadAnalytics();
+loadBookings();

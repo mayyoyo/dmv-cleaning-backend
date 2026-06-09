@@ -6,7 +6,6 @@
 
 <title>Admin Login - DMV Cleaning</title>
 
-<!-- FIXED CSS PATH -->
 <link rel="stylesheet" href="../css/admin-login.css">
 
 </head>
@@ -30,7 +29,7 @@
 </div>
 
 <!-- ================= DASHBOARD ================= -->
-<div class="dashboard" id="dashboard">
+<div class="dashboard" id="dashboard" style="display:none;">
 
   <header class="dash-header">
     <h2>📊 DMV Cleaning Admin Dashboard</h2>
@@ -47,7 +46,7 @@
 
 </div>
 
-<!-- ================= SOCKET.IO ================= -->
+<!-- ================= SOCKET ================= -->
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
 <script>
@@ -66,16 +65,18 @@ async function login() {
     const res = await fetch(API + "/admin/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      credentials: "include",
       body: JSON.stringify({ username, password })
     });
 
     const data = await res.json();
 
-    if (!res.ok) {
+    if (!data.token) {
       document.getElementById("msg").innerText = "❌ Invalid login";
       return;
     }
+
+    // SAVE TOKEN
+    localStorage.setItem("adminToken", data.token);
 
     document.getElementById("loginBox").style.display = "none";
     document.getElementById("dashboard").style.display = "block";
@@ -88,13 +89,15 @@ async function login() {
   }
 }
 
-/* ================= LOAD BOOKINGS ================= */
+/* ================= LOAD BOOKINGS (SECURED) ================= */
 async function loadBookings() {
 
   try {
 
     const res = await fetch(API + "/bookings", {
-      credentials: "include"
+      headers: {
+        Authorization: localStorage.getItem("adminToken")
+      }
     });
 
     const bookings = await res.json();
@@ -115,7 +118,7 @@ async function loadBookings() {
   }
 }
 
-/* ================= LIVE SOCKET UPDATES ================= */
+/* ================= LIVE ================= */
 socket.on("new-booking", (booking) => {
 
   document.getElementById("liveStatus").innerHTML =
