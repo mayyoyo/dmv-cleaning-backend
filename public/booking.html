@@ -1,4 +1,3 @@
-```html id="booking_page_full"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -28,48 +27,48 @@
 
 <main class="booking-page">
 
-  <section class="booking-card">
+<section class="booking-card">
 
-    <h2>📅 Book Cleaning Service</h2>
+<h2>📅 Book Cleaning Service</h2>
 
-    <!-- CALENDAR -->
-    <div id="calendar"></div>
+<!-- CALENDAR -->
+<div id="calendar"></div>
 
-    <!-- SELECTED DATE -->
-    <p id="selectedDate">No date selected</p>
+<!-- SELECTED DATE -->
+<p id="selectedDate">No date selected</p>
 
-    <!-- FORM -->
-    <form id="bookingForm" onsubmit="return false;">
+<!-- FORM -->
+<form id="bookingForm" onsubmit="return false;">
 
-      <select id="timeSlot" class="input" required>
-        <option value="">Select Time</option>
-        <option value="08:00-10:00">08:00 - 10:00</option>
-        <option value="10:00-12:00">10:00 - 12:00</option>
-        <option value="12:00-14:00">12:00 - 14:00</option>
-        <option value="14:00-16:00">14:00 - 16:00</option>
-        <option value="16:00-18:00">16:00 - 18:00</option>
-      </select>
+  <select id="timeSlot" class="input" required>
+    <option value="">Select Time</option>
+    <option value="08:00-10:00">08:00 - 10:00</option>
+    <option value="10:00-12:00">10:00 - 12:00</option>
+    <option value="12:00-14:00">12:00 - 14:00</option>
+    <option value="14:00-16:00">14:00 - 16:00</option>
+    <option value="16:00-18:00">16:00 - 18:00</option>
+  </select>
 
-      <input id="name" class="input" placeholder="Full Name" required>
-      <input id="phone" class="input" placeholder="Phone" required>
-      <input id="email" class="input" type="email" placeholder="Email" required>
-      <input id="address" class="input" placeholder="Address" required>
+  <input id="name" class="input" placeholder="Full Name" required>
+  <input id="phone" class="input" placeholder="Phone" required>
+  <input id="email" class="input" type="email" placeholder="Email" required>
+  <input id="address" class="input" placeholder="Address" required>
 
-      <select id="service" class="input" required>
-        <option value="">Select Service</option>
-        <option value="Home Cleaning">Home Cleaning - $120</option>
-        <option value="Deep Cleaning">Deep Cleaning - $200</option>
-        <option value="Office Cleaning">Office Cleaning - $150</option>
-        <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
-      </select>
+  <select id="service" class="input" required>
+    <option value="">Select Service</option>
+    <option value="Home Cleaning">Home Cleaning - $120</option>
+    <option value="Deep Cleaning">Deep Cleaning - $200</option>
+    <option value="Office Cleaning">Office Cleaning - $150</option>
+    <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
+  </select>
 
-      <button type="button" class="btn primary" onclick="bookNow()">
-        📩 Book Now
-      </button>
+  <button type="button" class="btn primary" onclick="bookNow()">
+    📩 Book Now
+  </button>
 
-    </form>
+</form>
 
-  </section>
+</section>
 
 </main>
 
@@ -97,7 +96,7 @@ document.addEventListener("DOMContentLoaded", function () {
   calendar.render();
 });
 
-/* ================= BOOK NOW (FIXED REDIRECT) ================= */
+/* ================= BOOK NOW ================= */
 async function bookNow() {
 
   const name = document.getElementById("name").value.trim();
@@ -119,7 +118,9 @@ async function bookNow() {
 
     const res = await fetch(API + "/book", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
         name,
         email,
@@ -137,18 +138,18 @@ async function bookNow() {
       return alert(data.error || "Booking failed");
     }
 
-    alert("✅ Booking successful!");
+    // ✅ SUCCESS MESSAGE (clean UX)
+    alert("Booking confirmed successfully!");
 
-    // 🔥 FINAL REDIRECT FIX
+    // ✅ FIXED REDIRECT (IMPORTANT)
     window.location.href = "/success.html?bookingId=" + data.bookingId;
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
-    alert("❌ Server error");
+    alert("Server error");
   }
 }
 </script>
 
 </body>
 </html>
-```
