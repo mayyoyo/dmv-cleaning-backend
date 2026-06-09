@@ -6,50 +6,51 @@
 
 <title>Admin Dashboard</title>
 
-<link rel="stylesheet" href="/css/admin-dashboard.css">
+<link rel="stylesheet" href="admin-dashboard.css">
 
-<script defer src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script defer src="/js/admin-dashboard.js"></script>
-
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script defer src="admin-dashboard.js"></script>
 </head>
 
 <body>
 
+<!-- ================= TOP BAR ================= -->
 <header class="topbar">
-  <h3>Admin Dashboard</h3>
+  <h1>🧼 DMV Admin</h1>
   <button id="logoutBtn">Logout</button>
 </header>
 
-<main class="main">
+<!-- ================= STATS ================= -->
+<section class="stats">
 
-  <!-- STATS -->
-  <div class="cards">
-    <div class="card">
-      <h3 id="bookings">0</h3>
-      <p>Total Bookings</p>
-    </div>
-
-    <div class="card">
-      <h3 id="pending">0</h3>
-      <p>Pending</p>
-    </div>
-
-    <div class="card">
-      <h3 id="approved">0</h3>
-      <p>Approved</p>
-    </div>
-
-    <div class="card">
-      <h3 id="rejected">0</h3>
-      <p>Rejected</p>
-    </div>
+  <div class="card">
+    <h3>Total</h3>
+    <p id="total">0</p>
   </div>
 
-  <!-- BOOKINGS LIST -->
-  <section class="booking-section">
-    <h2>📋 Booking Requests</h2>
-    <div id="bookingList" class="list"></div>
-  </section>
+  <div class="card">
+    <h3>Pending</h3>
+    <p id="pending">0</p>
+  </div>
+
+  <div class="card">
+    <h3>Approved</h3>
+    <p id="approved">0</p>
+  </div>
+
+  <div class="card">
+    <h3>Rejected</h3>
+    <p id="rejected">0</p>
+  </div>
+
+</section>
+
+<!-- ================= BOOKINGS ================= -->
+<main class="container">
+
+  <h2>📅 Bookings</h2>
+
+  <div id="bookingList"></div>
 
 </main>
 

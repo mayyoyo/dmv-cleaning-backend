@@ -1,72 +1,78 @@
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-/* SOCKET REALTIME */
+/* SOCKET */
 const socket = io("https://dmv-cleaning-backend.onrender.com");
 
-/* ================= DASHBOARD ================= */
-async function loadDashboard() {
-  const res = await fetch(API + "/dashboard", {
-    credentials: "include"
-  });
-
-  const data = await res.json();
-
-  document.getElementById("bookings").innerText = data.totalBookings;
-  document.getElementById("pending").innerText = data.pending;
-  document.getElementById("approved").innerText = data.approved;
-  document.getElementById("rejected").innerText = data.rejected;
-}
-
-/* ================= BOOKINGS LIST ================= */
-async function loadBookings() {
+/* LOAD DASHBOARD */
+async function load() {
   const res = await fetch(API + "/bookings");
   const data = await res.json();
 
-  const list = document.getElementById("bookingList");
-  list.innerHTML = "";
+  renderBookings(data);
+  updateStats(data);
+}
 
-  data.forEach(b => {
+/* STATS */
+function updateStats(data) {
+  document.getElementById("total").innerText = data.length;
+  document.getElementById("pending").innerText = data.filter(b => b.status === "Pending").length;
+  document.getElementById("approved").innerText = data.filter(b => b.status === "Approved").length;
+  document.getElementById("rejected").innerText = data.filter(b => b.status === "Rejected").length;
+}
+
+/* BOOKINGS UI */
+function renderBookings(bookings) {
+  const container = document.getElementById("bookingList");
+  container.innerHTML = "";
+
+  bookings.reverse().forEach(b => {
+
     const div = document.createElement("div");
     div.className = "booking";
 
     div.innerHTML = `
-      <p><b>${b.name}</b> - ${b.service}</p>
-      <p>${b.date} | ${b.timeSlot}</p>
-      <p>Status: <b>${b.status}</b></p>
+      <h4>${b.name} (${b.service})</h4>
+      <small>${b.date} | ${b.timeSlot}</small>
+      <p>Status: ${b.status}</p>
 
-      <button onclick="approveBooking(${b.id})">Approve</button>
-      <button onclick="rejectBooking(${b.id})">Reject</button>
+      <div class="actions">
+        <button class="approve" onclick="approve(${b.id})">Approve</button>
+        <button class="reject" onclick="reject(${b.id})">Reject</button>
+      </div>
     `;
 
-    list.appendChild(div);
+    container.appendChild(div);
   });
 }
 
-/* ================= APPROVE ================= */
-async function approveBooking(id) {
+/* APPROVE */
+async function approve(id) {
   await fetch(API + "/bookings/approve", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id })
   });
 
-  loadDashboard();
-  loadBookings();
+  load();
 }
 
-/* ================= REJECT ================= */
-async function rejectBooking(id) {
+/* REJECT */
+async function reject(id) {
   await fetch(API + "/bookings/reject", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ id })
   });
 
-  loadDashboard();
-  loadBookings();
+  load();
 }
 
-/* ================= LOGOUT ================= */
+/* REALTIME UPDATE */
+socket.on("new-booking", () => {
+  load();
+});
+
+/* LOGOUT */
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   await fetch(API + "/admin/logout", {
     credentials: "include"
@@ -75,16 +81,5 @@ document.getElementById("logoutBtn").addEventListener("click", async () => {
   window.location.href = "/admin/login.html";
 });
 
-/* ================= REALTIME ================= */
-socket.on("new-booking", () => {
-  loadDashboard();
-  loadBookings();
-});
-
-/* ================= INIT ================= */
-loadDashboard();
-loadBookings();
-setInterval(() => {
-  loadDashboard();
-  loadBookings();
-}, 30000);
+/* INIT */
+load();

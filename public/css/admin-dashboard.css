@@ -1,83 +1,101 @@
 body {
-  font-family: Arial, sans-serif;
-  background: #f4f6fa;
   margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f7f7f7;
 }
 
+/* TOPBAR */
 .topbar {
-  background: #111;
-  color: white;
-  padding: 12px 16px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  background: #111;
+  color: white;
+  padding: 15px 20px;
 }
 
 .topbar button {
-  padding: 6px 12px;
+  background: red;
+  border: none;
+  color: white;
+  padding: 8px 12px;
   cursor: pointer;
-}
-
-.main {
-  padding: 20px;
+  border-radius: 6px;
 }
 
 /* STATS */
-.cards {
+.stats {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 15px;
+  padding: 20px;
 }
 
 .card {
   background: white;
-  padding: 15px;
-  border-radius: 10px;
+  padding: 20px;
+  border-radius: 12px;
   text-align: center;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+
+.card h3 {
+  margin: 0;
+  font-size: 14px;
+  color: gray;
+}
+
+.card p {
+  font-size: 24px;
+  margin: 10px 0 0;
 }
 
 /* BOOKINGS */
-.booking-section {
-  margin-top: 20px;
-}
-
-.list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.container {
+  padding: 20px;
 }
 
 .booking {
   background: white;
-  padding: 12px;
-  border-radius: 10px;
+  padding: 15px;
+  border-radius: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 
-.booking button {
-  margin-right: 5px;
-  padding: 5px 10px;
+.booking h4 {
+  margin: 0;
+}
+
+.booking small {
+  color: gray;
+}
+
+.actions {
+  margin-top: 10px;
+}
+
+.actions button {
+  padding: 8px 12px;
+  border: none;
   cursor: pointer;
+  border-radius: 6px;
+  margin-right: 5px;
 }
-/*  */
-@media (max-width: 768px) {
 
-  .cards {
-    grid-template-columns: 1fr 1fr;
-  }
+.approve {
+  background: green;
+  color: white;
+}
 
-  .booking {
-    font-size: 14px;
-  }
+.reject {
+  background: red;
+  color: white;
+}
 
-  .topbar {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
-
-  button {
-    width: 100%;
-    margin-top: 5px;
+/* MOBILE */
+@media(max-width: 768px) {
+  .stats {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
