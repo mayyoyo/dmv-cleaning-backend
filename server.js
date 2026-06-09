@@ -1,4 +1,4 @@
-console.log("🚀 PRODUCTION SYSTEM STARTING...");
+console.log("🚀 PRODUCTION SYSTEM STARTING (FIXED)");
 
 require("dotenv").config();
 
@@ -6,23 +6,48 @@ const express = require("express");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const cookieParser = require("cookie-parser");
-const nodemailer = require("nodemailer");
 const http = require("http");
 const { Server } = require("socket.io");
+const nodemailer = require("nodemailer");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-/* ================= ENV ================= */
-const PAYMENT_ENABLED = process.env.PAYMENT_ENABLED === "true";
+/* ================= ENV CHECK ================= */
+if (!process.env.ADMIN_USER || !process.env.ADMIN_PASS || !process.env.JWT_SECRET) {
+  console.log("❌ ENV missing in Render");
+}
 
 /* ================= MIDDLEWARE ================= */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-/* ================= BASIC TEST ROUTE ================= */
+/* ================= CORS ================= */
+const allowedOrigins = [
+  "https://mydmvcleaningservice.com",
+  "https://www.mydmvcleaningservice.com",
+  "http://localhost:3000"
+];
+
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+  if (req.method === "OPTIONS") return res.sendStatus(200);
+
+  next();
+});
+
+/* ================= HEALTH CHECK ================= */
 app.get("/api", (req, res) => {
   res.json({ message: "API Working" });
 });
@@ -30,12 +55,12 @@ app.get("/api", (req, res) => {
 /* ================= BOOKINGS STORAGE ================= */
 let bookings = [];
 
-/* ================= SOCKET REALTIME ================= */
+/* ================= SOCKET ================= */
 io.on("connection", () => {
   console.log("⚡ Admin connected");
 });
 
-/* ================= EMAIL SYSTEM ================= */
+/* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -74,130 +99,17 @@ function auth(req, res, next) {
     next();
 
   } catch (err) {
-    console.error("AUTH ERROR:", err);
     return res.status(401).json({ error: "Invalid session" });
   }
 }
 
-/* ================= BOOKING CREATE ================= */
-app.post("/api/book", async (req, res) => {
-  const booking = {
-    id: Date.now(),
-    ...req.body,
-    status: "Pending",
-    createdAt: new Date()
-  };
-
-  bookings.push(booking);
-
-  io.emit("new-booking", booking);
-
-  await sendEmail(
-    booking.email,
-    "Booking Received - DMV Cleaning",
-    `
-      <div style="font-family:Arial;padding:20px">
-        <h2>🧼 Booking Received</h2>
-        <p>Hi <b>${booking.name}</b>,</p>
-        <p>Your booking is <b>Pending</b>.</p>
-        <p><b>Date:</b> ${booking.date}</p>
-        <p><b>Time:</b> ${booking.timeSlot}</p>
-      </div>
-    `
-  );
-
-  res.json({ success: true });
-});
-
-/* ================= BOOKINGS LIST ================= */
-app.get("/api/bookings", (req, res) => {
-  res.json(bookings);
-});
-
-/* ================= APPROVE BOOKING ================= */
-app.post("/api/bookings/approve", async (req, res) => {
-  const booking = bookings.find(b => b.id == req.body.id);
-  if (!booking) return res.status(404).json({ error: "Not found" });
-
-  booking.status = "Approved";
-
-  await sendEmail(
-    booking.email,
-    "Booking Approved ✅",
-    `
-      <div style="font-family:Arial;padding:20px">
-        <h2 style="color:green">Approved 🎉</h2>
-        <p>Hi ${booking.name}, your booking is confirmed.</p>
-        <p><b>Date:</b> ${booking.date}</p>
-        <p><b>Time:</b> ${booking.timeSlot}</p>
-      </div>
-    `
-  );
-
-  res.json({ success: true });
-});
-
-/* ================= REJECT BOOKING ================= */
-app.post("/api/bookings/reject", async (req, res) => {
-  const booking = bookings.find(b => b.id == req.body.id);
-  if (!booking) return res.status(404).json({ error: "Not found" });
-
-  booking.status = "Rejected";
-
-  await sendEmail(
-    booking.email,
-    "Booking Rejected ❌",
-    `
-      <div style="font-family:Arial;padding:20px">
-        <h2 style="color:red">Rejected</h2>
-        <p>Hi ${booking.name}, your booking was not available.</p>
-        <p>Please choose another time slot.</p>
-      </div>
-    `
-  );
-
-  res.json({ success: true });
-});
-
-/* ================= ANALYTICS DASHBOARD ================= */
-app.get("/api/analytics", auth, (req, res) => {
-  const total = bookings.length;
-  const pending = bookings.filter(b => b.status === "Pending").length;
-  const approved = bookings.filter(b => b.status === "Approved").length;
-  const rejected = bookings.filter(b => b.status === "Rejected").length;
-
-  const revenue = bookings
-    .filter(b => b.status === "Approved")
-    .reduce((sum, b) => {
-      if (b.service === "Deep Cleaning") return sum + 200;
-      if (b.service === "Office Cleaning") return sum + 150;
-      if (b.service === "Move In/Out Cleaning") return sum + 180;
-      return sum + 120;
-    }, 0);
-
-  res.json({
-    totalBookings: total,
-    pending,
-    approved,
-    rejected,
-    revenue,
-    paymentEnabled: PAYMENT_ENABLED
-  });
-});
-
-/* ================= DASHBOARD ================= */
-app.get("/api/dashboard", auth, (req, res) => {
-  res.json({
-    totalBookings: bookings.length,
-    pending: bookings.filter(b => b.status === "Pending").length,
-    approved: bookings.filter(b => b.status === "Approved").length,
-    rejected: bookings.filter(b => b.status === "Rejected").length
-  });
-});
-
-/* ================= LOGIN ================= */
+/* ================= LOGIN (FIXED) ================= */
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ error: "Missing fields" });
+  }
 
   if (
     username === process.env.ADMIN_USER &&
@@ -218,7 +130,80 @@ app.post("/api/admin/login", (req, res) => {
     return res.json({ success: true });
   }
 
-  res.status(401).json({ error: "Invalid credentials" });
+  return res.status(401).json({ error: "Invalid credentials" });
+});
+
+/* ================= BOOKING (FIXED SAFE VERSION) ================= */
+app.post("/api/book", async (req, res) => {
+  try {
+    const { name, email, phone, address, date, timeSlot, service } = req.body;
+
+    if (!name || !email || !phone || !address || !date || !timeSlot || !service) {
+      return res.status(400).json({ error: "All fields required" });
+    }
+
+    const isTaken = bookings.some(
+      b => b.date === date &&
+           b.timeSlot === timeSlot &&
+           b.status !== "Rejected"
+    );
+
+    if (isTaken) {
+      return res.status(400).json({ error: "Time slot already booked" });
+    }
+
+    const booking = {
+      id: Date.now(),
+      name,
+      email,
+      phone,
+      address,
+      date,
+      timeSlot,
+      service,
+      status: "Pending",
+      createdAt: new Date()
+    };
+
+    bookings.push(booking);
+
+    io.emit("new-booking", booking);
+
+    await sendEmail(
+      email,
+      "Booking Received - DMV Cleaning",
+      `
+        <div style="font-family:Arial;padding:20px">
+          <h2>🧼 Booking Received</h2>
+          <p>Hi <b>${name}</b>,</p>
+          <p>Status: <b>Pending</b></p>
+          <p>Date: ${date}</p>
+          <p>Time: ${timeSlot}</p>
+        </div>
+      `
+    );
+
+    return res.json({ success: true });
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    return res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ================= BOOKINGS ================= */
+app.get("/api/bookings", (req, res) => {
+  res.json(bookings);
+});
+
+/* ================= DASHBOARD ================= */
+app.get("/api/dashboard", auth, (req, res) => {
+  res.json({
+    totalBookings: bookings.length,
+    pending: bookings.filter(b => b.status === "Pending").length,
+    approved: bookings.filter(b => b.status === "Approved").length,
+    rejected: bookings.filter(b => b.status === "Rejected").length
+  });
 });
 
 /* ================= LOGOUT ================= */
@@ -232,12 +217,12 @@ app.get("/api/admin/logout", (req, res) => {
   res.json({ success: true });
 });
 
-/* ================= STATIC FILES ================= */
+/* ================= STATIC ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log("✅ SYSTEM READY ON PORT " + PORT);
+  console.log("✅ SERVER RUNNING ON PORT " + PORT);
 });
