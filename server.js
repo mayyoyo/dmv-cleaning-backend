@@ -1,5 +1,3 @@
-
-
 console.log("🚀 SERVER STARTING...");
 
 require("dotenv").config();
@@ -16,7 +14,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// ================== CORS ==================
+// ================== CORS FIX ==================
 const allowedOrigins = [
   "https://mydmvcleaningservice.com",
   "https://www.mydmvcleaningservice.com",
@@ -80,7 +78,7 @@ app.post("/api/admin/login", (req, res) => {
   }
 });
 
-// ================== AUTH ==================
+// ================== AUTH (SAFE VERSION) ==================
 function auth(req, res, next) {
   try {
     const token = req.cookies.token;
@@ -89,10 +87,15 @@ function auth(req, res, next) {
       return res.status(401).json({ error: "Not logged in" });
     }
 
+    if (!process.env.JWT_SECRET) {
+      return res.status(500).json({ error: "JWT missing" });
+    }
+
     jwt.verify(token, process.env.JWT_SECRET);
     next();
 
   } catch (err) {
+    console.error("AUTH ERROR:", err);
     return res.status(401).json({ error: "Invalid session" });
   }
 }
@@ -120,6 +123,7 @@ app.get("/api/admin/logout", (req, res) => {
 // ================== BOOKINGS ==================
 let bookings = [];
 
+// simple booking endpoint
 app.post("/api/book", (req, res) => {
   const booking = {
     id: Date.now(),
@@ -134,6 +138,7 @@ app.post("/api/book", (req, res) => {
   res.json({ success: true });
 });
 
+// get all bookings (admin)
 app.get("/api/bookings", (req, res) => {
   res.json(bookings);
 });
@@ -141,10 +146,9 @@ app.get("/api/bookings", (req, res) => {
 // ================== STATIC FILES ==================
 app.use(express.static(path.join(__dirname, "public")));
 
-// ================== START SERVER ==================
+// ================== SERVER START ==================
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
   console.log("✅ Server running on port " + PORT);
 });
-```
