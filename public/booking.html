@@ -1,3 +1,4 @@
+```html id="booking_page_full"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -9,8 +10,6 @@
 <link rel="stylesheet" href="css/booking.css">
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
-
-<script defer src="js/booking.js"></script>
 
 </head>
 
@@ -28,15 +27,19 @@
 </header>
 
 <main class="booking-page">
+
   <section class="booking-card">
 
     <h2>📅 Book Cleaning Service</h2>
 
+    <!-- CALENDAR -->
     <div id="calendar"></div>
 
+    <!-- SELECTED DATE -->
     <p id="selectedDate">No date selected</p>
 
-    <form id="bookingForm">
+    <!-- FORM -->
+    <form id="bookingForm" onsubmit="return false;">
 
       <select id="timeSlot" class="input" required>
         <option value="">Select Time</option>
@@ -53,6 +56,7 @@
       <input id="address" class="input" placeholder="Address" required>
 
       <select id="service" class="input" required>
+        <option value="">Select Service</option>
         <option value="Home Cleaning">Home Cleaning - $120</option>
         <option value="Deep Cleaning">Deep Cleaning - $200</option>
         <option value="Office Cleaning">Office Cleaning - $150</option>
@@ -66,7 +70,85 @@
     </form>
 
   </section>
+
 </main>
+
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+let selectedDate = null;
+
+/* ================= CALENDAR ================= */
+document.addEventListener("DOMContentLoaded", function () {
+
+  const calendarEl = document.getElementById("calendar");
+
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    height: 500,
+
+    dateClick: function(info) {
+      selectedDate = info.dateStr;
+      document.getElementById("selectedDate").innerText =
+        "Selected: " + selectedDate;
+    }
+  });
+
+  calendar.render();
+});
+
+/* ================= BOOK NOW (FIXED REDIRECT) ================= */
+async function bookNow() {
+
+  const name = document.getElementById("name").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const address = document.getElementById("address").value.trim();
+  const timeSlot = document.getElementById("timeSlot").value;
+  const service = document.getElementById("service").value;
+
+  if (!selectedDate) {
+    return alert("❌ Please select a date");
+  }
+
+  if (!name || !email || !phone || !address || !timeSlot || !service) {
+    return alert("❌ Please fill all fields");
+  }
+
+  try {
+
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        address,
+        date: selectedDate,
+        timeSlot,
+        service
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return alert(data.error || "Booking failed");
+    }
+
+    alert("✅ Booking successful!");
+
+    // 🔥 FINAL REDIRECT FIX
+    window.location.href = "/success.html?bookingId=" + data.bookingId;
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("❌ Server error");
+  }
+}
+</script>
 
 </body>
 </html>
+```
