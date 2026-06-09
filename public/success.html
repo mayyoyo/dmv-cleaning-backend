@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Booking Confirmation</title>
+<title>Booking Confirmed - DMV Cleaning</title>
 
 <link rel="stylesheet" href="css/success.css">
 
@@ -14,37 +14,42 @@
 
 <div class="success-container">
 
-  <!-- BUSINESS HEADER -->
-  <h1>🧼 DMV Cleaning Services LLC</h1>
-  <p><b>Business Phone:</b> 703-967-0674</p>
+  <div class="success-card">
 
-  <!-- RECEIPT CARD -->
-  <div class="card">
+    <h1>🧼 DMV Cleaning Services LLC</h1>
+
+    <p class="business-phone">
+      Business Phone: 703-967-0674
+    </p>
 
     <h2>✔ Booking Confirmed</h2>
-    <p><b>Booking Receipt</b></p>
 
-    <!-- STATUS -->
-    <p><b>Status:</b> <span id="status">Loading...</span></p>
+    <h3>Booking Receipt</h3>
 
-    <hr>
+    <div id="receipt">
 
-    <!-- CUSTOMER INFO -->
-    <p><b>Name:</b> <span id="name"></span></p>
-    <p><b>Email:</b> <span id="email"></span></p>
-    <p><b>Customer Phone:</b> <span id="phone"></span></p>
+      <p>Status: <span id="status">Pending</span></p>
 
-    <hr>
+      <p>Name: <span id="name"></span></p>
 
-    <!-- BOOKING INFO -->
-    <p><b>Service:</b> <span id="service"></span></p>
-    <p><b>Date:</b> <span id="date"></span></p>
-    <p><b>Time:</b> <span id="time"></span></p>
+      <p>Email: <span id="email"></span></p>
 
-    <hr>
+      <p>Customer Phone: <span id="phone"></span></p>
 
-    <!-- PAYMENT -->
-    <p><b>Amount Due:</b> $<span id="total"></span></p>
+      <p>Service: <span id="service"></span></p>
+
+      <p>Date: <span id="date"></span></p>
+
+      <p>Time: <span id="time"></span></p>
+
+      <hr>
+
+      <!-- ✅ PROFESSIONAL FIX -->
+      <p class="total">
+        Amount Due: $<span id="total">0</span>
+      </p>
+
+    </div>
 
   </div>
 
@@ -53,48 +58,39 @@
 <script>
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-/* ================= GET BOOKING ID ================= */
 const params = new URLSearchParams(window.location.search);
 const bookingId = params.get("bookingId");
+const urlTotal = params.get("total");
 
-console.log("Booking ID:", bookingId);
-
-/* ================= LOAD BOOKING ================= */
-async function loadBooking() {
-
-  if (!bookingId) {
-    document.body.innerHTML = "<h2>❌ Invalid booking</h2>";
-    return;
-  }
-
-  try {
-
-    const res = await fetch(API + "/booking/" + bookingId);
-    const data = await res.json();
-
-    if (!res.ok) {
-      throw new Error("Booking not found");
-    }
-
-    // ================= FILL DATA =================
-    document.getElementById("status").innerText = data.status || "Pending";
-    document.getElementById("name").innerText = data.name || "";
-    document.getElementById("email").innerText = data.email || "";
-    document.getElementById("phone").innerText = data.phone || "";
-    document.getElementById("service").innerText = data.service || "";
-    document.getElementById("date").innerText = data.date || "";
-    document.getElementById("time").innerText = data.timeSlot || "";
-
-    // ================= DYNAMIC PRICE =================
-    document.getElementById("total").innerText = data.total || "0";
-
-  } catch (err) {
-    console.error(err);
-    document.body.innerHTML = "<h2>❌ Error loading booking</h2>";
-  }
+/* ================= SAFE FALLBACK ================= */
+if (urlTotal) {
+  document.getElementById("total").innerText = urlTotal;
 }
 
-loadBooking();
+/* ================= BEST PRACTICE (REAL DATA) ================= */
+if (bookingId) {
+
+  fetch(API + "/booking/" + bookingId)
+    .then(res => res.json())
+    .then(data => {
+
+      document.getElementById("name").innerText = data.name;
+      document.getElementById("email").innerText = data.email;
+      document.getElementById("phone").innerText = data.phone;
+      document.getElementById("service").innerText = data.service;
+      document.getElementById("date").innerText = data.date;
+      document.getElementById("time").innerText = data.timeSlot;
+      document.getElementById("status").innerText = data.status;
+
+      /* IMPORTANT FIX */
+      document.getElementById("total").innerText = data.total || 0;
+
+    })
+    .catch(err => {
+      console.error("ERROR LOADING BOOKING:", err);
+    });
+
+}
 </script>
 
 </body>
