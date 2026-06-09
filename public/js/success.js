@@ -1,30 +1,68 @@
+const API = window.location.origin;
+
+/* ================= GET BOOKING ID ================= */
 const params = new URLSearchParams(window.location.search);
+const bookingId = params.get("bookingId");
 
-const bookingId = params.get("bid");
-const total = params.get("total");
-const deposit = params.get("deposit");
-const remaining = params.get("remaining");
+/* ================= LOAD BOOKING ================= */
+async function loadBooking() {
 
-const booking = JSON.parse(localStorage.getItem("lastBooking"));
+  if (!bookingId) {
+    document.body.innerHTML = "<h2>❌ Missing booking ID</h2>";
+    return;
+  }
 
-const box = document.getElementById("details");
+  try {
+    const res = await fetch(API + "/api/bookings");
+    const bookings = await res.json();
 
-if (booking) {
-  box.innerHTML = `
-    <div class="box"><b>Booking ID:</b> ${bookingId}</div>
-    <div class="box"><b>Name:</b> ${booking.name}</div>
-    <div class="box"><b>Service:</b> ${booking.service}</div>
-    <div class="box"><b>Date:</b> ${booking.date}</div>
-    <div class="box"><b>Time:</b> ${booking.timeSlot}</div>
+    const booking = bookings.find(b => String(b.id) === String(bookingId));
 
-    <div class="box"><b>Total:</b> $${total}</div>
-    <div class="box"><b>Deposit (20%):</b> $${deposit}</div>
-    <div class="box"><b>Remaining:</b> $${remaining}</div>
-  `;
-} else {
-  box.innerHTML = "No booking data found.";
+    if (!booking) {
+      document.body.innerHTML = "<h2>❌ Booking not found</h2>";
+      return;
+    }
+
+    document.getElementById("name").innerText = booking.name;
+    document.getElementById("email").innerText = booking.email;
+    document.getElementById("service").innerText = booking.service;
+    document.getElementById("date").innerText = booking.date;
+    document.getElementById("time").innerText = booking.timeSlot;
+    document.getElementById("total").innerText = booking.total || "120";
+
+    const badge = document.getElementById("statusBadge");
+
+    if (booking.status === "Approved") {
+      badge.innerText = "APPROVED";
+      badge.classList.add("paid");
+    } else if (booking.status === "Rejected") {
+      badge.innerText = "REJECTED";
+      badge.style.background = "red";
+    } else {
+      badge.innerText = "PENDING";
+      badge.classList.add("pending");
+    }
+
+  } catch (err) {
+    console.error(err);
+    document.body.innerHTML = "<h2>❌ Error loading booking</h2>";
+  }
 }
 
-function goHome() {
-  window.location.href = "index.html";
+/* ================= PDF DOWNLOAD ================= */
+function downloadPDF() {
+  const element = document.getElementById("receipt");
+
+  html2pdf()
+    .set({
+      margin: 10,
+      filename: "receipt.pdf",
+      html2canvas: { scale: 2 },
+      jsPDF: { format: "a4" }
+    })
+    .from(element)
+    .save();
 }
+
+/* ================= INIT ================= */
+loadBooking();

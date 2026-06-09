@@ -1,15 +1,20 @@
+
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 let selectedDate = null;
 
-/* ================= CALENDAR ================= */
+/* ================= CALENDAR (FIXED AUTO BLOCKING) ================= */
 document.addEventListener("DOMContentLoaded", async function () {
+
   const calendarEl = document.getElementById("calendar");
-  let events = [];
+
+  let bookedDates = [];
 
   try {
     const res = await fetch(API + "/bookings");
-    events = await res.json();
+    const data = await res.json();
+
+    bookedDates = data.map(b => b.date);
   } catch (err) {
     console.error("Calendar load error:", err);
   }
@@ -18,19 +23,34 @@ document.addEventListener("DOMContentLoaded", async function () {
     initialView: "dayGridMonth",
     height: 500,
 
-    events: events,
-
     dateClick: function (info) {
-      selectedDate = info.dateStr;
+
+      const clickedDate = info.dateStr;
+
+      // 🔴 BLOCK BOOKED DATES
+      if (bookedDates.includes(clickedDate)) {
+        alert("❌ This date is already booked");
+        return;
+      }
+
+      // 🟢 SELECT DATE
+      selectedDate = clickedDate;
       document.getElementById("selectedDate").innerText = selectedDate;
-    }
+    },
+
+    events: bookedDates.map(date => ({
+      title: "Booked",
+      date: date,
+      color: "red"
+    }))
   });
 
   calendar.render();
 });
 
-/* ================= BOOKING FUNCTION (FIXED) ================= */
+/* ================= BOOK NOW (FIXED + REDIRECT) ================= */
 async function bookNow() {
+
   const name = document.getElementById("name").value.trim();
   const email = document.getElementById("email").value.trim();
   const phone = document.getElementById("phone").value.trim();
@@ -38,7 +58,6 @@ async function bookNow() {
   const timeSlot = document.getElementById("timeSlot").value;
   const service = document.getElementById("service").value;
 
-  // VALIDATION
   if (!selectedDate) {
     return alert("❌ Please select a date");
   }
@@ -58,6 +77,7 @@ async function bookNow() {
   };
 
   try {
+
     const res = await fetch(API + "/book", {
       method: "POST",
       headers: {
@@ -69,11 +89,13 @@ async function bookNow() {
     const data = await res.json();
 
     if (!res.ok) {
-      return alert(data.error || "❌ Booking failed");
+      return alert(data.error || "Booking failed");
     }
 
-    alert("✅ Booking successful! We will contact you soon.");
-    location.reload();
+    alert("✅ Booking successful!");
+
+    // 🔥 FIXED REDIRECT TO RECEIPT PAGE
+    window.location.href = "/success.html?bookingId=" + Date.now();
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
@@ -81,5 +103,5 @@ async function bookNow() {
   }
 }
 
-/* ================= DEBUG ================= */
+/* DEBUG */
 console.log("🟢 Booking system loaded successfully");
