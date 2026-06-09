@@ -8,9 +8,7 @@
 
 <link rel="stylesheet" href="css/success.css">
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" defer></script>
-
-<script defer src="js/success.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 </head>
 
@@ -22,8 +20,7 @@
   <h2>✔ Booking Receipt</h2>
 
   <div>
-    <b>Status:</b>
-    <span id="statusBadge" class="status pending">PENDING</span>
+    <b>Status:</b> <span id="statusBadge"></span>
   </div>
 
   <hr>
@@ -33,14 +30,69 @@
   <p><b>Service:</b> <span id="service"></span></p>
   <p><b>Date:</b> <span id="date"></span></p>
   <p><b>Time:</b> <span id="time"></span></p>
-  <p><b>Total:</b> $<span id="total"></span></p>
 
   <hr>
 
-  <button onclick="downloadPDF()">🧾 Download PDF</button>
-  <button onclick="window.print()">🖨 Print</button>
+  <button onclick="downloadPDF()">Download PDF</button>
 
 </div>
+
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+/* GET ID FROM URL */
+const params = new URLSearchParams(window.location.search);
+const bookingId = params.get("bookingId");
+
+/* SAFE LOAD */
+async function loadBooking() {
+
+  if (!bookingId) {
+    document.body.innerHTML = `
+      <div style="text-align:center;padding:50px">
+        <h2>❌ Missing booking ID</h2>
+        <p>Please book again from booking page.</p>
+        <a href="/booking.html">Go to Booking</a>
+      </div>
+    `;
+    return;
+  }
+
+  try {
+
+    const res = await fetch(API + "/bookings");
+    const bookings = await res.json();
+
+    const booking = bookings.find(b => String(b.id) === String(bookingId));
+
+    if (!booking) {
+      document.body.innerHTML = "<h2>❌ Booking not found</h2>";
+      return;
+    }
+
+    document.getElementById("name").innerText = booking.name;
+    document.getElementById("email").innerText = booking.email;
+    document.getElementById("service").innerText = booking.service;
+    document.getElementById("date").innerText = booking.date;
+    document.getElementById("time").innerText = booking.timeSlot;
+
+    const badge = document.getElementById("statusBadge");
+    badge.innerText = booking.status;
+
+  } catch (err) {
+    console.error(err);
+    document.body.innerHTML = "<h2>❌ Error loading booking</h2>";
+  }
+}
+
+loadBooking();
+
+/* PDF */
+function downloadPDF() {
+  const element = document.getElementById("receipt");
+  html2pdf().from(element).save("receipt.pdf");
+}
+</script>
 
 </body>
 </html>

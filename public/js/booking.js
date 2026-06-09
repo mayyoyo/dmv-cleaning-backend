@@ -1,108 +1,192 @@
+console.log("🚀 PRODUCTION SYSTEM STARTING (FIXED)");
 
-const API = "https://dmv-cleaning-backend.onrender.com/api";
+require("dotenv").config();
 
-let selectedDate = null;
+const express = require("express");
+const path = require("path");
+const jwt = require("jsonwebtoken");
+const cookieParser = require("cookie-parser");
+const http = require("http");
+const { Server } = require("socket.io");
+const nodemailer = require("nodemailer");
 
-/* ================= CALENDAR ================= */
-document.addEventListener("DOMContentLoaded", async function () {
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 
-  const calendarEl = document.getElementById("calendar");
+/* ================= MIDDLEWARE ================= */
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
-  let bookedDates = [];
-
-  try {
-    const res = await fetch(API + "/bookings");
-    const data = await res.json();
-
-    bookedDates = data.map(b => b.date);
-  } catch (err) {
-    console.error("Calendar load error:", err);
-  }
-
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
-    height: 500,
-
-    dateClick: function (info) {
-
-      const clickedDate = info.dateStr;
-
-      // 🔴 BLOCK BOOKED DATES
-      if (bookedDates.includes(clickedDate)) {
-        alert("❌ This date is already booked");
-        return;
-      }
-
-      // 🟢 SELECT DATE
-      selectedDate = clickedDate;
-      document.getElementById("selectedDate").innerText = selectedDate;
-    },
-
-    events: bookedDates.map(date => ({
-      title: "Booked",
-      date: date,
-      color: "red"
-    }))
-  });
-
-  calendar.render();
+/* ================= BASIC TEST ================= */
+app.get("/api", (req, res) => {
+  res.json({ message: "API Working" });
 });
 
-/* ================= BOOK NOW (FIXED REDIRECT) ================= */
-async function bookNow() {
+/* ================= BOOKINGS STORAGE ================= */
+let bookings = [];
 
-  const name = document.getElementById("name").value.trim();
-  const email = document.getElementById("email").value.trim();
-  const phone = document.getElementById("phone").value.trim();
-  const address = document.getElementById("address").value.trim();
-  const timeSlot = document.getElementById("timeSlot").value;
-  const service = document.getElementById("service").value;
+/* ================= SOCKET ================= */
+io.on("connection", () => {
+  console.log("⚡ Admin connected");
+});
 
-  // ✅ VALIDATION
-  if (!selectedDate) {
-    return alert("❌ Please select a date");
+/* ================= EMAIL ================= */
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.ADMIN_EMAIL,
+    pass: process.env.EMAIL_PASS
   }
+});
 
-  if (!name || !email || !phone || !address || !timeSlot || !service) {
-    return alert("❌ Please fill all fields");
-  }
-
-  const booking = {
-    name,
-    email,
-    phone,
-    address,
-    date: selectedDate,
-    timeSlot,
-    service
-  };
-
+async function sendEmail(to, subject, html) {
   try {
-
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(booking)
+    await transporter.sendMail({
+      from: process.env.ADMIN_EMAIL,
+      to,
+      subject,
+      html
     });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      return alert(data.error || "Booking failed");
-    }
-
-    alert("✅ Booking successful!");
-
-    // ✅ FIXED REDIRECT (REAL BOOKING ID FROM BACKEND)
-    window.location.href = "/success.html?bookingId=" + data.bookingId;
-
   } catch (err) {
-    console.error("BOOK ERROR:", err);
-    alert("❌ Server error");
+    console.error("EMAIL ERROR:", err);
   }
 }
 
-/* DEBUG */
-console.log("🟢 Booking system loaded successfully");
+/* ================= AUTH ================= */
+function auth(req, res, next) {
+  try {
+    const token = req.cookies.token;
+
+    if (!token) {
+      return res.status(401).json({ error: "Not logged in" });
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET);
+    next();
+
+  } catch (err) {
+    console.error("AUTH ERROR:", err);
+    return res.status(401).json({ error: "Invalid session" });
+  }
+}
+
+/* ================= BOOKING CREATE ================= */
+app.post("/api/book", async (req, res) => {
+  try {
+    const { name, email, phone, address, date, timeSlot, service } = req.body;
+
+    if (!name || !email || !phone || !address || !date || !timeSlot || !service) {
+      return res.status(400).json({ error: "All fields required" });
+    }
+
+    // ❌ DOUBLE BOOKING CHECK
+    const isTaken = bookings.some(
+      b => b.date === date &&
+           b.timeSlot === timeSlot &&
+           b.status !== "Rejected"
+    );
+
+    if (isTaken) {
+      return res.status(400).json({ error: "Time slot already booked" });
+    }
+
+    const booking = {
+      id: Date.now(),
+      name,
+      email,
+      phone,
+      address,
+      date,
+      timeSlot,
+      service,
+      status: "Pending",
+      createdAt: new Date()
+    };
+
+    bookings.push(booking);
+
+    io.emit("new-booking", booking);
+
+    await sendEmail(
+      email,
+      "Booking Received - DMV Cleaning",
+      `
+        <div style="font-family:Arial;padding:20px">
+          <h2>🧼 Booking Received</h2>
+          <p>Hi <b>${name}</b>,</p>
+          <p>Status: <b>Pending</b></p>
+          <p>Date: ${date}</p>
+          <p>Time: ${timeSlot}</p>
+        </div>
+      `
+    );
+
+    res.json({
+      success: true,
+      bookingId: booking.id
+    });
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ================= GET BOOKINGS ================= */
+app.get("/api/bookings", (req, res) => {
+  res.json(bookings);
+});
+
+/* ================= DASHBOARD ================= */
+app.get("/api/dashboard", auth, (req, res) => {
+  res.json({
+    totalBookings: bookings.length,
+    pending: bookings.filter(b => b.status === "Pending").length,
+    approved: bookings.filter(b => b.status === "Approved").length,
+    rejected: bookings.filter(b => b.status === "Rejected").length
+  });
+});
+
+/* ================= LOGIN ================= */
+app.post("/api/admin/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (
+    username === process.env.ADMIN_USER &&
+    password === process.env.ADMIN_PASS
+  ) {
+    const token = jwt.sign(
+      { user: username },
+      process.env.JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    res.cookie("token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none"
+    });
+
+    return res.json({ success: true });
+  }
+
+  res.status(401).json({ error: "Invalid credentials" });
+});
+
+/* ================= LOGOUT ================= */
+app.get("/api/admin/logout", (req, res) => {
+  res.clearCookie("token");
+  res.json({ success: true });
+});
+
+/* ================= STATIC FILES ================= */
+app.use(express.static(path.join(__dirname, "public")));
+
+/* ================= START SERVER ================= */
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("✅ SERVER RUNNING ON PORT " + PORT);
+});
