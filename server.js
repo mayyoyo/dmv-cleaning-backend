@@ -6,7 +6,7 @@ const cors = require("cors");
 
 const app = express();
 
-/* ================= CORS (FIXED FOR PRODUCTION) ================= */
+/* ================= MUST BE FIRST ================= */
 app.use(cors({
   origin: [
     "https://mydmvcleaningservice.com",
@@ -15,25 +15,22 @@ app.use(cors({
   credentials: true
 }));
 
-/* ================= MIDDLEWARE ================= */
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= STATIC FILES ================= */
+/* ================= STATIC ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= ROUTES ================= */
 const bookingRoutes = require("./routes/booking.routes");
-
-// IMPORTANT: ALL API ROUTES MUST USE /api
 app.use("/api", bookingRoutes);
 
-/* ================= HEALTH CHECK ================= */
+/* ================= HEALTH ================= */
 app.get("/health", (req, res) => {
   res.json({ status: "Server running ✅" });
 });
 
-/* ================= 404 HANDLER ================= */
+/* ================= 404 ================= */
 app.use((req, res) => {
   res.status(404).json({
     message: "Route not found ❌",
@@ -41,9 +38,9 @@ app.use((req, res) => {
   });
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log("🚀 Server running on port " + PORT);
 });

@@ -139,10 +139,9 @@ async function bookNow() {
       return alert(data.error || "Booking failed");
     }
 
-    // ✅ SUCCESS MESSAGE (clean UX)
     alert("Booking confirmed successfully!");
 
-    // ✅ FINAL REDIRECT FIX (REQUIRED)
+    // ✅ FINAL REDIRECT (AS YOU REQUESTED)
     window.location.href =
       "https://mydmvcleaningservice.com/success.html?bookingId=" + data.bookingId;
 
