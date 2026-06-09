@@ -1,45 +1,48 @@
-const API = "http://127.0.0.1:3006";
+const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 async function login() {
+  const btn = document.getElementById("loginBtn");
+  const error = document.getElementById("error");
+
+  const username = document.getElementById("user").value.trim();
+  const password = document.getElementById("pass").value.trim();
+
+  error.innerText = "";
+
+  if (!username || !password) {
+    error.innerText = "❌ Please fill all fields";
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerText = "Logging in...";
+
   try {
-    const username = document.getElementById("username").value.trim();
-    const password = document.getElementById("password").value.trim();
-    const msg = document.getElementById("msg");
-
-    msg.innerText = "Logging in...";
-
-    const res = await fetch(API + "/api/admin/login", {
+    const res = await fetch(API + "/admin/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json"
+      },
+      credentials: "include",
       body: JSON.stringify({ username, password })
     });
 
-    // ❗ handle server errors properly
-    if (!res.ok) {
-      throw new Error("Server error: " + res.status);
-    }
-
     const data = await res.json();
 
-    console.log("LOGIN RESPONSE:", data);
-
-    if (data.success) {
-      msg.style.color = "#22c55e";
-      msg.innerText = "Login successful...";
-
-      setTimeout(() => {
-        window.location.href = "/admin/dashboard.html";
-      }, 800);
-
-    } else {
-      msg.style.color = "#ef4444";
-      msg.innerText = "Invalid username or password";
+    if (!res.ok) {
+      error.innerText = data.error || "Login failed";
+      btn.disabled = false;
+      btn.innerText = "Login";
+      return;
     }
 
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    window.location.href = "/admin/dashboard.html";
 
-    const msg = document.getElementById("msg");
-    msg.innerText = "Server error. Check backend.";
+  } catch (err) {
+    console.error(err);
+    error.innerText = "❌ Server error (backend not responding)";
   }
+
+  btn.disabled = false;
+  btn.innerText = "Login";
 }
