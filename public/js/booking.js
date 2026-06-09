@@ -3,7 +3,7 @@ const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 let selectedDate = null;
 
-/* ================= CALENDAR (FIXED AUTO BLOCKING) ================= */
+/* ================= CALENDAR ================= */
 document.addEventListener("DOMContentLoaded", async function () {
 
   const calendarEl = document.getElementById("calendar");
@@ -48,7 +48,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   calendar.render();
 });
 
-/* ================= BOOK NOW (FIXED + REDIRECT) ================= */
+/* ================= BOOK NOW (FIXED REDIRECT) ================= */
 async function bookNow() {
 
   const name = document.getElementById("name").value.trim();
@@ -58,6 +58,7 @@ async function bookNow() {
   const timeSlot = document.getElementById("timeSlot").value;
   const service = document.getElementById("service").value;
 
+  // ✅ VALIDATION
   if (!selectedDate) {
     return alert("❌ Please select a date");
   }
@@ -94,8 +95,8 @@ async function bookNow() {
 
     alert("✅ Booking successful!");
 
-    // 🔥 FIXED REDIRECT TO RECEIPT PAGE
-    window.location.href = "/success.html?bookingId=" + Date.now();
+    // ✅ FIXED REDIRECT (REAL BOOKING ID FROM BACKEND)
+    window.location.href = "/success.html?bookingId=" + data.bookingId;
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
