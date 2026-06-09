@@ -1,45 +1,60 @@
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-let selectedDate = "";
+let selectedDate = null;
 
 /* ================= CALENDAR ================= */
-document.addEventListener("DOMContentLoaded", function () {
-
+document.addEventListener("DOMContentLoaded", async function () {
   const calendarEl = document.getElementById("calendar");
+  let events = [];
+
+  try {
+    const res = await fetch(API + "/bookings");
+    events = await res.json();
+  } catch (err) {
+    console.error("Calendar load error:", err);
+  }
 
   const calendar = new FullCalendar.Calendar(calendarEl, {
     initialView: "dayGridMonth",
-    selectable: true,
+    height: 500,
+
+    events: events,
 
     dateClick: function (info) {
       selectedDate = info.dateStr;
-
-      document.getElementById("selectedDate").innerText =
-        "Selected Date: " + selectedDate;
+      document.getElementById("selectedDate").innerText = selectedDate;
     }
   });
 
   calendar.render();
-
 });
 
-/* ================= BOOKING ================= */
-document.getElementById("bookingForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
+/* ================= BOOKING FUNCTION (FIXED) ================= */
+async function bookNow() {
+  const name = document.getElementById("name").value.trim();
+  const email = document.getElementById("email").value.trim();
+  const phone = document.getElementById("phone").value.trim();
+  const address = document.getElementById("address").value.trim();
+  const timeSlot = document.getElementById("timeSlot").value;
+  const service = document.getElementById("service").value;
 
+  // VALIDATION
   if (!selectedDate) {
-    alert("Please select a date");
-    return;
+    return alert("❌ Please select a date");
   }
 
-  const data = {
-    name: document.getElementById("name").value,
-    phone: document.getElementById("phone").value,
-    email: document.getElementById("email").value,
-    address: document.getElementById("address").value,
-    service: document.getElementById("service").value,
+  if (!name || !email || !phone || !address || !timeSlot || !service) {
+    return alert("❌ Please fill all fields");
+  }
+
+  const booking = {
+    name,
+    email,
+    phone,
+    address,
     date: selectedDate,
-    timeSlot: document.getElementById("timeSlot").value
+    timeSlot,
+    service
   };
 
   try {
@@ -48,17 +63,23 @@ document.getElementById("bookingForm").addEventListener("submit", async (e) => {
       headers: {
         "Content-Type": "application/json"
       },
-      body: JSON.stringify(data)
+      body: JSON.stringify(booking)
     });
 
-    if (!res.ok) throw new Error("Booking failed");
+    const data = await res.json();
 
-    alert("✅ Booking Confirmed!");
-    document.getElementById("bookingForm").reset();
-    document.getElementById("selectedDate").innerText = "No date selected";
+    if (!res.ok) {
+      return alert(data.error || "❌ Booking failed");
+    }
+
+    alert("✅ Booking successful! We will contact you soon.");
+    location.reload();
 
   } catch (err) {
-    console.error(err);
-    alert("❌ Error booking service");
+    console.error("BOOK ERROR:", err);
+    alert("❌ Server error");
   }
-});
+}
+
+/* ================= DEBUG ================= */
+console.log("🟢 Booking system loaded successfully");
