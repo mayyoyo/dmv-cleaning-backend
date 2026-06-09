@@ -3,15 +3,13 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const cors = require("cors");
-const nodemailer = require("nodemailer");
-const PDFDocument = require("pdfkit");
 const http = require("http");
 const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
 
-/* ================= SOCKET.IO ================= */
+/* ================= SOCKET ================= */
 const io = new Server(server, {
   cors: {
     origin: "*"
@@ -32,8 +30,9 @@ app.use(express.urlencoded({ extended: true }));
 
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= DATABASE ================= */
-let bookings = [];
+/* ================= IMPORTANT FIX ================= */
+/* MUST BE GLOBAL (Render restart safe) */
+global.bookings = global.bookings || [];
 
 /* ================= PRICE MAP ================= */
 const prices = {
@@ -43,43 +42,8 @@ const prices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= EMAIL ================= */
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
-/* ================= EMAIL TEMPLATE ================= */
-function generateEmailHTML(booking) {
-  return `
-  <div style="font-family:Arial;background:#f7f7f7;padding:20px">
-    <div style="max-width:600px;margin:auto;background:#fff;padding:20px;border-radius:10px">
-
-      <h2 style="color:#16a34a;">Booking Confirmed ✅</h2>
-
-      <p><b>Name:</b> ${booking.name}</p>
-      <p><b>Service:</b> ${booking.service}</p>
-      <p><b>Date:</b> ${booking.date}</p>
-      <p><b>Time:</b> ${booking.timeSlot}</p>
-      <p><b>Total Due:</b> $${booking.total}</p>
-
-    </div>
-  </div>
-  `;
-}
-
-/* ================= CHECK DOUBLE BOOKING ================= */
-function isSlotTaken(date, timeSlot) {
-  return bookings.some(
-    b => b.date === date && b.timeSlot === timeSlot
-  );
-}
-
 /* ================= BOOKING API ================= */
-app.post("/api/book", async (req, res) => {
+app.post("/api/book", (req, res) => {
 
   try {
 
@@ -97,10 +61,14 @@ app.post("/api/book", async (req, res) => {
       return res.status(400).json({ error: "All fields required" });
     }
 
-    /* ================= DOUBLE BOOKING BLOCK ================= */
-    if (isSlotTaken(date, timeSlot)) {
+    /* ================= DOUBLE BOOKING CHECK ================= */
+    const exists = global.bookings.find(
+      b => b.date === date && b.timeSlot === timeSlot
+    );
+
+    if (exists) {
       return res.status(409).json({
-        error: "This time slot is already booked"
+        error: "This slot is already booked"
       });
     }
 
@@ -119,16 +87,11 @@ app.post("/api/book", async (req, res) => {
       status: "Pending"
     };
 
-    bookings.push(booking);
+    global.bookings.push(booking);
 
-    /* ================= EMAIL ================= */
-    await transporter.sendMail({
-      to: email,
-      subject: "Booking Confirmed - DMV Cleaning",
-      html: generateEmailHTML(booking)
-    });
+    console.log("BOOKING CREATED:", booking);
 
-    /* ================= SOCKET LIVE UPDATE ================= */
+    /* ================= LIVE UPDATE ================= */
     io.emit("new-booking", booking);
 
     return res.json({
@@ -138,49 +101,24 @@ app.post("/api/book", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
+    console.error("RENDER ERROR:", err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
 /* ================= GET BOOKINGS ================= */
 app.get("/api/bookings", (req, res) => {
-  res.json(bookings);
+  res.json(global.bookings);
 });
 
-/* ================= PDF RECEIPT ================= */
-app.get("/api/booking/:id/pdf", (req, res) => {
-
-  const booking = bookings.find(b => b.id == req.params.id);
-  if (!booking) return res.status(404).send("Not found");
-
-  const doc = new PDFDocument();
-
-  res.setHeader("Content-Type", "application/pdf");
-
-  doc.pipe(res);
-
-  doc.fontSize(20).text("DMV Cleaning Receipt", { align: "center" });
-  doc.moveDown();
-
-  doc.fontSize(12)
-    .text(`Name: ${booking.name}`)
-    .text(`Service: ${booking.service}`)
-    .text(`Date: ${booking.date}`)
-    .text(`Time: ${booking.timeSlot}`)
-    .text(`Total Due: $${booking.total}`);
-
-  doc.end();
-});
-
-/* ================= SOCKET ================= */
-io.on("connection", (socket) => {
-  console.log("Admin connected:", socket.id);
+/* ================= HEALTH CHECK ================= */
+app.get("/health", (req, res) => {
+  res.json({ status: "Server running ✅" });
 });
 
 /* ================= START ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log("🚀 Server running on port", PORT);
 });
