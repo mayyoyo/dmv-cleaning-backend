@@ -1,29 +1,75 @@
-const API = "https://dmv-cleaning-backend.onrender.com/api";
+const express = require("express");
+const router = express.Router();
 
-async function bookNow() {
+/* ================= TEMP DATABASE ================= */
+let bookings = [];
 
-  const res = await fetch(API + "/book", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name,
-      email,
-      phone,
-      address,
-      date: selectedDate,
-      timeSlot,
-      service
-    })
-  });
+/* ================= PRICE MAP ================= */
+const prices = {
+  "Home Cleaning": 120,
+  "Deep Cleaning": 200,
+  "Office Cleaning": 150,
+  "Move In/Out Cleaning": 180
+};
 
-  const data = await res.json();
+/* ================= BOOKING ROUTE ================= */
+router.post("/book", (req, res) => {
 
-  if (!res.ok) {
-    return alert(data.error || "Booking failed");
+  const {
+    name,
+    email,
+    phone,
+    address,
+    date,
+    timeSlot,
+    service
+  } = req.body;
+
+  /* ================= VALIDATION ================= */
+  if (!name || !email || !phone || !address || !date || !timeSlot || !service) {
+    return res.status(400).json({ error: "All fields required" });
   }
 
-  alert("Booking successful!");
+  /* ================= CALCULATE TOTAL ================= */
+  const total = prices[service] ?? 0;
 
-  // ✅ THIS IS THE ONLY REQUIRED LINE
-  window.location.href = "/success.html?bookingId=" + data.bookingId;
-}
+  const booking = {
+    id: Date.now(),
+    name,
+    email,
+    phone,
+    address,
+    date,
+    timeSlot,
+    service,
+    total,
+    status: "Pending"
+  };
+
+  bookings.push(booking);
+
+  return res.json({
+    success: true,
+    bookingId: booking.id,
+    total
+  });
+});
+
+/* ================= GET BOOKINGS ================= */
+router.get("/bookings", (req, res) => {
+  res.json(bookings);
+});
+
+/* ================= GET SINGLE BOOKING ================= */
+router.get("/booking/:id", (req, res) => {
+
+  const booking = bookings.find(b => b.id == req.params.id);
+
+  if (!booking) {
+    return res.status(404).json({ error: "Not found" });
+  }
+
+  res.json(booking);
+});
+
+module.exports = router;

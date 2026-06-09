@@ -78,7 +78,7 @@ const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 let selectedDate = null;
 
-/* ================= CALENDAR ================= */
+/* ================= CALENDAR FIX (WORKING VERSION) ================= */
 document.addEventListener("DOMContentLoaded", function () {
 
   const calendarEl = document.getElementById("calendar");
@@ -89,8 +89,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
     dateClick: function(info) {
       selectedDate = info.dateStr;
+
       document.getElementById("selectedDate").innerText =
         "Selected: " + selectedDate;
+
+      console.log("DATE SELECTED:", selectedDate);
     }
   });
 
@@ -141,7 +144,7 @@ async function bookNow() {
 
     alert("Booking confirmed successfully!");
 
-    // ✅ FINAL REDIRECT (AS YOU REQUESTED)
+    // 🔥 FINAL REDIRECT FIX
     window.location.href =
       "https://mydmvcleaningservice.com/success.html?bookingId=" + data.bookingId;
 
