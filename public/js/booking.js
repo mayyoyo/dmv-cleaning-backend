@@ -1,118 +1,90 @@
+/* ================= API ================= */
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-let selectedDate = null;
+/* ================= SOCKET ================= */
+const socket = io("https://dmv-cleaning-backend.onrender.com");
+
+/* ================= GLOBAL ================= */
 let bookings = [];
+let selectedDate = null;
+let calendar;
 
 /* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
   try {
     const res = await fetch(API + "/public-bookings");
-
-    if (!res.ok) {
-      console.log("API ERROR:", res.status);
-      return;
-    }
-
     bookings = await res.json();
-    console.log("BOOKINGS LOADED:", bookings);
-
   } catch (err) {
-    console.error("FETCH ERROR:", err);
+    console.error("LOAD ERROR:", err);
   }
 }
 
-/* ================= INIT CALENDAR ================= */
+/* ================= FORMAT DATE SAFELY ================= */
+function formatDate(date) {
+  return date.toLocaleDateString("en-CA"); // YYYY-MM-DD
+}
+
+/* ================= INIT ================= */
 document.addEventListener("DOMContentLoaded", async () => {
 
   await loadBookings();
 
-  const calendar = new FullCalendar.Calendar(
+  calendar = new FullCalendar.Calendar(
     document.getElementById("calendar"),
     {
       initialView: "dayGridMonth",
       height: 500,
 
-      dateClick: function(info) {
+      /* 🔴 RED BOOKED DAYS */
+      dayCellDidMount: function(info) {
+        const dateStr = formatDate(info.date);
 
+        const bookedDates = bookings.map(b => b.date);
+
+        if (bookedDates.includes(dateStr)) {
+          info.el.style.backgroundColor = "#ff4d4d";
+          info.el.style.color = "#fff";
+        }
+      },
+
+      /* CLICK DATE */
+      dateClick: function(info) {
         selectedDate = info.dateStr;
 
         document.getElementById("selectedDate").innerText =
           "Selected: " + selectedDate;
 
-        highlightSlots(); // 🔥 IMPORTANT FIX
+        updateSlots();
       }
     }
   );
 
   calendar.render();
-});
 
-/* ================= BOOK NOW FUNCTION ================= */
-async function bookNow() {
+  /* ================= SOCKET LIVE ================= */
 
-  const name = document.getElementById("name").value;
-  const email = document.getElementById("email").value;
-  const phone = document.getElementById("phone").value;
-  const address = document.getElementById("address").value;
-  const timeSlot = document.getElementById("timeSlot").value;
-  const service = document.getElementById("service").value;
-  const paymentType = document.getElementById("paymentType").value;
-
-  console.log({
-    name,
-    email,
-    phone,
-    address,
-    selectedDate,
-    timeSlot,
-    service
+  socket.on("init-bookings", (data) => {
+    bookings = data;
+    calendar.refetchEvents();   // 🔥 better refresh
+    updateSlots();
   });
 
-  if (!selectedDate) {
-    return alert("❌ Please select a date");
-  }
+  socket.on("new-booking", (booking) => {
+    bookings.push(booking);
+    calendar.render();          // 🔥 repaint calendar
+    updateSlots();
+  });
 
-  if (!name || !email || !phone || !address || !timeSlot || !service) {
-    return alert("❌ All fields required");
-  }
+  socket.on("update-slots", (data) => {
+    bookings = data;
+    calendar.render();
+    updateSlots();
+  });
 
-  try {
+});
 
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name,
-        email,
-        phone,
-        address,
-        date: selectedDate,
-        timeSlot,
-        service,
-        paymentType
-      })
-    });
-
-    const data = await res.json();
-
-    if (!res.ok) {
-      return alert(data.error || "Booking failed");
-    }
-
-    /* ================= SUCCESS REDIRECT ================= */
-    window.location.href =
-      "/success.html?bookingId=" + data.bookingId;
-
-  } catch (err) {
-    console.error("BOOK ERROR:", err);
-    alert("Server error. Please try again.");
-  }
-}
-
-/* ================= SLOT BLOCKING ================= */
-function highlightSlots() {
+/* ================= UPDATE SLOTS ================= */
+function updateSlots() {
 
   const select = document.getElementById("timeSlot");
 
@@ -138,13 +110,58 @@ function highlightSlots() {
     if (booked.includes(slot)) {
       option.textContent = slot + " ❌ Booked";
       option.disabled = true;
-      option.style.background = "#ff4d4d";
-      option.style.color = "white";
+      option.style.backgroundColor = "#ff4d4d";
+      option.style.color = "#fff";
     } else {
       option.textContent = slot + " ✅ Available";
-      option.style.background = "#e8fff0";
     }
 
     select.appendChild(option);
   });
+}
+
+/* ================= BOOK ================= */
+async function bookNow() {
+
+  const name = document.getElementById("name").value;
+  const email = document.getElementById("email").value;
+  const phone = document.getElementById("phone").value;
+  const address = document.getElementById("address").value;
+  const timeSlot = document.getElementById("timeSlot").value;
+  const service = document.getElementById("service").value;
+  const paymentType = document.getElementById("paymentType").value;
+
+  if (!selectedDate) return alert("Select date");
+
+  if (!name || !email || !phone || !address || !timeSlot || !service) {
+    return alert("All fields required");
+  }
+
+  try {
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        address,
+        date: selectedDate,
+        timeSlot,
+        service,
+        paymentType
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) return alert(data.error || "Booking failed");
+
+    window.location.href =
+      "/success.html?bookingId=" + data.bookingId;
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Server error");
+  }
 }

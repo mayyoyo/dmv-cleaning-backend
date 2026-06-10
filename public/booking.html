@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -9,7 +10,17 @@
 <link rel="stylesheet" href="css/booking.css">
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
+
+<!-- 1. CONFIG FIRST -->
+
 <script src="js/config.js" defer></script>
+
+<!-- 2. SOCKET MUST LOAD BEFORE YOUR APP -->
+
+<script src="/socket.io/socket.io.js" defer></script>
+
+<!-- 3. MAIN LOGIC LAST -->
+
 <script src="js/booking.js" defer></script>
 
 <style>
@@ -30,7 +41,8 @@
     <a href="booking.html" class="active">Booking</a>
   </nav>
 
-  <a class="back-btn" href="index.html">⬅ Back</a>
+<a class="back-btn" href="index.html">⬅ Back</a>
+
 </header>
 
 <main class="booking-page">
@@ -40,11 +52,13 @@
 <h2>📅 Book Cleaning Service</h2>
 
 <!-- CALENDAR -->
+
 <div id="calendar"></div>
 
 <p id="selectedDate">No date selected</p>
 
 <!-- FORM -->
+
 <form id="bookingForm">
 
   <select id="timeSlot" class="input" required>
