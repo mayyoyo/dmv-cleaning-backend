@@ -7,7 +7,6 @@ const http = require("http");
 const { Server } = require("socket.io");
 const Stripe = require("stripe");
 const nodemailer = require("nodemailer");
-const PDFDocument = require("pdfkit");
 const jwt = require("jsonwebtoken");
 const cron = require("node-cron");
 
@@ -31,10 +30,22 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+/* ✅ IMPORTANT STATIC FILES (REQUIRED FOR FRONTEND) */
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= GLOBAL STORAGE ================= */
 global.bookings = global.bookings || [];
+
+/* ================= SOCKET CONNECTION ================= */
+
+/* ✅ IMPORTANT (YOU REQUESTED THIS) */
+io.on("connection", (socket) => {
+  console.log("Client connected");
+
+  // send current bookings instantly
+  socket.emit("init-bookings", global.bookings);
+});
 
 /* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
@@ -68,7 +79,6 @@ app.post("/api/admin/login", (req, res) => {
 
 /* ================= AUTH ================= */
 function verifyAdmin(req, res, next) {
-
   const token = req.headers.authorization;
 
   if (!token) return res.status(401).json({ error: "No token" });
@@ -110,7 +120,9 @@ app.post("/api/book", async (req, res) => {
     b => b.date === date && b.timeSlot === timeSlot
   );
 
-  if (exists) return res.status(409).json({ error: "Slot already booked" });
+  if (exists) {
+    return res.status(409).json({ error: "Slot already booked" });
+  }
 
   const total = prices[service] || 0;
 
@@ -130,10 +142,12 @@ app.post("/api/book", async (req, res) => {
 
   global.bookings.push(booking);
 
-  /* ================= REAL-TIME UPDATE ================= */
-  io.emit("new-booking", booking);
-  io.emit("update-slots", global.bookings); // 🔥 IMPORTANT FIX
+  /* ================= REAL-TIME UPDATE (IMPORTANT) ================= */
 
+  io.emit("new-booking", booking);
+  io.emit("update-slots", global.bookings);
+
+  /* ================= EMAIL ================= */
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to: email,
@@ -142,6 +156,7 @@ app.post("/api/book", async (req, res) => {
       <h2>Booking Confirmed</h2>
       <p>Service: ${service}</p>
       <p>Date: ${date}</p>
+      <p>Time: ${timeSlot}</p>
       <p>Total: $${total}</p>
     `
   });
@@ -153,12 +168,12 @@ app.post("/api/book", async (req, res) => {
   });
 });
 
-/* ================= GET BOOKINGS (ADMIN) ================= */
+/* ================= GET BOOKINGS (ADMIN ONLY) ================= */
 app.get("/api/bookings", verifyAdmin, (req, res) => {
   res.json(global.bookings);
 });
 
-/* ================= PUBLIC BOOKINGS (🔥 REQUIRED FOR SLOT SYSTEM) ================= */
+/* ================= PUBLIC BOOKINGS (FOR FRONTEND SLOT SYSTEM) ================= */
 app.get("/api/public-bookings", (req, res) => {
   res.json(global.bookings);
 });
@@ -187,16 +202,12 @@ app.post("/api/save-card", async (req, res) => {
   });
 });
 
-/* ================= COMPLETE + AUTO CHARGE ================= */
+/* ================= COMPLETE BOOKING ================= */
 app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
 
   const booking = global.bookings.find(b => b.id == req.params.id);
 
   if (!booking) return res.status(404).json({ error: "Not found" });
-
-  if (!booking.stripeCustomerId) {
-    return res.status(400).json({ error: "No payment method" });
-  }
 
   try {
 
@@ -217,10 +228,7 @@ app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
       from: process.env.EMAIL_USER,
       to: booking.email,
       subject: "Payment Completed",
-      html: `
-        <h2>Service Completed</h2>
-        <p>Total Paid: $${booking.total}</p>
-      `
+      html: `<p>Your payment has been completed.</p>`
     });
 
     res.json({ success: true });
@@ -231,7 +239,7 @@ app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
   }
 });
 
-/* ================= CANCEL + REFUND ================= */
+/* ================= CANCEL BOOKING ================= */
 app.post("/api/admin/cancel/:id", verifyAdmin, async (req, res) => {
 
   const booking = global.bookings.find(b => b.id == req.params.id);
@@ -252,7 +260,7 @@ app.post("/api/admin/cancel/:id", verifyAdmin, async (req, res) => {
       from: process.env.EMAIL_USER,
       to: booking.email,
       subject: "Booking Cancelled",
-      html: `<p>Your booking has been cancelled.</p>`
+      html: `<p>Your booking was cancelled.</p>`
     });
 
     res.json({ success: true });
@@ -293,7 +301,7 @@ cron.schedule("0 9 * * *", async () => {
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: b.email,
-      subject: "Reminder",
+      subject: "Payment Reminder",
       html: `<p>Please complete your payment.</p>`
     });
   }
@@ -303,5 +311,5 @@ cron.schedule("0 9 * * *", async () => {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log("🚀 CLEAN SYSTEM RUNNING");
+  console.log("🚀 CLEAN SYSTEM RUNNING ON PORT", PORT);
 });

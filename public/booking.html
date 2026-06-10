@@ -10,7 +10,13 @@
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 <script src="js/config.js" defer></script>
-<script src="js/booking.js" defer></script>
+
+<style>
+/* basic safety styling (NO INLINE CSS IN JS) */
+#calendar {
+  margin-top: 20px;
+}
+</style>
 
 </head>
 
@@ -33,12 +39,10 @@
 
 <h2>📅 Book Cleaning Service</h2>
 
-<!-- CALENDAR -->
 <div id="calendar"></div>
 
 <p id="selectedDate">No date selected</p>
 
-<!-- FORM -->
 <form id="bookingForm">
 
   <select id="timeSlot" class="input" required>
@@ -77,6 +81,102 @@
 </section>
 
 </main>
+
+<script>
+/* ================= API ================= */
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+/* ================= GLOBAL DATA ================= */
+let bookings = [];
+let selectedDate = null;
+
+/* ================= LOAD BOOKINGS (EXACT FIX) ================= */
+async function loadBookings() {
+  try {
+    const res = await fetch(API + "/public-bookings");
+
+    if (!res.ok) {
+      console.log("API ERROR:", res.status);
+      return;
+    }
+
+    bookings = await res.json();
+    console.log("BOOKINGS LOADED:", bookings);
+
+  } catch (err) {
+    console.error("FETCH ERROR:", err);
+  }
+}
+
+/* ================= FULLCALENDAR (WAIT FOR DATA) ================= */
+document.addEventListener("DOMContentLoaded", async () => {
+
+  await loadBookings();
+
+  const calendar = new FullCalendar.Calendar(
+    document.getElementById("calendar"),
+    {
+      initialView: "dayGridMonth",
+      height: 500,
+
+      dateClick: function(info) {
+        selectedDate = info.dateStr;
+
+        document.getElementById("selectedDate").innerText =
+          "Selected: " + selectedDate;
+      }
+    }
+  );
+
+  calendar.render();
+});
+
+/* ================= BOOK NOW ================= */
+async function bookNow() {
+
+  const data = {
+    name: name.value,
+    email: email.value,
+    phone: phone.value,
+    address: address.value,
+    date: selectedDate,
+    timeSlot: timeSlot.value,
+    service: service.value,
+    paymentType: paymentType.value
+  };
+
+  if (!selectedDate) {
+    return alert("Select date");
+  }
+
+  if (!data.timeSlot) {
+    return alert("Select time slot");
+  }
+
+  try {
+
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      return alert(result.error || "Booking failed");
+    }
+
+    /* SUCCESS REDIRECT */
+    window.location.href =
+      "/success.html?bookingId=" + result.bookingId;
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Server error. Please try again.");
+  }
+}
+</script>
 
 </body>
 </html>

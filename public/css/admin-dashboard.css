@@ -1,132 +1,45 @@
 body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f7f7f7;
-}
-
-/* TOPBAR */
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  font-family: Arial;
   background: #111;
   color: white;
-  padding: 15px 20px;
-}
-
-.topbar button {
-  background: red;
-  border: none;
-  color: white;
-  padding: 8px 12px;
-  cursor: pointer;
-  border-radius: 6px;
-}
-
-/* STATS */
-.stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 15px;
-  padding: 20px;
-}
-
-.card {
-  background: white;
-  padding: 20px;
-  border-radius: 12px;
-  text-align: center;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-}
-
-.card h3 {
   margin: 0;
-  font-size: 14px;
-  color: gray;
 }
 
-.card p {
-  font-size: 24px;
-  margin: 10px 0 0;
-}
-
-/* BOOKINGS */
 .container {
   padding: 20px;
 }
 
-.booking {
-  background: white;
+h2 {
+  margin-bottom: 5px;
+}
+
+.live {
+  color: #00ff88;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.card {
+  background: #222;
   padding: 15px;
-  border-radius: 12px;
-  margin-bottom: 12px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  margin-bottom: 10px;
+  border-radius: 10px;
+  animation: fadeIn 0.3s ease-in-out;
 }
 
-.booking h4 {
-  margin: 0;
-}
-
-.booking small {
-  color: gray;
-}
-
-.actions {
-  margin-top: 10px;
-}
-
-.actions button {
-  padding: 8px 12px;
-  border: none;
-  cursor: pointer;
-  border-radius: 6px;
-  margin-right: 5px;
-}
-
-.approve {
-  background: green;
-  color: white;
-}
-
-.reject {
-  background: red;
-  color: white;
-}
-
-/* MOBILE */
-@media(max-width: 768px) {
-  .stats {
-    grid-template-columns: repeat(2, 1fr);
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
-/*  */
-body {
-  font-family: Arial;
-  background: #0b1220;
-  color: white;
-  margin: 0;
-  padding: 20px;
-}
 
-.admin-header {
-  background: #111a2e;
-  padding: 15px;
-  margin-bottom: 20px;
-  border-radius: 10px;
-}
-
-.booking-card {
-  background: #111a2e;
-  padding: 15px;
-  margin-bottom: 15px;
-  border-radius: 10px;
-}
-
-.charge-btn {
-  background: #10b981;
-  color: white;
-  padding: 10px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
+/* FLASH EFFECT ON NEW DATA */
+.flash {
+  background: #1a1a1a !important;
+  transition: 0.2s;
 }

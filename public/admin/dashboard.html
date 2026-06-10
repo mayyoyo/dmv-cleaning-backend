@@ -1,75 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>Admin Dashboard</title>
+<title>Admin Live Dashboard</title>
 
-<link rel="stylesheet" href="../css/admin.css">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script defer src="../js/admin-dashboard.js"></script>
+<link rel="stylesheet" href="../css/admin-dashboard.css">
 
+<script src="/socket.io/socket.io.js" defer></script>
+<script src="../js/admin/admin-dashboard.js" defer></script>
 </head>
 
 <body>
 
-<header class="admin-header">
-  <h2>📊 DMV Cleaning Admin Dashboard</h2>
-  <button onclick="logout()">Logout</button>
-</header>
+<div class="container">
 
-<section class="stats">
+<h2>🔥 Live Admin Dashboard</h2>
+<p class="live">● LIVE SYSTEM ACTIVE</p>
 
-  <div class="card">
-    <h3>Total Revenue</h3>
-    <h2 id="revenue">$0</h2>
-  </div>
+<div id="dashboard"></div>
 
-  <div class="card">
-    <h3>Total Bookings</h3>
-    <h2 id="bookings">0</h2>
-  </div>
-
-  <div class="card">
-    <h3>Paid</h3>
-    <h2 id="paid">0</h2>
-  </div>
-
-  <div class="card">
-    <h3>Pending</h3>
-    <h2 id="pending">0</h2>
-  </div>
-
-</section>
-
-<!-- ================= CHARTS ================= -->
-<section class="charts">
-
-  <canvas id="serviceChart"></canvas>
-  <canvas id="monthlyChart"></canvas>
-
-</section>
-
-<!-- ================= BOOKINGS TABLE ================= -->
-<section>
-
-  <h2>Bookings</h2>
-
-  <button onclick="exportCSV()">📥 Export CSV</button>
-
-  <table id="table">
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Service</th>
-        <th>Date</th>
-        <th>Total</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody></tbody>
-  </table>
-
-</section>
+</div>
 
 </body>
 </html>
