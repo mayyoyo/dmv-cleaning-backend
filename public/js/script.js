@@ -189,3 +189,52 @@ async function bookNow() {
     alert("Server not reachable");
   }
 }
+// STICKY NAVBAR ACTIVE HIGHLIGHT (ADD TO js/script.js)
+// ================= SMOOTH SCROLL =================
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener("click", function (e) {
+    e.preventDefault();
+
+    const target = document.querySelector(this.getAttribute("href"));
+
+    if (target) {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+  });
+});
+// SMOOTH SCROLL NAVIGATION (ADD TO js/script.js)
+// ================= SMOOTH SCROLL =================
+document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+  anchor.addEventListener("click", function (e) {
+    e.preventDefault();
+
+    const target = document.querySelector(this.getAttribute("href"));
+
+    if (target) {
+      target.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+    }
+  });
+});
+// 
+// ================= DARK / LIGHT TOGGLE =================
+const toggle = document.getElementById("themeToggle");
+
+if (toggle) {
+  toggle.addEventListener("click", () => {
+
+    document.body.classList.toggle("dark-mode");
+
+    if (document.body.classList.contains("dark-mode")) {
+      toggle.innerText = "☀️";
+    } else {
+      toggle.innerText = "🌙";
+    }
+
+  });
+}
