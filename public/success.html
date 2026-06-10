@@ -20,7 +20,7 @@
   <hr>
 
   <div class="row"><span class="label">Booking ID:</span> <span id="bookingId"></span></div>
-  <div class="row"><span class="label">Status:</span> Pending</div>
+  <div class="row"><span class="label">Status:</span> <span id="status"></span></div>
 
   <div class="row"><span class="label">Name:</span> <span id="name"></span></div>
   <div class="row"><span class="label">Email:</span> <span id="email"></span></div>
@@ -38,7 +38,55 @@
 
 </div>
 
-<script src="js/success.js"></script>
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+/* ================= GET BOOKING ID ================= */
+const params = new URLSearchParams(window.location.search);
+const bookingId = params.get("bookingId");
+
+/* ================= LOAD BOOKING ================= */
+async function loadBooking() {
+
+  try {
+
+    const res = await fetch(API + "/public-bookings");
+
+    if (!res.ok) {
+      throw new Error("API error");
+    }
+
+    const bookings = await res.json();
+
+    const booking = bookings.find(b => b.id == bookingId);
+
+    if (!booking) {
+      document.querySelector(".container").innerHTML =
+        "<h2>❌ Booking Not Found</h2>";
+      return;
+    }
+
+    /* ================= FILL PAGE ================= */
+    document.getElementById("bookingId").innerText = booking.id;
+    document.getElementById("status").innerText = booking.status;
+    document.getElementById("name").innerText = booking.name;
+    document.getElementById("email").innerText = booking.email;
+    document.getElementById("phone").innerText = booking.phone;
+    document.getElementById("service").innerText = booking.service;
+    document.getElementById("date").innerText = booking.date;
+    document.getElementById("time").innerText = booking.timeSlot;
+    document.getElementById("total").innerText = booking.total;
+
+  } catch (err) {
+    console.error(err);
+    document.querySelector(".container").innerHTML =
+      "<h2>⚠ Error loading booking</h2>";
+  }
+}
+
+/* ================= INIT ================= */
+loadBooking();
+</script>
 
 </body>
 </html>
