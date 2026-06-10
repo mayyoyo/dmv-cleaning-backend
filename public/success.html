@@ -75,7 +75,9 @@ async function loadBooking() {
     document.getElementById("service").innerText = booking.service;
     document.getElementById("date").innerText = booking.date;
     document.getElementById("time").innerText = booking.timeSlot;
-    document.getElementById("total").innerText = booking.total;
+
+    /* ✅ FIXED LINE (THIS IS WHAT YOU REQUESTED) */
+    document.getElementById("total").innerText = booking.total || 0;
 
   } catch (err) {
     console.error(err);
