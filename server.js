@@ -25,7 +25,6 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ✅ REQUIRED STATIC FILES */
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= GLOBAL ================= */
@@ -35,7 +34,6 @@ global.bookings = global.bookings || [];
 io.on("connection", (socket) => {
   console.log("Client connected");
 
-  // send all bookings instantly
   socket.emit("init-bookings", global.bookings);
 });
 
@@ -71,7 +69,6 @@ app.post("/api/book", (req, res) => {
 
   global.bookings.push(booking);
 
-  /* ================= REAL TIME UPDATE ================= */
   io.emit("new-booking", booking);
   io.emit("update-slots", global.bookings);
 
@@ -81,13 +78,13 @@ app.post("/api/book", (req, res) => {
   });
 });
 
-/* ================= PUBLIC BOOKINGS (REQUIRED) ================= */
+/* ================= PUBLIC BOOKINGS ================= */
 app.get("/api/public-bookings", (req, res) => {
   res.json(global.bookings);
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log("🚀 Server running");
+  console.log("🚀 Server running on port", PORT);
 });
