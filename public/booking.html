@@ -66,7 +66,7 @@
     <option value="pay_later">Pay After Service</option>
   </select>
 
-  <button type="submit" class="btn primary">
+  <button type="button" class="btn primary" onclick="bookNow()">
     📩 Book Now
   </button>
 
@@ -75,6 +75,82 @@
 </section>
 
 </main>
+
+<script>
+
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+let selectedDate = null;
+
+/* ================= CALENDAR ================= */
+document.addEventListener("DOMContentLoaded", function () {
+
+  const calendarEl = document.getElementById("calendar");
+
+  const calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: "dayGridMonth",
+    height: 500,
+
+    dateClick: function(info) {
+      selectedDate = info.dateStr;
+
+      document.getElementById("selectedDate").innerText =
+        "Selected: " + selectedDate;
+    }
+  });
+
+  calendar.render();
+});
+
+/* ================= BOOK NOW (FIXED VERSION) ================= */
+async function bookNow() {
+
+  const data = {
+    name: name.value,
+    email: email.value,
+    phone: phone.value,
+    address: address.value,
+    date: selectedDate,
+    timeSlot: timeSlot.value,
+    service: service.value,
+    paymentType: paymentType.value
+  };
+
+  if (!selectedDate) {
+    return alert("Select date");
+  }
+
+  if (!data.timeSlot) {
+    return alert("Select time slot");
+  }
+
+  try {
+
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      return alert(result.error || "Booking failed");
+    }
+
+    /* ✅ SUCCESS → REDIRECT HERE */
+    window.location.href =
+      "/success.html?bookingId=" + result.bookingId;
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Server error. Please try again.");
+  }
+}
+
+</script>
 
 </body>
 </html>

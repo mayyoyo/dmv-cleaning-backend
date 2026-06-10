@@ -89,7 +89,7 @@ const prices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= BOOK ================= */
+/* ================= BOOKING ================= */
 app.post("/api/book", async (req, res) => {
 
   const {
@@ -130,7 +130,9 @@ app.post("/api/book", async (req, res) => {
 
   global.bookings.push(booking);
 
+  /* ================= REAL-TIME UPDATE ================= */
   io.emit("new-booking", booking);
+  io.emit("update-slots", global.bookings); // 🔥 IMPORTANT FIX
 
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
@@ -156,7 +158,7 @@ app.get("/api/bookings", verifyAdmin, (req, res) => {
   res.json(global.bookings);
 });
 
-/* ================= ✅ PUBLIC BOOKINGS (FIX FOR SLOT SYSTEM) ================= */
+/* ================= PUBLIC BOOKINGS (🔥 REQUIRED FOR SLOT SYSTEM) ================= */
 app.get("/api/public-bookings", (req, res) => {
   res.json(global.bookings);
 });
@@ -209,7 +211,6 @@ app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
     });
 
     booking.paymentIntentId = payment.id;
-
     booking.status = "Paid";
 
     await transporter.sendMail({
@@ -283,7 +284,7 @@ app.get("/api/admin/analytics", verifyAdmin, (req, res) => {
   res.json(data);
 });
 
-/* ================= REMINDER ================= */
+/* ================= AUTO REMINDER ================= */
 cron.schedule("0 9 * * *", async () => {
 
   const unpaid = global.bookings.filter(b => b.status !== "Paid");
@@ -296,10 +297,9 @@ cron.schedule("0 9 * * *", async () => {
       html: `<p>Please complete your payment.</p>`
     });
   }
-
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {

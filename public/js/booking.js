@@ -1,108 +1,163 @@
+/* ================= CONFIG ================= */
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+const socket = io("https://dmv-cleaning-backend.onrender.com");
+
+/* ================= GLOBAL STATE ================= */
+let bookings = [];
 let selectedDate = null;
 
-document.addEventListener("DOMContentLoaded", () => {
-  initCalendar();
-  handleForm();
+/* ================= DOM ELEMENTS ================= */
+const calendarEl = document.getElementById("calendar");
+const timeSlot = document.getElementById("timeSlot");
+const selectedDateText = document.getElementById("selectedDate");
+
+/* ================= TIME SLOTS ================= */
+const SLOTS = [
+  "08:00-10:00",
+  "10:00-12:00",
+  "12:00-14:00",
+  "14:00-16:00",
+  "16:00-18:00"
+];
+
+/* ================= SOCKET REAL-TIME ================= */
+socket.on("connect", () => {
+  console.log("✅ Connected to server");
 });
 
-/* CALENDAR */
-function initCalendar() {
+/* initial load */
+socket.on("init-bookings", (data) => {
+  bookings = data;
+  updateSlots();
+});
 
-  const calendar = new FullCalendar.Calendar(
-    document.getElementById("calendar"),
-    {
-      initialView: "dayGridMonth",
-      height: 500,
+/* new booking instantly */
+socket.on("new-booking", (booking) => {
+  bookings.push(booking);
+  updateSlots();
+});
 
-      dateClick: async (info) => {
+/* full refresh from server */
+socket.on("update-slots", (data) => {
+  bookings = data;
+  updateSlots();
+});
 
-        selectedDate = info.dateStr;
-
-        document.getElementById("selectedDate").innerText =
-          "Selected: " + selectedDate;
-
-        loadSlots();
-      }
-    }
-  );
-
-  calendar.render();
+/* ================= LOAD BOOKINGS (fallback) ================= */
+async function loadBookings() {
+  try {
+    const res = await fetch(API + "/public-bookings");
+    bookings = await res.json();
+    updateSlots();
+  } catch (err) {
+    console.error("Failed loading bookings:", err);
+  }
 }
 
-/* LOAD BOOKED SLOTS */
-async function loadSlots() {
+/* ================= UPDATE SLOTS (REAL-TIME UI) ================= */
+function updateSlots() {
 
   if (!selectedDate) return;
 
-  const res = await fetch(API + "/public-bookings");
-  const bookings = await res.json();
+  const bookedSlots = bookings
+    .filter(b => b.date === selectedDate)
+    .map(b => b.timeSlot);
 
-  const select = document.getElementById("timeSlot");
+  timeSlot.innerHTML = `<option value="">Select Time</option>`;
 
-  Array.from(select.options).forEach(opt => {
+  SLOTS.forEach(slot => {
 
-    if (!opt.value) return;
+    const option = document.createElement("option");
+    option.value = slot;
 
-    const booked = bookings.find(
-      b => b.date === selectedDate && b.timeSlot === opt.value
-    );
-
-    if (booked) {
-      opt.disabled = true;
-      opt.textContent = opt.value + " (Booked)";
+    if (bookedSlots.includes(slot)) {
+      option.textContent = `${slot} ❌ Booked`;
+      option.disabled = true;
+      option.classList.add("slot-booked");
     } else {
-      opt.disabled = false;
-      opt.textContent = opt.value;
+      option.textContent = `${slot} ✅ Available`;
+      option.classList.add("slot-free");
     }
 
+    timeSlot.appendChild(option);
   });
 }
 
-/* FORM */
-function handleForm() {
+/* ================= CALENDAR ================= */
+document.addEventListener("DOMContentLoaded", async () => {
 
-  document
-    .getElementById("bookingForm")
-    .addEventListener("submit", async (e) => {
+  await loadBookings();
 
-      e.preventDefault();
+  const calendar = new FullCalendar.Calendar(calendarEl, {
 
-      const data = {
-        name: name.value.trim(),
-        email: email.value.trim(),
-        phone: phone.value.trim(),
-        address: address.value.trim(),
-        timeSlot: timeSlot.value,
-        service: service.value,
-        paymentType: paymentType.value,
-        date: selectedDate
-      };
+    initialView: "dayGridMonth",
+    height: 500,
 
-      if (!selectedDate) return alert("Select date");
-      if (!data.timeSlot) return alert("Select time");
+    dateClick: function(info) {
 
-      const res = await fetch(API + "/book", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(data)
-      });
+      selectedDate = info.dateStr;
 
-      const result = await res.json();
+      selectedDateText.innerText =
+        "Selected: " + selectedDate;
 
-      if (res.status === 409) {
-        alert("Slot already booked");
-        loadSlots();
-        return;
-      }
+      updateSlots();
+    }
+  });
 
-      if (!res.ok) {
-        return alert(result.error);
-      }
+  calendar.render();
+});
 
-      alert("Booking confirmed!");
+/* ================= BOOK NOW ================= */
+async function bookNow() {
 
-      window.location.href =
-        "https://mydmvcleaningservice.com/success.html?bookingId=" +
-        result.bookingId;
+  const data = {
+    name: document.getElementById("name").value.trim(),
+    email: document.getElementById("email").value.trim(),
+    phone: document.getElementById("phone").value.trim(),
+    address: document.getElementById("address").value.trim(),
+    date: selectedDate,
+    timeSlot: timeSlot.value,
+    service: document.getElementById("service").value,
+    paymentType: document.getElementById("paymentType").value
+  };
+
+  if (!selectedDate) {
+    return alert("❌ Please select a date");
+  }
+
+  if (!data.timeSlot) {
+    return alert("❌ Please select a time slot");
+  }
+
+  try {
+
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data)
     });
+
+    const result = await res.json();
+
+    if (res.status === 409) {
+      alert("⚠ Slot already booked. Choose another time.");
+      return;
+    }
+
+    if (!res.ok) {
+      return alert(result.error || "Booking failed");
+    }
+
+    alert("✅ Booking successful!");
+
+    /* REDIRECT TO SUCCESS PAGE */
+    window.location.href =
+      "/success.html?bookingId=" + result.bookingId;
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Server error. Try again.");
+  }
 }
