@@ -12,7 +12,6 @@
 <script src="js/config.js" defer></script>
 
 <style>
-/* basic safety styling (NO INLINE CSS IN JS) */
 #calendar {
   margin-top: 20px;
 }
@@ -39,10 +38,12 @@
 
 <h2>📅 Book Cleaning Service</h2>
 
+<!-- CALENDAR -->
 <div id="calendar"></div>
 
 <p id="selectedDate">No date selected</p>
 
+<!-- FORM -->
 <form id="bookingForm">
 
   <select id="timeSlot" class="input" required>
@@ -90,7 +91,7 @@ const API = "https://dmv-cleaning-backend.onrender.com/api";
 let bookings = [];
 let selectedDate = null;
 
-/* ================= LOAD BOOKINGS (EXACT FIX) ================= */
+/* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
   try {
     const res = await fetch(API + "/public-bookings");
@@ -108,7 +109,7 @@ async function loadBookings() {
   }
 }
 
-/* ================= FULLCALENDAR (WAIT FOR DATA) ================= */
+/* ================= FULLCALENDAR ================= */
 document.addEventListener("DOMContentLoaded", async () => {
 
   await loadBookings();
@@ -135,14 +136,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function bookNow() {
 
   const data = {
-    name: name.value,
-    email: email.value,
-    phone: phone.value,
-    address: address.value,
+    name: document.getElementById("name").value,
+    email: document.getElementById("email").value,
+    phone: document.getElementById("phone").value,
+    address: document.getElementById("address").value,
     date: selectedDate,
-    timeSlot: timeSlot.value,
-    service: service.value,
-    paymentType: paymentType.value
+    timeSlot: document.getElementById("timeSlot").value,
+    service: document.getElementById("service").value,
+    paymentType: document.getElementById("paymentType").value
   };
 
   if (!selectedDate) {
@@ -167,7 +168,6 @@ async function bookNow() {
       return alert(result.error || "Booking failed");
     }
 
-    /* SUCCESS REDIRECT */
     window.location.href =
       "/success.html?bookingId=" + result.bookingId;
 
