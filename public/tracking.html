@@ -1,42 +1,81 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Track Your Booking</title>
-<link rel="stylesheet" href="css/style.css">
+<title>Live Booking Tracking</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="css/tracking.css">
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
 </head>
 
 <body>
 
-<h2>📍 Track Your Cleaning Service</h2>
+<div class="header">
+  📍 Live Booking Tracking
+</div>
 
-<input id="bookingId" placeholder="Enter Booking ID">
-<button onclick="track()">Track</button>
+<div class="card">
+  <h2>Booking Status</h2>
+  <p id="status" class="status">Loading...</p>
+</div>
 
-<div id="result"></div>
+<div class="card">
+  <h3>Service Info</h3>
+  <p id="info">Loading...</p>
+</div>
 
 <script>
 
 const API = "https://dmv-cleaning-backend.onrender.com/api";
+const socket = io("https://dmv-cleaning-backend.onrender.com");
 
-async function track() {
+/* ================= GET BOOKING ID ================= */
+const urlParams = new URLSearchParams(window.location.search);
+const bookingId = urlParams.get("id");
 
-  const id = document.getElementById("bookingId").value;
+/* ================= LOAD BOOKING ================= */
+async function loadBooking() {
 
-  const res = await fetch(API + "/booking/" + id);
-  const data = await res.json();
+  try {
 
-  if (!res.ok) {
-    return alert("Booking not found");
+    const res = await fetch(API + "/booking/" + bookingId);
+    const data = await res.json();
+
+    document.getElementById("status").innerText = data.status || "Pending";
+
+    document.getElementById("info").innerHTML = `
+      Service: ${data.service || "-"}<br>
+      Date: ${data.date || "-"}<br>
+      Total: $${data.total || 0}
+    `;
+
+  } catch (err) {
+    console.error("LOAD ERROR:", err);
+    document.getElementById("status").innerText = "Error loading booking";
   }
-
-  document.getElementById("result").innerHTML = `
-    <h3>Status: ${data.status}</h3>
-    <p>Service: ${data.service}</p>
-    <p>Date: ${data.date}</p>
-    <p>Total: $${data.total}</p>
-  `;
 }
+
+loadBooking();
+
+/* ================= LIVE SOCKET UPDATES ================= */
+socket.on("booking-updated", (booking) => {
+
+  if (!bookingId) return;
+
+  if (booking.id == bookingId) {
+
+    document.getElementById("status").innerText = booking.status;
+
+    document.getElementById("info").innerHTML = `
+      Service: ${booking.service}<br>
+      Date: ${booking.date}<br>
+      Total: $${booking.total}
+    `;
+  }
+});
 
 </script>
 

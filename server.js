@@ -89,7 +89,7 @@ const prices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= BOOKING (UPDATED WITH PAYMENT TYPE + TERMS) ================= */
+/* ================= BOOKING ================= */
 app.post("/api/book", async (req, res) => {
 
   const {
@@ -99,15 +99,8 @@ app.post("/api/book", async (req, res) => {
     address,
     date,
     timeSlot,
-    service,
-    paymentType,
-    termsAccepted
+    service
   } = req.body;
-
-  /* TERMS REQUIRED */
-  if (!termsAccepted) {
-    return res.status(400).json({ error: "You must accept terms" });
-  }
 
   if (!name || !email || !phone || !address || !date || !timeSlot || !service) {
     return res.status(400).json({ error: "All fields required" });
@@ -130,9 +123,8 @@ app.post("/api/book", async (req, res) => {
     date,
     timeSlot,
     service,
-    paymentType: paymentType || "pay_now",
     total,
-    status: paymentType === "pay_later" ? "Pending Payment" : "Pending",
+    status: "Pending",
     createdAt: new Date().toISOString()
   };
 
@@ -140,7 +132,6 @@ app.post("/api/book", async (req, res) => {
 
   io.emit("new-booking", booking);
 
-  /* EMAIL CONFIRMATION */
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to: email,
@@ -149,9 +140,7 @@ app.post("/api/book", async (req, res) => {
       <h2>Booking Confirmed</h2>
       <p>Service: ${service}</p>
       <p>Date: ${date}</p>
-      <p>Time: ${timeSlot}</p>
       <p>Total: $${total}</p>
-      <p>Payment Type: ${booking.paymentType}</p>
     `
   });
 
@@ -162,19 +151,9 @@ app.post("/api/book", async (req, res) => {
   });
 });
 
-/* ================= GET BOOKINGS (ADMIN ONLY) ================= */
+/* ================= GET BOOKINGS ================= */
 app.get("/api/bookings", verifyAdmin, (req, res) => {
   res.json(global.bookings);
-});
-
-/* ================= GET SINGLE BOOKING ================= */
-app.get("/api/booking/:id", (req, res) => {
-
-  const booking = global.bookings.find(b => b.id == req.params.id);
-
-  if (!booking) return res.status(404).json({ error: "Not found" });
-
-  res.json(booking);
 });
 
 /* ================= SAVE CARD ================= */
@@ -201,18 +180,22 @@ app.post("/api/save-card", async (req, res) => {
   });
 });
 
-/* ================= CHARGE CUSTOMER ================= */
-app.post("/api/charge/:id", async (req, res) => {
+/* ================= AUTO CHARGE ON COMPLETION ================= */
+app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
 
   const booking = global.bookings.find(b => b.id == req.params.id);
 
-  if (!booking || !booking.stripeCustomerId) {
-    return res.status(400).json({ error: "Missing payment info" });
+  if (!booking) return res.status(404).json({ error: "Not found" });
+
+  if (!booking.stripeCustomerId) {
+    return res.status(400).json({ error: "No payment method" });
   }
 
   try {
 
-    await stripe.paymentIntents.create({
+    booking.status = "Completed";
+
+    const payment = await stripe.paymentIntents.create({
       amount: booking.total * 100,
       currency: "usd",
       customer: booking.stripeCustomerId,
@@ -220,40 +203,58 @@ app.post("/api/charge/:id", async (req, res) => {
       confirm: true
     });
 
+    // ⭐ IMPORTANT FIX (YOU ASKED FOR THIS)
+    booking.paymentIntentId = payment.id;
+
     booking.status = "Paid";
 
-    /* ================= PDF INVOICE ================= */
-    const doc = new PDFDocument();
-    const chunks = [];
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: booking.email,
+      subject: "Payment Completed",
+      html: `
+        <h2>Service Completed</h2>
+        <p>Service: ${booking.service}</p>
+        <p>Total Paid: $${booking.total}</p>
+        <p>Status: Paid</p>
+      `
+    });
 
-    doc.on("data", chunk => chunks.push(chunk));
+    res.json({ success: true });
 
-    doc.fontSize(20).text("DMV Cleaning Invoice");
-    doc.moveDown();
+  } catch (err) {
+    booking.status = "Payment Failed";
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    doc.fontSize(14).text(`Name: ${booking.name}`);
-    doc.text(`Service: ${booking.service}`);
-    doc.text(`Total: $${booking.total}`);
-    doc.text(`Status: Paid`);
+/* ================= CANCEL + REFUND ================= */
+app.post("/api/admin/cancel/:id", verifyAdmin, async (req, res) => {
 
-    doc.end();
+  const booking = global.bookings.find(b => b.id == req.params.id);
 
-    doc.on("end", async () => {
+  if (!booking) return res.status(404).json({ error: "Not found" });
 
-      const pdf = Buffer.concat(chunks);
+  try {
 
-      await transporter.sendMail({
-        from: process.env.EMAIL_USER,
-        to: booking.email,
-        subject: "Invoice - DMV Cleaning",
-        html: `<h2>Payment Successful</h2>`,
-        attachments: [
-          {
-            filename: "invoice.pdf",
-            content: pdf
-          }
-        ]
+    if (booking.status === "Paid" && booking.paymentIntentId) {
+
+      await stripe.refunds.create({
+        payment_intent: booking.paymentIntentId
       });
+    }
+
+    booking.status = "Cancelled";
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: booking.email,
+      subject: "Booking Cancelled",
+      html: `
+        <h2>Booking Cancelled</h2>
+        <p>Service: ${booking.service}</p>
+        <p>Status: Cancelled</p>
+      `
     });
 
     res.json({ success: true });
@@ -306,81 +307,16 @@ cron.schedule("0 9 * * *", async () => {
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: b.email,
-      subject: "Payment Reminder - DMV Cleaning",
+      subject: "Payment Reminder",
       html: `<p>Please complete your payment.</p>`
     });
   }
 
-  console.log("📩 Reminder sent");
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log("🚀 FINAL CLEAN SYSTEM RUNNING");
+  console.log("🚀 CLEAN SYSTEM RUNNING");
 });
-// 
-/* ================= AUTO CHARGE WHEN COMPLETED ================= */
-app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
-
-  const booking = global.bookings.find(b => b.id == req.params.id);
-
-  if (!booking) {
-    return res.status(404).json({ error: "Booking not found" });
-  }
-
-  if (!booking.stripeCustomerId) {
-    return res.status(400).json({ error: "No payment method saved" });
-  }
-
-  try {
-
-    // 🔥 STEP 1: Mark completed first
-    booking.status = "Completed";
-
-    // 🔥 STEP 2: AUTO CHARGE STRIPE IMMEDIATELY
-    const payment = await stripe.paymentIntents.create({
-      amount: booking.total * 100,
-      currency: "usd",
-      customer: booking.stripeCustomerId,
-      off_session: true,
-      confirm: true
-    });
-
-    // 🔥 STEP 3: UPDATE STATUS AFTER SUCCESS
-    booking.status = "Paid";
-
-    console.log("💰 AUTO CHARGED AFTER COMPLETION:", booking.id);
-
-    // 🔥 STEP 4: EMAIL RECEIPT
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: booking.email,
-      subject: "Payment Completed - DMV Cleaning",
-      html: `
-        <h2>Service Completed & Paid</h2>
-        <p>Service: ${booking.service}</p>
-        <p>Total: $${booking.total}</p>
-        <p>Status: Paid</p>
-      `
-    });
-
-    res.json({
-      success: true,
-      message: "Booking completed and charged"
-    });
-
-  } catch (err) {
-
-    console.error("AUTO CHARGE ERROR:", err.message);
-
-    // If payment fails, keep it completed but unpaid
-    booking.status = "Payment Failed";
-
-    res.status(500).json({
-      error: err.message
-    });
-  }
-});
-// 

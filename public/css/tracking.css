@@ -1,0 +1,28 @@
+body {
+  font-family: Arial;
+  background: #f5f6f8;
+  margin: 0;
+}
+
+.header {
+  background: #111;
+  color: white;
+  padding: 15px;
+  text-align: center;
+}
+
+.card {
+  background: white;
+  margin: 20px;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.status {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.live {
+  color: green;
+}
