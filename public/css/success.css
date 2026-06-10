@@ -1,105 +1,164 @@
-/* ================= SUCCESS PAGE (MATCH HOME PAGE STYLE) ================= */
+/* RESET */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+  }
 
 body {
-  margin: 0;
-  background: #0b1220;
-  color: #e5e7eb;
-  font-family: Arial;
-  animation: fadeIn 0.5s ease;
-
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
+background: #f5f7fb;
 }
 
-@keyframes fadeIn {
-  from {opacity: 0; transform: translateY(10px);}
-  to {opacity: 1; transform: translateY(0);}
+/* WRAPPER */
+.wrapper {
+max-width: 600px;
+margin: 40px auto;
+padding: 20px;
 }
 
-/* ================= RECEIPT CARD ================= */
-
-.receipt-card {
-  background: #111a2e; /* same as your cards */
-  padding: 25px;
-  border-radius: 14px;
-  width: 380px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
-  text-align: center;
-  border: 1px solid #1f2a44;
+/* SUCCESS HEADER */
+.success-header {
+text-align: center;
+margin-bottom: 25px;
 }
 
-/* ================= HEADER ================= */
-
-.business-header h1 {
-  font-size: 18px;
-  margin-bottom: 5px;
-  color: #ffffff;
+.checkmark {
+width: 70px;
+height: 70px;
+background: #28a745;
+color: white;
+font-size: 40px;
+line-height: 70px;
+border-radius: 50%;
+margin: 0 auto 10px;
 }
 
-.business-header p {
-  font-size: 14px;
-  color: #cbd5e1;
+.success-header h1 {
+color: #28a745;
 }
 
-/* ================= RECEIPT CONTENT ================= */
-
-.section {
-  text-align: left;
-  margin: 12px 0;
+.success-header p {
+color: #666;
 }
 
-.section p {
-  margin: 6px 0;
-  font-size: 14px;
-  color: #e5e7eb;
+/* CARD */
+.card {
+background: white;
+border-radius: 12px;
+padding: 25px;
+box-shadow: 0 10px 30px rgba(0,0,0,0.08);
 }
 
-/* ================= DIVIDER ================= */
-
-hr {
-  border: none;
-  border-top: 1px solid #1f2a44;
-  margin: 12px 0;
+/* TOP */
+.top {
+text-align: center;
+margin-bottom: 20px;
 }
 
-/* ================= TITLE ================= */
-
-h2 {
-  color: #3b82f6;
-  margin-bottom: 10px;
+/* DETAILS */
+.details .row {
+display: flex;
+justify-content: space-between;
+margin: 10px 0;
+font-size: 14px;
 }
 
-/* ================= BUTTONS ================= */
-
-.buttons {
-  margin-top: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.details span {
+color: #666;
 }
 
-button {
-  width: 100%;
-  padding: 12px;
-  cursor: pointer;
-  border: none;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #4f46e5, #3b82f6);
-  color: white;
-  font-size: 14px;
-  transition: 0.2s ease;
+.details b {
+color: #111;
 }
 
-button:hover {
-  transform: scale(1.03);
+/* DIVIDER */
+.divider {
+height: 1px;
+background: #eee;
+margin: 15px 0;
 }
 
-/* ================= MOBILE ================= */
+/* STATUS */
+.status {
+color: orange;
+}
 
-@media (max-width: 768px) {
-  .receipt-card {
-    width: 90%;
-  }
+/* PRICE BOX */
+.price-box {
+background: #0d6efd;
+color: white;
+margin-top: 20px;
+padding: 20px;
+border-radius: 10px;
+text-align: center;
+}
+
+.price-box h2 {
+font-size: 28px;
+}
+
+/* MOBILE */
+@media (max-width: 600px) {
+.details .row {
+flex-direction: column;
+gap: 5px;
+}
+
+.price-box h2 {
+font-size: 24px;
+}
+}
+/*  */
+/* NEXT STEPS */
+.next-steps {
+margin-top: 25px;
+padding: 15px;
+background: #f8f9fa;
+border-radius: 10px;
+}
+
+.next-steps h3 {
+margin-bottom: 10px;
+}
+
+.next-steps ul {
+list-style: none;
+}
+
+.next-steps li {
+margin: 6px 0;
+color: #444;
+}
+
+/* ACTION BUTTONS */
+.actions {
+display: flex;
+gap: 10px;
+margin-top: 20px;
+}
+
+.btn {
+flex: 1;
+text-align: center;
+padding: 12px;
+background: #0d6efd;
+color: white;
+text-decoration: none;
+border-radius: 8px;
+font-weight: bold;
+}
+
+.btn.outline {
+background: white;
+color: #0d6efd;
+border: 2px solid #0d6efd;
+}
+
+/* MOBILE */
+@media (max-width: 600px) {
+.actions {
+flex-direction: column;
+}
 }

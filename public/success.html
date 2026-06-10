@@ -1,8 +1,11 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Booking Success</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booking Confirmed</title>
+
 
 <link rel="stylesheet" href="css/success.css">
 
@@ -10,30 +13,75 @@
 
 <body>
 
-<div class="container">
+<div class="wrapper">
 
-  <h2>✔ Booking Confirmed</h2>
+  <!-- ✅ SUCCESS HEADER -->
 
-  <p>🧼 DMV Cleaning Services LLC</p>
-  <p><b>Business Phone:</b> 703-967-0674</p>
+  <div class="success-header">
+    <div class="checkmark">✔</div>
+    <h1>Booking Confirmed</h1>
+    <p>Thank you for choosing DMV Cleaning Services</p>
+  </div>
 
-  <hr>
+  <!-- ✅ CARD -->
 
-  <div class="row"><span class="label">Booking ID:</span> <span id="bookingId"></span></div>
-  <div class="row"><span class="label">Status:</span> <span id="status"></span></div>
+  <div class="card">
 
-  <div class="row"><span class="label">Name:</span> <span id="name"></span></div>
-  <div class="row"><span class="label">Email:</span> <span id="email"></span></div>
-  <div class="row"><span class="label">Customer Phone:</span> <span id="phone"></span></div>
+```
+<div class="top">
+  <h2>🧼 DMV Cleaning Services LLC</h2>
+  <p>📞 703-967-0674</p>
+</div>
 
-  <div class="row"><span class="label">Service:</span> <span id="service"></span></div>
-  <div class="row"><span class="label">Date:</span> <span id="date"></span></div>
-  <div class="row"><span class="label">Time:</span> <span id="time"></span></div>
+<div class="details">
 
-  <hr>
+  <div class="row">
+    <span>Booking ID</span>
+    <b id="bookingId"></b>
+  </div>
 
-  <div class="amount">
-    <b>Amount Due:</b> $<span id="total">0</span>
+  <div class="row">
+    <span>Status</span>
+    <b id="status" class="status"></b>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="row"><span>Name</span><b id="name"></b></div>
+  <div class="row"><span>Email</span><b id="email"></b></div>
+  <div class="row"><span>Phone</span><b id="phone"></b></div>
+
+  <div class="divider"></div>
+
+  <div class="row"><span>Service</span><b id="service"></b></div>
+  <div class="row"><span>Date</span><b id="date"></b></div>
+  <div class="row"><span>Time</span><b id="time"></b></div>
+
+</div>
+
+<!-- ✅ PRICE BOX -->
+<div class="price-box">
+  <p>Total Due Amount</p>
+  <h2>$<span id="total">0</span></h2>
+</div>
+
+<!-- ✅ NEXT STEPS (ADDED HERE) -->
+<div class="next-steps">
+  <h3>What Happens Next?</h3>
+  <ul>
+    <li>✔ Our team will contact you shortly</li>
+    <li>✔ Please be available at your scheduled time</li>
+    <li>✔ Prepare access to your home</li>
+  </ul>
+</div>
+
+<!-- ✅ ACTION BUTTONS -->
+<div class="actions">
+  <a href="index.html" class="btn">🏠 Back Home</a>
+  <a href="tel:7039670674" class="btn outline">📞 Call Us</a>
+</div>
+```
+
   </div>
 
 </div>
@@ -41,32 +89,21 @@
 <script>
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-/* ================= GET BOOKING ID ================= */
 const params = new URLSearchParams(window.location.search);
 const bookingId = params.get("bookingId");
 
-/* ================= LOAD BOOKING ================= */
 async function loadBooking() {
-
   try {
-
     const res = await fetch(API + "/public-bookings");
-
-    if (!res.ok) {
-      throw new Error("API error");
-    }
-
     const bookings = await res.json();
 
     const booking = bookings.find(b => b.id == bookingId);
 
     if (!booking) {
-      document.querySelector(".container").innerHTML =
-        "<h2>❌ Booking Not Found</h2>";
+      document.body.innerHTML = "<h2>❌ Booking Not Found</h2>";
       return;
     }
 
-    /* ================= FILL PAGE ================= */
     document.getElementById("bookingId").innerText = booking.id;
     document.getElementById("status").innerText = booking.status;
     document.getElementById("name").innerText = booking.name;
@@ -76,17 +113,15 @@ async function loadBooking() {
     document.getElementById("date").innerText = booking.date;
     document.getElementById("time").innerText = booking.timeSlot;
 
-    /* ✅ FIXED LINE (THIS IS WHAT YOU REQUESTED) */
+    /* ✅ FIXED TOTAL */
     document.getElementById("total").innerText = booking.total || 0;
 
   } catch (err) {
     console.error(err);
-    document.querySelector(".container").innerHTML =
-      "<h2>⚠ Error loading booking</h2>";
+    document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
   }
 }
 
-/* ================= INIT ================= */
 loadBooking();
 </script>
 
