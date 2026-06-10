@@ -66,7 +66,7 @@ app.post("/api/admin/login", (req, res) => {
   res.status(401).json({ error: "Invalid login" });
 });
 
-/* ================= AUTH MIDDLEWARE ================= */
+/* ================= AUTH ================= */
 function verifyAdmin(req, res, next) {
 
   const token = req.headers.authorization;
@@ -89,7 +89,7 @@ const prices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= BOOKING ================= */
+/* ================= BOOK ================= */
 app.post("/api/book", async (req, res) => {
 
   const {
@@ -135,7 +135,7 @@ app.post("/api/book", async (req, res) => {
   await transporter.sendMail({
     from: process.env.EMAIL_USER,
     to: email,
-    subject: "Booking Confirmed - DMV Cleaning",
+    subject: "Booking Confirmed",
     html: `
       <h2>Booking Confirmed</h2>
       <p>Service: ${service}</p>
@@ -151,8 +151,13 @@ app.post("/api/book", async (req, res) => {
   });
 });
 
-/* ================= GET BOOKINGS ================= */
+/* ================= GET BOOKINGS (ADMIN) ================= */
 app.get("/api/bookings", verifyAdmin, (req, res) => {
+  res.json(global.bookings);
+});
+
+/* ================= ✅ PUBLIC BOOKINGS (FIX FOR SLOT SYSTEM) ================= */
+app.get("/api/public-bookings", (req, res) => {
   res.json(global.bookings);
 });
 
@@ -180,7 +185,7 @@ app.post("/api/save-card", async (req, res) => {
   });
 });
 
-/* ================= AUTO CHARGE ON COMPLETION ================= */
+/* ================= COMPLETE + AUTO CHARGE ================= */
 app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
 
   const booking = global.bookings.find(b => b.id == req.params.id);
@@ -203,7 +208,6 @@ app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
       confirm: true
     });
 
-    // ⭐ IMPORTANT FIX (YOU ASKED FOR THIS)
     booking.paymentIntentId = payment.id;
 
     booking.status = "Paid";
@@ -214,9 +218,7 @@ app.post("/api/admin/complete/:id", verifyAdmin, async (req, res) => {
       subject: "Payment Completed",
       html: `
         <h2>Service Completed</h2>
-        <p>Service: ${booking.service}</p>
         <p>Total Paid: $${booking.total}</p>
-        <p>Status: Paid</p>
       `
     });
 
@@ -238,7 +240,6 @@ app.post("/api/admin/cancel/:id", verifyAdmin, async (req, res) => {
   try {
 
     if (booking.status === "Paid" && booking.paymentIntentId) {
-
       await stripe.refunds.create({
         payment_intent: booking.paymentIntentId
       });
@@ -250,11 +251,7 @@ app.post("/api/admin/cancel/:id", verifyAdmin, async (req, res) => {
       from: process.env.EMAIL_USER,
       to: booking.email,
       subject: "Booking Cancelled",
-      html: `
-        <h2>Booking Cancelled</h2>
-        <p>Service: ${booking.service}</p>
-        <p>Status: Cancelled</p>
-      `
+      html: `<p>Your booking has been cancelled.</p>`
     });
 
     res.json({ success: true });
@@ -271,50 +268,38 @@ app.get("/api/admin/analytics", verifyAdmin, (req, res) => {
     totalBookings: global.bookings.length,
     totalRevenue: 0,
     paid: 0,
-    pending: 0,
-    services: {},
-    monthly: {}
+    pending: 0
   };
 
   global.bookings.forEach(b => {
-
     if (b.status === "Paid") {
       data.totalRevenue += b.total;
       data.paid++;
     } else {
       data.pending++;
     }
-
-    data.services[b.service] =
-      (data.services[b.service] || 0) + b.total;
-
-    const month = new Date(b.createdAt).toISOString().slice(0, 7);
-
-    data.monthly[month] =
-      (data.monthly[month] || 0) + b.total;
   });
 
   res.json(data);
 });
 
-/* ================= AUTO REMINDER ================= */
+/* ================= REMINDER ================= */
 cron.schedule("0 9 * * *", async () => {
 
   const unpaid = global.bookings.filter(b => b.status !== "Paid");
 
   for (const b of unpaid) {
-
     await transporter.sendMail({
       from: process.env.EMAIL_USER,
       to: b.email,
-      subject: "Payment Reminder",
+      subject: "Reminder",
       html: `<p>Please complete your payment.</p>`
     });
   }
 
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {

@@ -9,6 +9,8 @@
 <link rel="stylesheet" href="css/booking.css">
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
+<script src="js/config.js" defer></script>
+<script src="js/booking.js" defer></script>
 
 </head>
 
@@ -31,14 +33,11 @@
 
 <h2>📅 Book Cleaning Service</h2>
 
-<!-- CALENDAR -->
 <div id="calendar"></div>
 
-<!-- SELECTED DATE -->
 <p id="selectedDate">No date selected</p>
 
-<!-- FORM -->
-<form id="bookingForm" onsubmit="return false;">
+<form id="bookingForm">
 
   <select id="timeSlot" class="input" required>
     <option value="">Select Time</option>
@@ -62,13 +61,12 @@
     <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
   </select>
 
-  <!-- ✅ PAYMENT TYPE ADDED HERE -->
   <select id="paymentType" class="input" required>
     <option value="pay_now">Pay Now</option>
     <option value="pay_later">Pay After Service</option>
   </select>
 
-  <button type="button" class="btn primary" onclick="bookNow()">
+  <button type="submit" class="btn primary">
     📩 Book Now
   </button>
 
@@ -77,99 +75,6 @@
 </section>
 
 </main>
-
-<script>
-
-/* ================= API ================= */
-const API = "https://dmv-cleaning-backend.onrender.com/api";
-
-let selectedDate = null;
-
-/* ================= CALENDAR ================= */
-document.addEventListener("DOMContentLoaded", function () {
-
-  const calendarEl = document.getElementById("calendar");
-
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: "dayGridMonth",
-    height: 500,
-
-    dateClick: function(info) {
-      selectedDate = info.dateStr;
-
-      document.getElementById("selectedDate").innerText =
-        "Selected: " + selectedDate;
-
-      console.log("DATE SELECTED:", selectedDate);
-    }
-  });
-
-  calendar.render();
-});
-
-/* ================= BOOK NOW ================= */
-async function bookNow() {
-
-  const name = document.getElementById("name").value.trim();
-  const email = document.getElementById("email").value.trim();
-  const phone = document.getElementById("phone").value.trim();
-  const address = document.getElementById("address").value.trim();
-  const timeSlot = document.getElementById("timeSlot").value;
-  const service = document.getElementById("service").value;
-
-  // ✅ NEW PAYMENT TYPE
-  const paymentType = document.getElementById("paymentType").value;
-
-  if (!selectedDate) {
-    return alert("❌ Please select a date");
-  }
-
-  if (!name || !email || !phone || !address || !timeSlot || !service) {
-    return alert("❌ Please fill all fields");
-  }
-
-  try {
-
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name,
-        email,
-        phone,
-        address,
-        date: selectedDate,
-        timeSlot,
-        service,
-        paymentType   // ✅ ADDED HERE
-      })
-    });
-
-    const data = await res.json();
-
-    if (res.status === 409) {
-      alert("⚠ This time slot is already booked. Please choose another.");
-      return;
-    }
-
-    if (!res.ok) {
-      return alert(data.error || "Booking failed");
-    }
-
-    alert("Booking confirmed successfully!");
-
-    window.location.href =
-      "https://mydmvcleaningservice.com/success.html?bookingId=" + data.bookingId;
-
-  } catch (err) {
-    console.error("BOOK ERROR:", err);
-    alert("Server error");
-  }
-}
-
-</script>
 
 </body>
 </html>

@@ -1,75 +1,108 @@
-const express = require("express");
-const router = express.Router();
+let selectedDate = null;
 
-/* ================= TEMP DATABASE ================= */
-let bookings = [];
+document.addEventListener("DOMContentLoaded", () => {
+  initCalendar();
+  handleForm();
+});
 
-/* ================= PRICE MAP ================= */
-const prices = {
-  "Home Cleaning": 120,
-  "Deep Cleaning": 200,
-  "Office Cleaning": 150,
-  "Move In/Out Cleaning": 180
-};
+/* CALENDAR */
+function initCalendar() {
 
-/* ================= BOOKING ROUTE ================= */
-router.post("/book", (req, res) => {
+  const calendar = new FullCalendar.Calendar(
+    document.getElementById("calendar"),
+    {
+      initialView: "dayGridMonth",
+      height: 500,
 
-  const {
-    name,
-    email,
-    phone,
-    address,
-    date,
-    timeSlot,
-    service
-  } = req.body;
+      dateClick: async (info) => {
 
-  /* ================= VALIDATION ================= */
-  if (!name || !email || !phone || !address || !date || !timeSlot || !service) {
-    return res.status(400).json({ error: "All fields required" });
-  }
+        selectedDate = info.dateStr;
 
-  /* ================= CALCULATE TOTAL ================= */
-  const total = prices[service] ?? 0;
+        document.getElementById("selectedDate").innerText =
+          "Selected: " + selectedDate;
 
-  const booking = {
-    id: Date.now(),
-    name,
-    email,
-    phone,
-    address,
-    date,
-    timeSlot,
-    service,
-    total,
-    status: "Pending"
-  };
+        loadSlots();
+      }
+    }
+  );
 
-  bookings.push(booking);
+  calendar.render();
+}
 
-  return res.json({
-    success: true,
-    bookingId: booking.id,
-    total
+/* LOAD BOOKED SLOTS */
+async function loadSlots() {
+
+  if (!selectedDate) return;
+
+  const res = await fetch(API + "/public-bookings");
+  const bookings = await res.json();
+
+  const select = document.getElementById("timeSlot");
+
+  Array.from(select.options).forEach(opt => {
+
+    if (!opt.value) return;
+
+    const booked = bookings.find(
+      b => b.date === selectedDate && b.timeSlot === opt.value
+    );
+
+    if (booked) {
+      opt.disabled = true;
+      opt.textContent = opt.value + " (Booked)";
+    } else {
+      opt.disabled = false;
+      opt.textContent = opt.value;
+    }
+
   });
-});
+}
 
-/* ================= GET BOOKINGS ================= */
-router.get("/bookings", (req, res) => {
-  res.json(bookings);
-});
+/* FORM */
+function handleForm() {
 
-/* ================= GET SINGLE BOOKING ================= */
-router.get("/booking/:id", (req, res) => {
+  document
+    .getElementById("bookingForm")
+    .addEventListener("submit", async (e) => {
 
-  const booking = bookings.find(b => b.id == req.params.id);
+      e.preventDefault();
 
-  if (!booking) {
-    return res.status(404).json({ error: "Not found" });
-  }
+      const data = {
+        name: name.value.trim(),
+        email: email.value.trim(),
+        phone: phone.value.trim(),
+        address: address.value.trim(),
+        timeSlot: timeSlot.value,
+        service: service.value,
+        paymentType: paymentType.value,
+        date: selectedDate
+      };
 
-  res.json(booking);
-});
+      if (!selectedDate) return alert("Select date");
+      if (!data.timeSlot) return alert("Select time");
 
-module.exports = router;
+      const res = await fetch(API + "/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data)
+      });
+
+      const result = await res.json();
+
+      if (res.status === 409) {
+        alert("Slot already booked");
+        loadSlots();
+        return;
+      }
+
+      if (!res.ok) {
+        return alert(result.error);
+      }
+
+      alert("Booking confirmed!");
+
+      window.location.href =
+        "https://mydmvcleaningservice.com/success.html?bookingId=" +
+        result.bookingId;
+    });
+}
