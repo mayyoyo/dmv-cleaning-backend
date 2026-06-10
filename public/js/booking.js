@@ -3,33 +3,126 @@ const API = "https://dmv-cleaning-backend.onrender.com/api";
 let selectedDate = null;
 let bookings = [];
 
-/* ================= SOCKET ================= */
-const socket = io("https://dmv-cleaning-backend.onrender.com");
-
 /* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
-  const res = await fetch(API + "/public-bookings");
-  bookings = await res.json();
+  try {
+    const res = await fetch(API + "/public-bookings");
+
+    if (!res.ok) {
+      console.log("API ERROR:", res.status);
+      return;
+    }
+
+    bookings = await res.json();
+    console.log("BOOKINGS LOADED:", bookings);
+
+  } catch (err) {
+    console.error("FETCH ERROR:", err);
+  }
 }
 
-/* ================= GET BOOKED DATES ================= */
-function getBookedDates() {
-  return bookings.map(b => b.date);
+/* ================= INIT CALENDAR ================= */
+document.addEventListener("DOMContentLoaded", async () => {
+
+  await loadBookings();
+
+  const calendar = new FullCalendar.Calendar(
+    document.getElementById("calendar"),
+    {
+      initialView: "dayGridMonth",
+      height: 500,
+
+      dateClick: function(info) {
+
+        selectedDate = info.dateStr;
+
+        document.getElementById("selectedDate").innerText =
+          "Selected: " + selectedDate;
+
+        highlightSlots(); // 🔥 IMPORTANT FIX
+      }
+    }
+  );
+
+  calendar.render();
+});
+
+/* ================= BOOK NOW FUNCTION ================= */
+async function bookNow() {
+
+  const name = document.getElementById("name").value;
+  const email = document.getElementById("email").value;
+  const phone = document.getElementById("phone").value;
+  const address = document.getElementById("address").value;
+  const timeSlot = document.getElementById("timeSlot").value;
+  const service = document.getElementById("service").value;
+  const paymentType = document.getElementById("paymentType").value;
+
+  console.log({
+    name,
+    email,
+    phone,
+    address,
+    selectedDate,
+    timeSlot,
+    service
+  });
+
+  if (!selectedDate) {
+    return alert("❌ Please select a date");
+  }
+
+  if (!name || !email || !phone || !address || !timeSlot || !service) {
+    return alert("❌ All fields required");
+  }
+
+  try {
+
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        name,
+        email,
+        phone,
+        address,
+        date: selectedDate,
+        timeSlot,
+        service,
+        paymentType
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      return alert(data.error || "Booking failed");
+    }
+
+    /* ================= SUCCESS REDIRECT ================= */
+    window.location.href =
+      "/success.html?bookingId=" + data.bookingId;
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Server error. Please try again.");
+  }
 }
 
-/* ================= SLOT LIST ================= */
-const ALL_SLOTS = [
-  "08:00-10:00",
-  "10:00-12:00",
-  "12:00-14:00",
-  "14:00-16:00",
-  "16:00-18:00"
-];
-
-/* ================= UPDATE SLOTS ================= */
+/* ================= SLOT BLOCKING ================= */
 function highlightSlots() {
 
   const select = document.getElementById("timeSlot");
+
+  const slots = [
+    "08:00-10:00",
+    "10:00-12:00",
+    "12:00-14:00",
+    "14:00-16:00",
+    "16:00-18:00"
+  ];
 
   select.innerHTML = `<option value="">Select Time</option>`;
 
@@ -37,7 +130,7 @@ function highlightSlots() {
     .filter(b => b.date === selectedDate)
     .map(b => b.timeSlot);
 
-  ALL_SLOTS.forEach(slot => {
+  slots.forEach(slot => {
 
     const option = document.createElement("option");
     option.value = slot;
@@ -54,76 +147,4 @@ function highlightSlots() {
 
     select.appendChild(option);
   });
-}
-
-/* ================= CALENDAR ================= */
-document.addEventListener("DOMContentLoaded", async () => {
-
-  await loadBookings();
-
-  const calendarEl = document.getElementById("calendar");
-
-  const calendar = new FullCalendar.Calendar(calendarEl, {
-
-    initialView: "dayGridMonth",
-    height: 500,
-
-    /* ================= COLOR BOOKED DAYS ================= */
-    dayCellDidMount: function(info) {
-
-      const dateStr = info.date.toISOString().split("T")[0];
-      const bookedDates = getBookedDates();
-
-      if (bookedDates.includes(dateStr)) {
-        info.el.style.backgroundColor = "#ff4d4d";
-        info.el.style.color = "white";
-        info.el.style.opacity = "0.7";
-        info.el.style.borderRadius = "6px";
-      }
-    },
-
-    /* ================= CLICK DATE ================= */
-    dateClick: function(info) {
-
-      selectedDate = info.dateStr;
-
-      document.getElementById("selectedDate").innerText =
-        "Selected: " + selectedDate;
-
-      highlightSlots();
-    }
-  });
-
-  calendar.render();
-
-  /* ================= REAL-TIME UPDATES ================= */
-  socket.on("init-bookings", async (data) => {
-    bookings = data;
-    calendar.refetchEvents();
-    highlightSlots();
-  });
-
-  socket.on("new-booking", async (booking) => {
-    bookings.push(booking);
-    calendar.refetchEvents();
-    highlightSlots();
-    animateRefresh();
-  });
-
-  socket.on("update-slots", async (data) => {
-    bookings = data;
-    calendar.refetchEvents();
-    highlightSlots();
-    animateRefresh();
-  });
-});
-
-/* ================= SMALL UI ANIMATION ================= */
-function animateRefresh() {
-  document.body.style.transition = "0.2s";
-  document.body.style.transform = "scale(1.01)";
-
-  setTimeout(() => {
-    document.body.style.transform = "scale(1)";
-  }, 150);
 }
