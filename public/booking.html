@@ -13,23 +13,27 @@
 
 <script defer>
 
-// const API = "https://YOUR-RENDER-URL.onrender.com/api";
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 let selectedDate = null;
 let bookings = [];
 let calendar;
 
-/* ================= LOAD BOOKINGS ================= */
+/* ================= LOAD BOOKINGS (FIXED SAFETY CHECK) ================= */
 async function loadBookings() {
 
   try {
 
     const res = await fetch(API + "/public-bookings");
 
-    const data = await res.json();
+    /* ✅ SAFE CHECK ADDED (FIX YOU REQUESTED) */
+    if (!res.ok) {
+      console.error("API FAILED:", await res.text());
+      bookings = [];
+      return;
+    }
 
-    bookings = Array.isArray(data) ? data : [];
+    bookings = await res.json();
 
     console.log("BOOKINGS LOADED:", bookings);
 
@@ -80,7 +84,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       successCallback(events);
     },
 
-    /* ================= DATE CLICK FIX ================= */
+    /* ================= DATE CLICK ================= */
     dateClick: function(info) {
 
       selectedDate = info.dateStr;
@@ -107,7 +111,6 @@ function updateSlots() {
 
   if (!select) return;
 
-  /* 🔴 FIX: main bug fix */
   if (!selectedDate) {
 
     select.innerHTML = `<option disabled selected>📅 Click a date above</option>`;
