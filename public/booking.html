@@ -8,101 +8,75 @@
 
 <link rel="stylesheet" href="css/booking.css">
 
-<!-- FULLCALENDAR -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
 <script defer>
 
-const API = "https://YOUR-RENDER-URL.onrender.com/api";
+const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 let selectedDate = null;
 let bookings = [];
 let calendar;
 
-/* ================= LOAD BOOKINGS ================= */
+/* LOAD BOOKINGS */
 async function loadBookings() {
   try {
     const res = await fetch(API + "/public-bookings");
-    bookings = await res.json();
-
-    console.log("BOOKINGS:", bookings);
+    const data = await res.json();
+    bookings = Array.isArray(data) ? data : [];
 
     if (calendar) calendar.refetchEvents();
 
   } catch (err) {
-    console.error("LOAD ERROR:", err);
+    console.error(err);
+    bookings = [];
   }
 }
 
-/* ================= INIT ================= */
-document.addEventListener("DOMContentLoaded", async function () {
+/* INIT */
+document.addEventListener("DOMContentLoaded", async () => {
 
-  const calendarEl = document.getElementById("calendar");
-
-  if (!calendarEl) {
-    console.error("Calendar not found");
-    return;
-  }
-
-  calendar = new FullCalendar.Calendar(calendarEl, {
-
+  calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
     initialView: "dayGridMonth",
     height: 500,
 
-    /* ================= SHOW BOOKED DAYS ================= */
     events: function(fetchInfo, successCallback) {
 
       const grouped = {};
 
       bookings.forEach(b => {
+        if (!b.date) return;
         grouped[b.date] = (grouped[b.date] || 0) + 1;
       });
 
       const events = Object.keys(grouped).map(date => ({
         title: grouped[date] + " Booked",
-        start: date,
-        color: grouped[date] >= 5 ? "red" : "#333"
+        start: date
       }));
 
       successCallback(events);
     },
 
-    /* ================= FIXED DATE CLICK ================= */
     dateClick: function(info) {
-
-      console.log("DATE CLICKED:", info.dateStr);
-
       selectedDate = info.dateStr;
-
-      const dateBox = document.getElementById("selectedDate");
-
-      if (dateBox) {
-        dateBox.innerText = "Selected Date: " + selectedDate;
-      }
-
+      document.getElementById("selectedDate").innerText =
+        "Selected Date: " + selectedDate;
       updateSlots();
     }
   });
 
   calendar.render();
-
   await loadBookings();
 });
 
-/* ================= SLOTS ================= */
+/* SLOTS */
 function updateSlots() {
 
   const select = document.getElementById("timeSlot");
-  if (!select) return;
 
-  /* 🔴 FIX: THIS IS YOUR MAIN BUG FIX */
   if (!selectedDate) {
-    select.innerHTML = `<option disabled selected>📅 Click a date above</option>`;
-
-    const dateBox = document.getElementById("selectedDate");
-    if (dateBox) dateBox.innerText = "No date selected";
-
+    select.innerHTML = `<option disabled selected>Select a date</option>`;
     return;
   }
 
@@ -120,38 +94,26 @@ function updateSlots() {
     .filter(b => b.date === selectedDate)
     .map(b => b.timeSlot);
 
-  let firstAvailable = null;
-
   slots.forEach(slot => {
-
-    const option = document.createElement("option");
-    option.value = slot;
+    const opt = document.createElement("option");
 
     if (booked.includes(slot)) {
-      option.textContent = slot + " ❌ Booked";
-      option.disabled = true;
+      opt.textContent = slot + " ❌";
+      opt.disabled = true;
     } else {
-      option.textContent = slot + " ✅ Available";
-
-      if (!firstAvailable) firstAvailable = slot;
+      opt.textContent = slot + " ✅";
+      opt.value = slot;
     }
 
-    select.appendChild(option);
+    select.appendChild(opt);
   });
-
-  /* AUTO SELECT FIRST AVAILABLE SLOT */
-  setTimeout(() => {
-    if (firstAvailable) {
-      select.value = firstAvailable;
-    }
-  }, 100);
 }
 
-/* ================= BOOK ================= */
+/* BOOK */
 async function bookNow() {
 
   if (!selectedDate) {
-    alert("Please select a date");
+    alert("Select a date");
     return;
   }
 
@@ -179,56 +141,41 @@ async function bookNow() {
       return alert(result.error || "Booking failed");
     }
 
-    alert("Booking Confirmed ✅");
+    alert("Booking success ✅");
 
-    window.location.href = "/payment.html?bookingId=" + result.bookingId;
+    window.location.href =
+      "/payment.html?bookingId=" + result.bookingId;
 
   } catch (err) {
-    console.error(err);
     alert("Server error");
   }
 }
 
 </script>
-
 </head>
 
 <body>
 
-<header class="navbar">
-  <div class="logo">🧼 Smart Booking</div>
-</header>
-
-<main class="booking-page">
-
-<section class="booking-card">
-
-<h2>📅 Book Cleaning Service</h2>
+<h2>📅 Book Cleaning</h2>
 
 <div id="calendar"></div>
 
 <p id="selectedDate">No date selected</p>
 
-<select id="timeSlot" class="input"></select>
+<select id="timeSlot"></select>
 
-<input id="name" placeholder="Full Name" class="input" required>
-<input id="phone" placeholder="Phone" class="input" required>
-<input id="email" placeholder="Email" class="input" required>
-<input id="address" placeholder="Address" class="input" required>
+<input id="name" placeholder="Name">
+<input id="phone" placeholder="Phone">
+<input id="email" placeholder="Email">
+<input id="address" placeholder="Address">
 
-<select id="service" class="input" required>
-  <option value="">Select Service</option>
-  <option value="Home Cleaning">Home Cleaning - $120</option>
-  <option value="Deep Cleaning">Deep Cleaning - $200</option>
-  <option value="Office Cleaning">Office Cleaning - $150</option>
-  <option value="Move In/Out Cleaning">Move In/Out - $180</option>
+<select id="service">
+  <option value="">Service</option>
+  <option value="Home Cleaning">Home Cleaning</option>
+  <option value="Deep Cleaning">Deep Cleaning</option>
 </select>
 
-<button class="btn" onclick="bookNow()">Book Now</button>
-
-</section>
-
-</main>
+<button onclick="bookNow()">Book Now</button>
 
 </body>
 </html>

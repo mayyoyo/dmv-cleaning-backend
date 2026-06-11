@@ -61,16 +61,62 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(bookings);
 });
 
-/* ================= BOOK ================= */
+/* ================= BOOK (FIXED) ================= */
 app.post("/api/book", async (req, res) => {
-  const b = await Booking.create(req.body);
+  try {
 
-  io.emit("update-slots", await Booking.find());
+    const {
+      name,
+      email,
+      phone,
+      address,
+      date,
+      timeSlot,
+      service
+    } = req.body;
 
-  res.json({
-    success: true,
-    bookingId: b._id
-  });
+    /* VALIDATION */
+    if (!name || !email || !date || !timeSlot) {
+      return res.status(400).json({
+        error: "Missing required fields"
+      });
+    }
+
+    /* AUTO PRICE */
+    let total = 0;
+
+    if (service === "Home Cleaning") total = 120;
+    if (service === "Deep Cleaning") total = 200;
+    if (service === "Office Cleaning") total = 150;
+    if (service === "Move In/Out Cleaning") total = 180;
+
+    /* CREATE */
+    const booking = await Booking.create({
+      name,
+      email,
+      phone,
+      address,
+      date,
+      timeSlot,
+      service,
+      total,
+      status: "UNPAID"
+    });
+
+    /* LIVE UPDATE */
+    io.emit("new-booking", booking);
+    io.emit("update-slots", await Booking.find());
+
+    /* RESPONSE */
+    res.json({
+      success: true,
+      bookingId: booking._id
+    });
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    res.status(500).json({ error: "Server error" });
+  }
 });
 
 /* ================= DELETE ================= */
@@ -215,7 +261,7 @@ cron.schedule("0 20 * * *", async () => {
 
 });
 
-/* ================= START SERVER (IMPORTANT - DEPLOY FIX) ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, "0.0.0.0", () => {
