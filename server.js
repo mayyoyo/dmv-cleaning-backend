@@ -27,7 +27,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= DATABASE (TEMP MEMORY) ================= */
+/* ================= DATABASE ================= */
 global.bookings = global.bookings || [];
 
 /* ================= SOCKET ================= */
@@ -78,18 +78,22 @@ app.post("/api/book", async (req, res) => {
 
   io.emit("new-booking", booking);
 
+  /* ================= EMAIL DEBUG ================= */
+  console.log("Sending email to:", email);
+
   /* ================= EMAIL RECEIPT ================= */
   try {
     await resend.emails.send({
-      from: "DMV Cleaning <onboarding@resend.dev>",
+      from: "DMV Cleaning <no-reply@yourdomain.com>",
       to: email,
       subject: "Booking Confirmed ✔",
       html: `
         <h2>✔ Booking Confirmed</h2>
-        <p>${name}</p>
-        <p>${service}</p>
-        <p>${date} | ${timeSlot}</p>
-        <p>Total: $${total}</p>
+        <p>Hi ${name}</p>
+        <p><b>Service:</b> ${service}</p>
+        <p><b>Date:</b> ${date}</p>
+        <p><b>Time:</b> ${timeSlot}</p>
+        <p><b>Total:</b> $${total}</p>
       `
     });
   } catch (err) {
@@ -132,7 +136,7 @@ app.post("/api/charge-customer", async (req, res) => {
     io.emit("update-slots", global.bookings);
 
     await resend.emails.send({
-      from: "DMV Cleaning <onboarding@resend.dev>",
+      from: "DMV Cleaning <no-reply@yourdomain.com>",
       to: email,
       subject: "Payment Receipt ✔",
       html: `
@@ -186,7 +190,7 @@ app.get("/api/analytics", (req, res) => {
   res.json(monthly);
 });
 
-/* ================= START SERVER (FIXED FOR RENDER) ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
