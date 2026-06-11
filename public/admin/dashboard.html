@@ -1,26 +1,39 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Admin Live Dashboard</title>
+  <title>Admin Dashboard</title>
 
+  <link rel="stylesheet" href="css/dashboard.css">
 
-<link rel="stylesheet" href="../css/admin-dashboard.css">
+  <script src="/socket.io/socket.io.js" defer></script>
+  <script src="js/dashboard.js" defer></script>
 
-<script src="/socket.io/socket.io.js" defer></script>
-<script src="../js/admin/admin-dashboard.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
 
-<div class="container">
+<header class="header">
+  <h1>📊 Admin Dashboard</h1>
 
-<h2>🔥 Live Admin Dashboard</h2>
-<p class="live">● LIVE SYSTEM ACTIVE</p>
+  <div class="hamburger" onclick="toggleMenu()">☰</div>
 
+  <nav class="nav" id="navMenu">
+    <a href="#">Dashboard</a>
+    <a href="#">Bookings</a>
+    <a href="#">Income</a>
+    <a href="#">Settings</a>
+  </nav>
+</header>
+
+<!-- STATS -->
+<div id="stats"></div>
+
+<!-- CHART -->
+<canvas id="incomeChart"></canvas>
+
+<!-- BOOKINGS -->
 <div id="dashboard"></div>
-
-</div>
 
 </body>
 </html>

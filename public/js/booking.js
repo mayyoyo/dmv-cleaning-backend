@@ -1,176 +1,150 @@
-/* ================= API ================= */
 const API = "https://dmv-cleaning-backend.onrender.com/api";
-
-/* ================= SOCKET ================= */
 const socket = io("https://dmv-cleaning-backend.onrender.com");
 
-/* ================= GLOBAL ================= */
 let bookings = [];
 let selectedDate = null;
 let calendar;
 
 /* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
-try {
-const res = await fetch(API + "/public-bookings");
-bookings = await res.json();
-} catch (err) {
-console.error("LOAD ERROR:", err);
-}
-}
-
-/* ================= FORMAT DATE ================= */
-function formatDate(date) {
-return date.toLocaleDateString("en-CA"); // YYYY-MM-DD
+  const res = await fetch(API + "/public-bookings");
+  bookings = await res.json();
 }
 
 /* ================= INIT ================= */
 document.addEventListener("DOMContentLoaded", async () => {
 
-await loadBookings();
+  await loadBookings();
 
-calendar = new FullCalendar.Calendar(
-document.getElementById("calendar"),
-{
-initialView: "dayGridMonth",
-height: 500,
+  updateStats(); // ✅ load stats on start
 
-```
-  /* 🔴 RED BOOKED DAYS */
-  dayCellDidMount: function(info) {
-    const dateStr = formatDate(info.date);
+  calendar = new FullCalendar.Calendar(
+    document.getElementById("calendar"),
+    {
+      initialView: "dayGridMonth",
+      height: 500,
 
-    const bookedDates = bookings.map(b => b.date);
+      dateClick: function(info) {
+        selectedDate = info.dateStr;
 
-    if (bookedDates.includes(dateStr)) {
-      info.el.style.backgroundColor = "#ff4d4d";
-      info.el.style.color = "#fff";
+        document.getElementById("selectedDate").innerText =
+          "Selected: " + selectedDate;
+
+        updateSlots();
+      }
     }
-  },
+  );
 
-  /* CLICK DATE */
-  dateClick: function(info) {
-    selectedDate = info.dateStr;
+  calendar.render();
 
-    document.getElementById("selectedDate").innerText =
-      "Selected: " + selectedDate;
+  /* ================= REAL-TIME ================= */
+  socket.on("new-booking", (b) => {
+    bookings.unshift(b); // ✅ important (latest first)
+    calendar.render();
+    updateSlots();
+    updateStats(); // ✅ stats update
+  });
 
-    updateSlots(); // 🔥 load slots
+  socket.on("update-slots", (data) => {
+    bookings = data;
+    calendar.render();
+    updateSlots();
+    updateStats(); // ✅ stats update
+  });
+
+});
+
+/* ================= STATS ================= */
+function updateStats() {
+  const total = bookings.reduce((sum, b) => sum + (b.total || 0), 0);
+
+  const statsBox = document.getElementById("stats");
+
+  if (statsBox) {
+    statsBox.innerHTML = `
+      <div class="stat">📦 Total Bookings: ${bookings.length}</div>
+      <div class="stat">💰 Total Income: $${total}</div>
+    `;
   }
 }
-```
 
-);
-
-calendar.render();
-
-/* ================= SOCKET LIVE ================= */
-
-socket.on("init-bookings", (data) => {
-bookings = data;
-calendar.render();
-updateSlots();
-});
-
-socket.on("new-booking", (booking) => {
-bookings.push(booking);
-calendar.render();
-updateSlots();
-});
-
-socket.on("update-slots", (data) => {
-bookings = data;
-calendar.render();
-updateSlots();
-});
-
-});
-
-/* ================= UPDATE SLOTS (UPDATED 🔥) ================= */
+/* ================= SLOTS ================= */
 function updateSlots() {
 
-const select = document.getElementById("timeSlot");
+  const select = document.getElementById("timeSlot");
+  if (!selectedDate) return;
 
-if (!selectedDate) return;
+  const slots = [
+    "08:00-10:00",
+    "10:00-12:00",
+    "12:00-14:00",
+    "14:00-16:00",
+    "16:00-18:00"
+  ];
 
-const slots = [
-"08:00-10:00",
-"10:00-12:00",
-"12:00-14:00",
-"14:00-16:00",
-"16:00-18:00"
-];
+  select.innerHTML = `<option value="">Select Time</option>`;
 
-select.innerHTML = `<option value="">Select Time</option>`;
+  const booked = bookings
+    .filter(b => b.date === selectedDate)
+    .map(b => b.timeSlot);
 
-const bookedSlots = bookings
-.filter(b => b.date === selectedDate)
-.map(b => b.timeSlot);
+  slots.forEach(slot => {
 
-slots.forEach(slot => {
+    const option = document.createElement("option");
+    option.value = slot;
 
-```
-const option = document.createElement("option");
-option.value = slot;
+    if (booked.includes(slot)) {
+      option.textContent = slot + " ❌ Booked";
+      option.disabled = true;
+      option.style.color = "red";
+    } else {
+      option.textContent = slot + " ✅ Available";
+    }
 
-if (bookedSlots.includes(slot)) {
-  option.textContent = slot + " ❌ Booked";
-  option.disabled = true;
-  option.style.color = "red"; // 🔴 cleaner than background
-} else {
-  option.textContent = slot + " ✅ Available";
-}
-
-select.appendChild(option);
-```
-
-});
+    select.appendChild(option);
+  });
 }
 
 /* ================= BOOK ================= */
 async function bookNow() {
 
-const name = document.getElementById("name").value;
-const email = document.getElementById("email").value;
-const phone = document.getElementById("phone").value;
-const address = document.getElementById("address").value;
-const timeSlot = document.getElementById("timeSlot").value;
-const service = document.getElementById("service").value;
-const paymentType = document.getElementById("paymentType").value;
+  const data = {
+    name: document.getElementById("name").value,
+    email: document.getElementById("email").value,
+    phone: document.getElementById("phone").value,
+    address: document.getElementById("address").value,
+    date: selectedDate,
+    timeSlot: document.getElementById("timeSlot").value,
+    service: document.getElementById("service").value
+  };
 
-if (!selectedDate) return alert("Select date");
+  if (!selectedDate) return alert("Select date");
 
-if (!name || !email || !phone || !address || !timeSlot || !service) {
-return alert("All fields required");
+  try {
+
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      console.error("BACKEND ERROR:", result);
+      return alert(result.error || "Booking failed");
+    }
+
+    window.location.href =
+      "/success.html?bookingId=" + result.bookingId;
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Error: " + err.message);
+  }
 }
 
-try {
-const res = await fetch(API + "/book", {
-method: "POST",
-headers: {"Content-Type": "application/json"},
-body: JSON.stringify({
-name,
-email,
-phone,
-address,
-date: selectedDate,
-timeSlot,
-service,
-paymentType
-})
-});
-
-```
-const data = await res.json();
-
-if (!res.ok) return alert(data.error || "Booking failed");
-
-window.location.href =
-  "/success.html?bookingId=" + data.bookingId;
-```
-
-} catch (err) {
-console.error("BOOK ERROR:", err);
-alert("Server error");
-}
+/* ================= STRIPE SAVE CARD ================= */
+async function saveCardAndBook() {
+  alert("Stripe UI step coming next");
 }
