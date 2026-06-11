@@ -27,7 +27,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= DATABASE ================= */
+/* ================= MEMORY DB ================= */
 global.bookings = global.bookings || [];
 
 /* ================= SOCKET ================= */
@@ -78,10 +78,10 @@ app.post("/api/book", async (req, res) => {
 
   io.emit("new-booking", booking);
 
-  /* ================= EMAIL DEBUG ================= */
+  /* ================= DEBUG EMAIL ================= */
   console.log("Sending email to:", email);
 
-  /* ================= EMAIL RECEIPT ================= */
+  /* ================= EMAIL RECEIPT (FIXED) ================= */
   try {
     await resend.emails.send({
       from: "DMV Cleaning <no-reply@yourdomain.com>",
@@ -100,7 +100,11 @@ app.post("/api/book", async (req, res) => {
     console.error("EMAIL ERROR:", err);
   }
 
-  res.json({ success: true, bookingId: booking.id, total });
+  res.json({
+    success: true,
+    bookingId: booking.id,
+    total
+  });
 });
 
 /* ================= STRIPE: SAVE CARD ================= */
@@ -149,6 +153,7 @@ app.post("/api/charge-customer", async (req, res) => {
     res.json({ success: true, paymentIntent });
 
   } catch (err) {
+    console.error("STRIPE ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -183,14 +188,14 @@ app.get("/api/analytics", (req, res) => {
   const monthly = {};
 
   global.bookings.forEach(b => {
-    const month = b.date?.slice(0,7);
+    const month = b.date?.slice(0, 7);
     monthly[month] = (monthly[month] || 0) + (b.total || 0);
   });
 
   res.json(monthly);
 });
 
-/* ================= START SERVER ================= */
+/* ================= RENDER SAFE FIX ================= */
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
