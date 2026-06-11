@@ -5,17 +5,13 @@ const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const nodemailer = require("nodemailer");
-const PDFDocument = require("pdfkit");
-const cron = require("node-cron");
-const jwt = require("jsonwebtoken");
 const Stripe = require("stripe");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-/* ================= ENV ================= */
+/* ================= STRIPE ================= */
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -25,12 +21,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-/* ================= ADMIN ================= */
-const ADMIN_USER = "admin";
-const ADMIN_PASS = "123456";
-const JWT_SECRET = "dmv_secret";
-
-/* ================= DATABASE ================= */
+/* ================= MONGODB ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch(err => console.log(err));
@@ -61,7 +52,7 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(bookings);
 });
 
-/* ================= 🔥 FIXED BOOK ROUTE ================= */
+/* ================= SAFE BOOKING (FIXED) ================= */
 app.post("/api/book", async (req, res) => {
 
   try {
@@ -73,17 +64,16 @@ app.post("/api/book", async (req, res) => {
       address,
       date,
       timeSlot,
-      service
+      service,
+      paymentType
     } = req.body;
 
-    /* ❗ VALIDATION (prevents crash / 505 error) */
+    /* 🔴 SAFETY CHECK */
     if (!name || !email || !date || !timeSlot) {
-      return res.status(400).json({
-        error: "Missing required fields"
-      });
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    /* 💰 AUTO PRICING */
+    /* 💰 PRICE SYSTEM (4 SERVICES) */
     let total = 0;
 
     if (service === "Home Cleaning") total = 120;
@@ -91,7 +81,7 @@ app.post("/api/book", async (req, res) => {
     if (service === "Office Cleaning") total = 150;
     if (service === "Move In/Out Cleaning") total = 180;
 
-    /* 🧾 CREATE BOOKING */
+    /* 💾 SAVE BOOKING */
     const booking = await Booking.create({
       name,
       email,
@@ -101,77 +91,50 @@ app.post("/api/book", async (req, res) => {
       timeSlot,
       service,
       total,
-      status: "UNPAID"
+      status: paymentType === "pay_now" ? "UNPAID" : "PAY_LATER"
     });
 
-    /* 🔄 REALTIME UPDATE */
+    /* 🔔 LIVE UPDATE */
     io.emit("new-booking", booking);
     io.emit("update-slots", await Booking.find());
 
-    /* RESPONSE */
+    /* 📦 RESPONSE */
     res.json({
       success: true,
       bookingId: booking._id
     });
 
   } catch (err) {
-
     console.error("BOOK ERROR:", err);
-
-    res.status(500).json({
-      error: "Server error"
-    });
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-/* ================= DELETE BOOKING ================= */
-app.delete("/api/delete-booking/:id", async (req, res) => {
-  await Booking.findByIdAndDelete(req.params.id);
-  io.emit("update-slots", await Booking.find());
-  res.json({ success: true });
-});
+/* ================= STRIPE PAY NOW ================= */
+app.post("/api/create-checkout-session", async (req, res) => {
 
-/* ================= EDIT BOOKING ================= */
-app.put("/api/edit-booking/:id", async (req, res) => {
-  await Booking.findByIdAndUpdate(req.params.id, req.body);
-  io.emit("update-slots", await Booking.find());
-  res.json({ success: true });
-});
-
-/* ================= ADMIN LOGIN ================= */
-app.post("/api/admin-login", (req, res) => {
-
-  const { username, password } = req.body;
-
-  if (username === ADMIN_USER && password === ADMIN_PASS) {
-
-    const token = jwt.sign(
-      { admin: true },
-      JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
-    return res.json({ token });
-  }
-
-  res.status(401).json({ error: "Invalid login" });
-});
-
-/* ================= STRIPE SAVE CARD ================= */
-app.post("/api/create-setup-intent", async (req, res) => {
   try {
 
-    if (!stripe) {
-      return res.status(500).json({ error: "Stripe not configured" });
-    }
+    if (!stripe) return res.status(500).json({ error: "Stripe not configured" });
 
-    const intent = await stripe.setupIntents.create({
-      payment_method_types: ["card"]
+    const { service, total, bookingId } = req.body;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: { name: service },
+          unit_amount: total * 100
+        },
+        quantity: 1
+      }],
+      success_url: "https://your-site.com/success.html",
+      cancel_url: "https://your-site.com/cancel.html"
     });
 
-    res.json({
-      clientSecret: intent.client_secret
-    });
+    res.json({ url: session.url });
 
   } catch (err) {
     console.error(err);
@@ -179,91 +142,7 @@ app.post("/api/create-setup-intent", async (req, res) => {
   }
 });
 
-/* ================= ANALYTICS ================= */
-app.get("/api/admin/analytics", async (req, res) => {
-
-  try {
-
-    const bookings = await Booking.find();
-
-    let weekly = {};
-    let monthly = {};
-
-    bookings.forEach(b => {
-
-      const date = new Date(b.createdAt);
-
-      const week = getWeekNumber(date);
-      const month = date.getMonth() + 1;
-
-      weekly[week] = (weekly[week] || 0) + (b.total || 0);
-      monthly[month] = (monthly[month] || 0) + (b.total || 0);
-    });
-
-    res.json({ weekly, monthly });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ================= WEEK HELPER ================= */
-function getWeekNumber(d) {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNum = date.getUTCDay() || 7;
-  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
-}
-
-/* ================= PDF INVOICE ================= */
-app.get("/api/invoice/:id", async (req, res) => {
-
-  const b = await Booking.findById(req.params.id);
-
-  if (!b) return res.status(404).send("Not found");
-
-  const doc = new PDFDocument();
-
-  res.setHeader("Content-Type", "application/pdf");
-
-  doc.pipe(res);
-
-  doc.fontSize(20).text("INVOICE");
-  doc.moveDown();
-
-  doc.text(`Name: ${b.name}`);
-  doc.text(`Service: ${b.service}`);
-  doc.text(`Date: ${b.date}`);
-  doc.text(`Total: $${b.total}`);
-  doc.text(`Status: ${b.status}`);
-
-  doc.end();
-});
-
-/* ================= EMAIL REPORT ================= */
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
-cron.schedule("0 20 * * *", async () => {
-
-  const bookings = await Booking.find();
-
-  await transporter.sendMail({
-    from: process.env.EMAIL,
-    to: process.env.EMAIL,
-    subject: "Daily Booking Report",
-    text: `Total Bookings Today: ${bookings.length}`
-  });
-
-});
-
-/* ================= START SERVER ================= */
+/* ================= START SERVER (FIX 502 ISSUE) ================= */
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, "0.0.0.0", () => {

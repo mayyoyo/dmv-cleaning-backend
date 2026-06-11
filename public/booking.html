@@ -19,14 +19,14 @@ let selectedDate = null;
 let bookings = [];
 let calendar;
 
-/* ================= LOAD BOOKINGS (FIXED SAFETY CHECK) ================= */
+/* ================= SAFE LOAD BOOKINGS (FIXED) ================= */
 async function loadBookings() {
 
   try {
 
     const res = await fetch(API + "/public-bookings");
 
-    /* ✅ SAFE CHECK ADDED (FIX YOU REQUESTED) */
+    /* 🔥 SAFETY FIX (YOU REQUESTED) */
     if (!res.ok) {
       console.error("API FAILED:", await res.text());
       bookings = [];
@@ -35,14 +35,8 @@ async function loadBookings() {
 
     bookings = await res.json();
 
-    console.log("BOOKINGS LOADED:", bookings);
-
-    if (calendar) calendar.refetchEvents();
-
   } catch (err) {
-
     console.error("LOAD ERROR:", err);
-
     bookings = [];
   }
 }
@@ -50,166 +44,88 @@ async function loadBookings() {
 /* ================= INIT ================= */
 document.addEventListener("DOMContentLoaded", async function () {
 
-  const calendarEl = document.getElementById("calendar");
+  await loadBookings();
 
-  if (!calendarEl) {
-    console.error("Calendar not found");
-    return;
-  }
-
-  calendar = new FullCalendar.Calendar(calendarEl, {
+  calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
 
     initialView: "dayGridMonth",
     height: 500,
 
-    /* ================= EVENTS ================= */
     events: function(fetchInfo, successCallback) {
 
       const grouped = {};
 
       bookings.forEach(b => {
-
         if (!b.date) return;
-
         grouped[b.date] = (grouped[b.date] || 0) + 1;
       });
 
       const events = Object.keys(grouped).map(date => ({
-
         title: grouped[date] + " Booked",
         start: date,
-        color: grouped[date] >= 5 ? "red" : "#333"
+        color: "#ef4444"
       }));
 
       successCallback(events);
     },
 
-    /* ================= DATE CLICK ================= */
     dateClick: function(info) {
-
       selectedDate = info.dateStr;
-
-      const box = document.getElementById("selectedDate");
-
-      if (box) {
-        box.innerText = "Selected Date: " + selectedDate;
-      }
-
-      updateSlots();
+      document.getElementById("selectedDate").innerText =
+        "Selected Date: " + selectedDate;
     }
   });
 
   calendar.render();
-
-  await loadBookings();
 });
 
-/* ================= SLOTS ================= */
-function updateSlots() {
-
-  const select = document.getElementById("timeSlot");
-
-  if (!select) return;
-
-  if (!selectedDate) {
-
-    select.innerHTML = `<option disabled selected>📅 Click a date above</option>`;
-
-    const box = document.getElementById("selectedDate");
-
-    if (box) box.innerText = "No date selected";
-
-    return;
-  }
-
-  const slots = [
-    "08:00-10:00",
-    "10:00-12:00",
-    "12:00-14:00",
-    "14:00-16:00",
-    "16:00-18:00"
-  ];
-
-  select.innerHTML = `<option value="">Select Time</option>`;
-
-  const booked = bookings
-    .filter(b => b.date === selectedDate)
-    .map(b => b.timeSlot);
-
-  let first = null;
-
-  slots.forEach(slot => {
-
-    const opt = document.createElement("option");
-    opt.value = slot;
-
-    if (booked.includes(slot)) {
-
-      opt.textContent = slot + " ❌ Booked";
-      opt.disabled = true;
-
-    } else {
-
-      opt.textContent = slot + " ✅ Available";
-
-      if (!first) first = slot;
-    }
-
-    select.appendChild(opt);
-  });
-
-  setTimeout(() => {
-    if (first) select.value = first;
-  }, 100);
-}
+/* ================= PRICE SYSTEM ================= */
+const servicePrices = {
+  "Home Cleaning": 120,
+  "Deep Cleaning": 200,
+  "Office Cleaning": 150,
+  "Move In/Out Cleaning": 180
+};
 
 /* ================= BOOK ================= */
-async function bookNow() {
+async function bookNow(paymentType) {
 
   if (!selectedDate) {
     alert("Please select a date");
     return;
   }
 
-  const data = {
+  const service = document.getElementById("service").value;
+  const total = servicePrices[service] || 0;
 
+  const data = {
     name: document.getElementById("name").value,
     phone: document.getElementById("phone").value,
     email: document.getElementById("email").value,
     address: document.getElementById("address").value,
     date: selectedDate,
     timeSlot: document.getElementById("timeSlot").value,
-    service: document.getElementById("service").value
+    service,
+    total,
+    paymentType
   };
 
-  try {
+  const res = await fetch(API + "/book", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
 
-    const res = await fetch(API + "/book", {
+  const result = await res.json();
 
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
+  if (!res.ok) {
+    return alert(result.error || "Booking failed");
+  }
 
-    const result = await res.json();
-
-    if (!res.ok) {
-
-      console.error("SERVER ERROR:", result);
-
-      return alert(result.error || "Booking failed");
-    }
-
-    alert("Booking Confirmed ✅");
-
-    window.location.href =
-      "/payment.html?bookingId=" + result.bookingId;
-
-  } catch (err) {
-
-    console.error("BOOK ERROR:", err);
-
-    alert("Server error");
+  if (paymentType === "pay_now") {
+    window.location.href = "/payment.html?bookingId=" + result.bookingId;
+  } else {
+    alert("Booking saved (Pay Later selected)");
   }
 }
 
@@ -232,14 +148,8 @@ async function bookNow() {
 
 <p id="selectedDate">No date selected</p>
 
-<select id="timeSlot" class="input"></select>
-
-<input id="name" placeholder="Full Name" class="input" required>
-<input id="phone" placeholder="Phone" class="input" required>
-<input id="email" placeholder="Email" class="input" required>
-<input id="address" placeholder="Address" class="input" required>
-
-<select id="service" class="input" required>
+<!-- 4 SERVICES -->
+<select id="service" class="input">
   <option value="">Select Service</option>
   <option value="Home Cleaning">Home Cleaning - $120</option>
   <option value="Deep Cleaning">Deep Cleaning - $200</option>
@@ -247,7 +157,27 @@ async function bookNow() {
   <option value="Move In/Out Cleaning">Move In/Out - $180</option>
 </select>
 
-<button class="btn" onclick="bookNow()">Book Now</button>
+<select id="timeSlot" class="input">
+  <option value="08:00-10:00">08:00-10:00</option>
+  <option value="10:00-12:00">10:00-12:00</option>
+  <option value="12:00-14:00">12:00-14:00</option>
+  <option value="14:00-16:00">14:00-16:00</option>
+  <option value="16:00-18:00">16:00-18:00</option>
+</select>
+
+<input id="name" class="input" placeholder="Full Name">
+<input id="phone" class="input" placeholder="Phone">
+<input id="email" class="input" placeholder="Email">
+<input id="address" class="input" placeholder="Address">
+
+<!-- BUTTONS -->
+<button class="btn primary" onclick="bookNow('pay_now')">
+💳 Pay Now
+</button>
+
+<button class="btn" onclick="bookNow('pay_later')">
+📌 Pay Later
+</button>
 
 </section>
 
