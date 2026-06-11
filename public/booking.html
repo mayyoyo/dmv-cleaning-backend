@@ -8,13 +8,16 @@
 
 <link rel="stylesheet" href="css/booking.css">
 
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
-<script src="/socket.io/socket.io.js" defer></script>
+<!-- FULLCALENDAR CSS -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 
-<script defer>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
 
-const API = "https://dmv-cleaning-backend.onrender.com/api";
-const socket = io("https://dmv-cleaning-backend.onrender.com");
+<script>
+
+const API = "https://dmv-cleaning-backend.onrender.com";
+const socket = io(API);
 
 let bookings = [];
 let selectedDate = null;
@@ -22,66 +25,84 @@ let calendar;
 
 /* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
-  try {
-    const res = await fetch(API + "/public-bookings");
-    bookings = await res.json();
-    console.log("Loaded bookings:", bookings);
-
-    updateSlots(); // IMPORTANT FIX
-  } catch (err) {
-    console.error(err);
-  }
+  const res = await fetch(API + "/api/public-bookings");
+  bookings = await res.json();
+  updateSlots();
+  updateCalendar();
 }
 
 /* ================= INIT ================= */
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener("DOMContentLoaded", async function () {
 
   await loadBookings();
 
-  calendar = new FullCalendar.Calendar(
-    document.getElementById("calendar"),
-    {
-      initialView: "dayGridMonth",
-      height: 500,
+  calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
 
-      dateClick: function(info) {
-        selectedDate = info.dateStr;
+    initialView: "dayGridMonth",
+    height: 500,
 
-        document.getElementById("selectedDate").innerText =
-          "Selected: " + selectedDate;
+    events: [],
 
-        updateSlots();
-      },
+    dateClick: function(info) {
 
-      eventDidMount: function(info) {
-        info.el.style.backgroundColor = "#111";
-        info.el.style.color = "white";
-      }
+      selectedDate = info.dateStr;
+
+      document.getElementById("selectedDate").innerText =
+        "Selected: " + selectedDate;
+
+      updateSlots();
+    },
+
+    eventDidMount: function(info) {
+      info.el.style.backgroundColor = "#111";
+      info.el.style.color = "white";
     }
-  );
+  });
 
   calendar.render();
 
-  /* SOCKET FIX */
+  /* SOCKET */
   socket.on("new-booking", (b) => {
     bookings.unshift(b);
     updateSlots();
+    updateCalendar();
   });
 
   socket.on("update-slots", (data) => {
     bookings = data;
     updateSlots();
+    updateCalendar();
   });
 
 });
 
-/* ================= SLOTS FIXED ================= */
+/* ================= CALENDAR UPDATE ================= */
+function updateCalendar() {
+  if (!calendar) return;
+
+  const grouped = {};
+
+  bookings.forEach(b => {
+    grouped[b.date] = (grouped[b.date] || 0) + 1;
+  });
+
+  const events = Object.keys(grouped).map(date => ({
+    title: grouped[date] + " Bookings",
+    start: date,
+    color: grouped[date] >= 5 ? "#ff4d4d" : "#333"
+  }));
+
+  calendar.removeAllEvents();
+  calendar.addEventSource(events);
+}
+
+/* ================= UPDATE SLOTS ================= */
 function updateSlots() {
 
   const select = document.getElementById("timeSlot");
 
   if (!selectedDate) {
-    select.innerHTML = `<option>Select a date first</option>`;
+    select.innerHTML = `<option disabled selected>📅 Click a date above</option>`;
     return;
   }
 
@@ -99,6 +120,8 @@ function updateSlots() {
     .filter(b => b.date === selectedDate)
     .map(b => b.timeSlot);
 
+  let firstAvailable = null;
+
   slots.forEach(slot => {
 
     const option = document.createElement("option");
@@ -107,32 +130,39 @@ function updateSlots() {
     if (booked.includes(slot)) {
       option.textContent = slot + " ❌ Booked";
       option.disabled = true;
-      option.style.background = "#ffdddd";
-      option.style.color = "red";
     } else {
       option.textContent = slot + " ✅ Available";
+
+      if (!firstAvailable) firstAvailable = slot;
     }
 
     select.appendChild(option);
   });
+
+  setTimeout(() => {
+    if (firstAvailable) select.value = firstAvailable;
+  }, 100);
 }
 
 /* ================= BOOK ================= */
 async function bookNow() {
 
+  const timeSlot = document.getElementById("timeSlot").value;
+
+  if (!selectedDate) return alert("Please select a date");
+  if (!timeSlot) return alert("Please select a time slot");
+
   const data = {
     name: document.getElementById("name").value,
-    email: document.getElementById("email").value,
     phone: document.getElementById("phone").value,
+    email: document.getElementById("email").value,
     address: document.getElementById("address").value,
     date: selectedDate,
-    timeSlot: document.getElementById("timeSlot").value,
+    timeSlot,
     service: document.getElementById("service").value
   };
 
-  if (!selectedDate) return alert("Select date first");
-
-  const res = await fetch(API + "/book", {
+  const res = await fetch(API + "/api/book", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)
@@ -140,7 +170,7 @@ async function bookNow() {
 
   const result = await res.json();
 
-  if (!res.ok) return alert(result.error);
+  if (!res.ok) return alert(result.error || "Booking failed");
 
   window.location.href = "/payment.html?bookingId=" + result.bookingId;
 }
@@ -153,13 +183,6 @@ async function bookNow() {
 
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
-
-  <nav class="nav-links">
-    <a href="index.html">Home</a>
-    <a href="booking.html" class="active">Booking</a>
-  </nav>
-
-  <a class="back-btn" href="index.html">⬅ Back</a>
 </header>
 
 <main class="booking-page">
@@ -172,16 +195,16 @@ async function bookNow() {
 
 <p id="selectedDate">No date selected</p>
 
-<form>
+<form onsubmit="event.preventDefault(); bookNow();">
 
 <select id="timeSlot" class="input"></select>
 
-<input id="name" placeholder="Full Name" class="input">
-<input id="phone" placeholder="Phone" class="input">
-<input id="email" placeholder="Email" class="input">
-<input id="address" placeholder="Address" class="input">
+<input id="name" placeholder="Full Name" class="input" required>
+<input id="phone" placeholder="Phone" class="input" required>
+<input id="email" placeholder="Email" class="input" required>
+<input id="address" placeholder="Address" class="input" required>
 
-<select id="service" class="input">
+<select id="service" class="input" required>
   <option value="">Select Service</option>
   <option>Home Cleaning</option>
   <option>Deep Cleaning</option>
@@ -189,7 +212,7 @@ async function bookNow() {
   <option>Move In/Out Cleaning</option>
 </select>
 
-<button type="button" class="btn" onclick="bookNow()">Book Now</button>
+<button type="submit" class="btn">Book Now</button>
 
 </form>
 

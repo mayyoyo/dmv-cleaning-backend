@@ -1,97 +1,33 @@
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-  font-family: Arial, sans-serif;
-}
-
-/* ================= TOPBAR ================= */
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #111;
-  color: white;
-  padding: 15px 20px;
-}
-
-.logo {
-  font-size: 18px;
-  font-weight: bold;
-}
-
-/* Hamburger */
-.menu-icon {
-  display: none;
-  font-size: 26px;
-  cursor: pointer;
-}
-
-/* NAV */
-.nav {
-  display: flex;
-  gap: 15px;
-}
-
-.nav a {
-  color: white;
-  text-decoration: none;
-}
-
-/* ================= LOGIN ================= */
-.login-container {
-  height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background: #f4f4f4;
+body {
+  margin:0;
+  font-family: Arial;
+  background:#111;
+  color:white;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  height:100vh;
 }
 
 .login-box {
-  background: white;
-  padding: 30px;
-  width: 300px;
-  border-radius: 10px;
-  box-shadow: 0 0 10px rgba(0,0,0,0.1);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  background:#222;
+  padding:30px;
+  border-radius:10px;
+  width:90%;
+  max-width:350px;
+  text-align:center;
 }
 
-.login-box input {
-  padding: 10px;
-  border: 1px solid #ccc;
-  border-radius: 5px;
+input {
+  width:100%;
+  padding:10px;
+  margin:10px 0;
 }
 
-.login-box button {
-  padding: 10px;
-  background: black;
-  color: white;
-  border: none;
-  cursor: pointer;
-  border-radius: 5px;
-}
-
-/* ================= MOBILE ================= */
-@media (max-width: 768px) {
-
-  .menu-icon {
-    display: block;
-  }
-
-  .nav {
-    display: none;
-    flex-direction: column;
-    background: #222;
-    position: absolute;
-    top: 60px;
-    right: 0;
-    width: 200px;
-    padding: 10px;
-  }
-
-  .nav.active {
-    display: flex;
-  }
+button {
+  width:100%;
+  padding:10px;
+  background:#00c3ff;
+  border:none;
+  cursor:pointer;
 }

@@ -1,39 +1,21 @@
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT ERROR:", err);
-});
-
-process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED PROMISE:", err);
-});
-
 require("dotenv").config();
 
 const express = require("express");
-const path = require("path");
-const cors = require("cors");
+const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
-const { Resend } = require("resend");
-const Stripe = require("stripe");
+const cors = require("cors");
+const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit");
+const cron = require("node-cron");
+const jwt = require("jsonwebtoken");
+const Stripe = require("stripe");
 
-/* ================= APP ================= */
 const app = express();
 const server = http.createServer(app);
-
-/* ================= SOCKET ================= */
-const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 /* ================= ENV ================= */
-const resend = process.env.RESEND_API_KEY
-  ? new Resend(process.env.RESEND_API_KEY)
-  : null;
-
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -41,174 +23,199 @@ const stripe = process.env.STRIPE_SECRET_KEY
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static("public"));
 
-/* ================= HEALTH CHECK ================= */
-app.get("/", (req, res) => {
-  res.send("DMV Cleaning Backend Running ✅");
-});
+/* ================= ADMIN ================= */
+const ADMIN_USER = "admin";
+const ADMIN_PASS = "123456";
+const JWT_SECRET = "dmv_secret";
 
-/* ================= MEMORY DB ================= */
-let bookings = [];
+/* ================= MONGODB ================= */
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log(err));
 
-/* ================= PUBLIC BOOKINGS (IMPORTANT FIX) ================= */
-app.get("/api/public-bookings", (req, res) => {
-  res.json(bookings || []);
-});
+/* ================= MODEL ================= */
+const Booking = mongoose.model("Booking", new mongoose.Schema({
+  name: String,
+  email: String,
+  phone: String,
+  address: String,
+  date: String,
+  timeSlot: String,
+  service: String,
+  total: Number,
+  status: { type: String, default: "UNPAID" },
+  createdAt: { type: Date, default: Date.now }
+}));
 
 /* ================= SOCKET ================= */
-io.on("connection", (socket) => {
-  console.log("User connected");
-
+io.on("connection", async (socket) => {
+  const bookings = await Booking.find();
   socket.emit("init-bookings", bookings);
+});
 
-  socket.on("disconnect", () => {
-    console.log("User disconnected");
+/* ================= PUBLIC BOOKINGS ================= */
+app.get("/api/public-bookings", async (req, res) => {
+  const bookings = await Booking.find().sort({ createdAt: -1 });
+  res.json(bookings);
+});
+
+/* ================= BOOK ================= */
+app.post("/api/book", async (req, res) => {
+  const b = await Booking.create(req.body);
+
+  io.emit("update-slots", await Booking.find());
+
+  res.json({
+    success: true,
+    bookingId: b._id
   });
 });
 
-/* ================= BOOK SERVICE ================= */
-app.post("/api/book", async (req, res) => {
-  try {
-    const { name, email, phone, address, date, timeSlot, service } = req.body;
+/* ================= DELETE ================= */
+app.delete("/api/delete-booking/:id", async (req, res) => {
+  await Booking.findByIdAndDelete(req.params.id);
 
-    if (!name || !email || !date || !timeSlot || !service) {
-      return res.status(400).json({ error: "Missing fields" });
-    }
+  io.emit("update-slots", await Booking.find());
 
-    const exists = bookings.find(
-      b => b.date === date && b.timeSlot === timeSlot
+  res.json({ success: true });
+});
+
+/* ================= EDIT ================= */
+app.put("/api/edit-booking/:id", async (req, res) => {
+  await Booking.findByIdAndUpdate(req.params.id, req.body);
+
+  io.emit("update-slots", await Booking.find());
+
+  res.json({ success: true });
+});
+
+/* ================= ADMIN LOGIN ================= */
+app.post("/api/admin-login", (req, res) => {
+
+  const { username, password } = req.body;
+
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+
+    const token = jwt.sign(
+      { admin: true },
+      JWT_SECRET,
+      { expiresIn: "1d" }
     );
 
-    if (exists) {
-      return res.status(409).json({ error: "Slot already booked" });
+    return res.json({ token });
+  }
+
+  res.status(401).json({ error: "Invalid login" });
+});
+
+/* ================= STRIPE SAVE CARD ================= */
+app.post("/api/create-setup-intent", async (req, res) => {
+  try {
+
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
     }
 
-    const prices = {
-      "Home Cleaning": 120,
-      "Deep Cleaning": 200,
-      "Office Cleaning": 150,
-      "Move In/Out Cleaning": 180
-    };
-
-    const total = prices[service] || 0;
-
-    const booking = {
-      id: Date.now(),
-      name,
-      email,
-      phone,
-      address,
-      date,
-      timeSlot,
-      service,
-      total,
-      status: "UNPAID"
-    };
-
-    bookings.unshift(booking);
-
-    /* FIX: realtime update */
-    io.emit("update-slots", bookings);
-
-    console.log("Sending email to:", email);
-
-    /* ================= EMAIL ================= */
-    if (resend) {
-      try {
-        await resend.emails.send({
-          from: "DMV Cleaning <onboarding@resend.dev>",
-          to: email,
-          subject: "Booking Confirmed ✔",
-          html: `
-            <h2>✔ Booking Confirmed</h2>
-            <p>Hi ${name}</p>
-            <p><b>Service:</b> ${service}</p>
-            <p><b>Date:</b> ${date}</p>
-            <p><b>Time:</b> ${timeSlot}</p>
-            <p><b>Total:</b> $${total}</p>
-          `
-        });
-      } catch (err) {
-        console.error("EMAIL ERROR:", err.message);
-      }
-    }
+    const intent = await stripe.setupIntents.create({
+      payment_method_types: ["card"]
+    });
 
     res.json({
-      success: true,
-      bookingId: booking.id,
-      total
+      clientSecret: intent.client_secret
     });
 
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Server error" });
+    res.status(500).json({ error: "Stripe error" });
   }
 });
 
-/* ================= STRIPE SETUP ================= */
-app.post("/api/create-setup-intent", async (req, res) => {
-  if (!stripe) return res.status(500).json({ error: "Stripe not configured" });
-
-  const intent = await stripe.setupIntents.create({
-    payment_method_types: ["card"]
-  });
-
-  res.json({ clientSecret: intent.client_secret });
-});
-
-/* ================= STRIPE CHARGE ================= */
-app.post("/api/charge-customer", async (req, res) => {
+/* ================= ADMIN ANALYTICS ================= */
+app.get("/api/admin/analytics", async (req, res) => {
   try {
-    if (!stripe) return res.status(500).json({ error: "Stripe not configured" });
 
-    const { paymentMethodId, amount, email, bookingId } = req.body;
+    const bookings = await Booking.find();
 
-    await stripe.paymentIntents.create({
-      amount: amount * 100,
-      currency: "usd",
-      payment_method: paymentMethodId,
-      confirm: true,
-      receipt_email: email
+    let weekly = {};
+    let monthly = {};
+
+    bookings.forEach(b => {
+
+      const date = new Date(b.createdAt);
+
+      const week = getWeekNumber(date);
+      const month = date.getMonth() + 1;
+
+      weekly[week] = (weekly[week] || 0) + (b.total || 0);
+      monthly[month] = (monthly[month] || 0) + (b.total || 0);
     });
 
-    const booking = bookings.find(b => b.id == bookingId);
-    if (booking) booking.status = "PAID";
-
-    io.emit("update-slots", bookings);
-
-    res.json({ success: true });
+    res.json({ weekly, monthly });
 
   } catch (err) {
-    console.error("STRIPE ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= INVOICE ================= */
-app.get("/api/invoice/:id", (req, res) => {
-  const booking = bookings.find(b => b.id == req.params.id);
+/* ================= WEEK HELPER ================= */
+function getWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
 
-  if (!booking) return res.status(404).send("Not found");
+/* ================= INVOICE PDF ================= */
+app.get("/api/invoice/:id", async (req, res) => {
+
+  const b = await Booking.findById(req.params.id);
+
+  if (!b) return res.status(404).send("Not found");
 
   const doc = new PDFDocument();
 
   res.setHeader("Content-Type", "application/pdf");
+
   doc.pipe(res);
 
   doc.fontSize(20).text("INVOICE");
   doc.moveDown();
 
-  doc.text(`Name: ${booking.name}`);
-  doc.text(`Service: ${booking.service}`);
-  doc.text(`Date: ${booking.date}`);
-  doc.text(`Total: $${booking.total}`);
-  doc.text(`Status: ${booking.status}`);
+  doc.text(`Name: ${b.name}`);
+  doc.text(`Service: ${b.service}`);
+  doc.text(`Date: ${b.date}`);
+  doc.text(`Total: $${b.total}`);
+  doc.text(`Status: ${b.status}`);
 
   doc.end();
 });
 
-/* ================= RENDER SAFE START ================= */
+/* ================= DAILY EMAIL REPORT ================= */
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+cron.schedule("0 20 * * *", async () => {
+
+  const bookings = await Booking.find();
+
+  await transporter.sendMail({
+    from: process.env.EMAIL,
+    to: process.env.EMAIL,
+    subject: "Daily Booking Report",
+    text: `Total Bookings Today: ${bookings.length}`
+  });
+
+});
+
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, "0.0.0.0", () => {

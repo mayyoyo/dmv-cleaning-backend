@@ -1,137 +1,89 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <title>Admin Dashboard</title>
 
-<link rel="stylesheet" href="dashboard.css">
+<link rel="stylesheet" href="/admin/admin-dashboard.css">
 
-<script src="/socket.io/socket.io.js" defer></script>
-
-<script defer>
-const socket = io();
-
-let bookings = [];
-
-/* ================= LOAD ================= */
-async function load() {
-  const res = await fetch("/api/public-bookings");
-  bookings = await res.json();
-  render();
-}
-
-/* ================= RENDER ================= */
-function render() {
-
-  const table = document.getElementById("table");
-  table.innerHTML = "";
-
-  bookings.forEach(b => {
-
-    const row = document.createElement("tr");
-
-    row.innerHTML = `
-      <td>${b.name}</td>
-      <td>${b.service}</td>
-      <td>${b.date}</td>
-      <td>${b.timeSlot}</td>
-      <td>$${b.total}</td>
-      <td>${b.status}</td>
-      <td>
-        <button onclick="del(${b.id})">Delete</button>
-      </td>
-    `;
-
-    table.appendChild(row);
-  });
-
-  document.getElementById("totalRevenue").innerText =
-    "$" + bookings.reduce((a,b) => a + (b.total || 0), 0);
-}
-
-/* ================= DELETE ================= */
-async function del(id) {
-  bookings = bookings.filter(b => b.id !== id);
-  render();
-}
-
-/* ================= SOCKET ================= */
-socket.on("update-slots", (data) => {
-  bookings = data;
-  render();
-});
-
-socket.on("new-booking", (b) => {
-  bookings.unshift(b);
-  render();
-});
-
-/* ================= INIT ================= */
-load();
-
-/* ================= MENU ================= */
-function toggleMenu() {
-  document.getElementById("nav").classList.toggle("active");
-}
-</script>
-
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
 
-<header class="topbar">
+<header>
+  <div class="logo">Admin Panel</div>
+  <div class="hamburger" onclick="toggleMenu()">☰</div>
 
-  <div class="logo">🧼 Admin Dashboard</div>
-
-  <div class="menu-icon" onclick="toggleMenu()">☰</div>
-
-  <nav id="nav" class="nav">
-    <a href="/admin/login.html">Logout</a>
+  <nav id="menu">
+    <a href="#">Dashboard</a>
+    <a href="#" onclick="logout()">Logout</a>
   </nav>
-
 </header>
 
-<main class="dashboard">
+<main>
 
-  <!-- CARDS -->
-  <div class="cards">
+<h2>Revenue</h2>
+<canvas id="chart"></canvas>
 
-    <div class="card">
-      <h3>Total Revenue</h3>
-      <p id="totalRevenue">$0</p>
-    </div>
-
-    <div class="card">
-      <h3>Total Bookings</h3>
-      <p id="count">Live</p>
-    </div>
-
-  </div>
-
-  <!-- TABLE -->
-  <div class="table-container">
-
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Service</th>
-          <th>Date</th>
-          <th>Time</th>
-          <th>Total</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-
-      <tbody id="table"></tbody>
-    </table>
-
-  </div>
+<h2>Bookings</h2>
+<div id="list"></div>
 
 </main>
+
+<script>
+const API = "/api";
+
+function toggleMenu() {
+  document.getElementById("menu").classList.toggle("active");
+}
+
+function logout() {
+  localStorage.removeItem("token");
+  window.location.href = "/admin/login.html";
+}
+
+async function load() {
+  const res = await fetch(API + "/public-bookings");
+  const data = await res.json();
+
+  let revenue = 0;
+
+  document.getElementById("list").innerHTML =
+    data.map(b => {
+      revenue += b.total || 0;
+
+      return `
+      <div class="card">
+        <p>${b.name} - ${b.service}</p>
+        <p>$${b.total}</p>
+
+        <button onclick="del('${b._id}')">Delete</button>
+      </div>`;
+    }).join("");
+
+  new Chart(document.getElementById("chart"), {
+    type: "bar",
+    data: {
+      labels: ["Revenue"],
+      datasets: [{
+        label: "Total",
+        data: [revenue],
+        backgroundColor: "#00c3ff"
+      }]
+    }
+  });
+}
+
+async function del(id) {
+  await fetch(API + "/delete-booking/" + id, { method: "DELETE" });
+  load();
+}
+
+load();
+</script>
 
 </body>
 </html>
