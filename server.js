@@ -17,9 +17,11 @@ const { Resend } = require("resend");
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
 
+/* ================= APP ================= */
 const app = express();
 const server = http.createServer(app);
 
+/* ================= SOCKET ================= */
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -27,7 +29,7 @@ const io = new Server(server, {
   }
 });
 
-/* ================= SAFE INIT ================= */
+/* ================= ENV ================= */
 const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
@@ -41,7 +43,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HEALTH ================= */
+/* ================= HEALTH CHECK ================= */
 app.get("/", (req, res) => {
   res.send("DMV Cleaning Backend Running ✅");
 });
@@ -49,17 +51,23 @@ app.get("/", (req, res) => {
 /* ================= MEMORY DB ================= */
 let bookings = [];
 
-/* ================= SOCKET ================= */
-io.on("connection", (socket) => {
-  socket.emit("init-bookings", bookings);
-});
-
-/* ================= PUBLIC BOOKINGS (FIXED) ================= */
+/* ================= PUBLIC BOOKINGS (IMPORTANT FIX) ================= */
 app.get("/api/public-bookings", (req, res) => {
   res.json(bookings || []);
 });
 
-/* ================= BOOKING ================= */
+/* ================= SOCKET ================= */
+io.on("connection", (socket) => {
+  console.log("User connected");
+
+  socket.emit("init-bookings", bookings);
+
+  socket.on("disconnect", () => {
+    console.log("User disconnected");
+  });
+});
+
+/* ================= BOOK SERVICE ================= */
 app.post("/api/book", async (req, res) => {
   try {
     const { name, email, phone, address, date, timeSlot, service } = req.body;
@@ -100,27 +108,37 @@ app.post("/api/book", async (req, res) => {
 
     bookings.unshift(booking);
 
+    /* FIX: realtime update */
     io.emit("update-slots", bookings);
 
     console.log("Sending email to:", email);
 
+    /* ================= EMAIL ================= */
     if (resend) {
-      await resend.emails.send({
-        from: "DMV Cleaning <onboarding@resend.dev>",
-        to: email,
-        subject: "Booking Confirmed ✔",
-        html: `
-          <h2>✔ Booking Confirmed</h2>
-          <p>Hi ${name}</p>
-          <p><b>Service:</b> ${service}</p>
-          <p><b>Date:</b> ${date}</p>
-          <p><b>Time:</b> ${timeSlot}</p>
-          <p><b>Total:</b> $${total}</p>
-        `
-      });
+      try {
+        await resend.emails.send({
+          from: "DMV Cleaning <onboarding@resend.dev>",
+          to: email,
+          subject: "Booking Confirmed ✔",
+          html: `
+            <h2>✔ Booking Confirmed</h2>
+            <p>Hi ${name}</p>
+            <p><b>Service:</b> ${service}</p>
+            <p><b>Date:</b> ${date}</p>
+            <p><b>Time:</b> ${timeSlot}</p>
+            <p><b>Total:</b> $${total}</p>
+          `
+        });
+      } catch (err) {
+        console.error("EMAIL ERROR:", err.message);
+      }
     }
 
-    res.json({ success: true, bookingId: booking.id, total });
+    res.json({
+      success: true,
+      bookingId: booking.id,
+      total
+    });
 
   } catch (err) {
     console.error(err);
@@ -128,7 +146,7 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= STRIPE ================= */
+/* ================= STRIPE SETUP ================= */
 app.post("/api/create-setup-intent", async (req, res) => {
   if (!stripe) return res.status(500).json({ error: "Stripe not configured" });
 
@@ -139,6 +157,7 @@ app.post("/api/create-setup-intent", async (req, res) => {
   res.json({ clientSecret: intent.client_secret });
 });
 
+/* ================= STRIPE CHARGE ================= */
 app.post("/api/charge-customer", async (req, res) => {
   try {
     if (!stripe) return res.status(500).json({ error: "Stripe not configured" });
@@ -161,7 +180,7 @@ app.post("/api/charge-customer", async (req, res) => {
     res.json({ success: true });
 
   } catch (err) {
-    console.error(err);
+    console.error("STRIPE ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -169,6 +188,7 @@ app.post("/api/charge-customer", async (req, res) => {
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", (req, res) => {
   const booking = bookings.find(b => b.id == req.params.id);
+
   if (!booking) return res.status(404).send("Not found");
 
   const doc = new PDFDocument();
@@ -188,7 +208,7 @@ app.get("/api/invoice/:id", (req, res) => {
   doc.end();
 });
 
-/* ================= RENDER FIX (IMPORTANT) ================= */
+/* ================= RENDER SAFE START ================= */
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, "0.0.0.0", () => {

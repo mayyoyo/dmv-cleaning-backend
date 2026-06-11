@@ -9,14 +9,8 @@
 <link rel="stylesheet" href="css/booking.css">
 
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
-
-<!-- CONFIG FIRST -->
-<script src="js/config.js" defer></script>
-
-<!-- SOCKET -->
 <script src="/socket.io/socket.io.js" defer></script>
 
-<!-- MAIN LOGIC -->
 <script defer>
 
 const API = "https://dmv-cleaning-backend.onrender.com/api";
@@ -28,8 +22,15 @@ let calendar;
 
 /* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
-  const res = await fetch(API + "/public-bookings");
-  bookings = await res.json();
+  try {
+    const res = await fetch(API + "/public-bookings");
+    bookings = await res.json();
+    console.log("Loaded bookings:", bookings);
+
+    updateSlots(); // IMPORTANT FIX
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 /* ================= INIT ================= */
@@ -43,12 +44,6 @@ document.addEventListener("DOMContentLoaded", async () => {
       initialView: "dayGridMonth",
       height: 500,
 
-      /* ✅ ADD THIS (calendar styling fix) */
-      eventDidMount: function(info) {
-        info.el.style.backgroundColor = "#111";
-        info.el.style.color = "white";
-      },
-
       dateClick: function(info) {
         selectedDate = info.dateStr;
 
@@ -56,30 +51,39 @@ document.addEventListener("DOMContentLoaded", async () => {
           "Selected: " + selectedDate;
 
         updateSlots();
+      },
+
+      eventDidMount: function(info) {
+        info.el.style.backgroundColor = "#111";
+        info.el.style.color = "white";
       }
     }
   );
 
   calendar.render();
 
-  /* ================= SOCKET FIXED ================= */
+  /* SOCKET FIX */
   socket.on("new-booking", (b) => {
     bookings.unshift(b);
-    updateSlots();   // 🔥 MUST
+    updateSlots();
   });
 
   socket.on("update-slots", (data) => {
     bookings = data;
-    updateSlots();   // 🔥 MUST
+    updateSlots();
   });
 
 });
 
-/* ================= FIXED SLOTS FUNCTION ================= */
+/* ================= SLOTS FIXED ================= */
 function updateSlots() {
 
   const select = document.getElementById("timeSlot");
-  if (!selectedDate) return;
+
+  if (!selectedDate) {
+    select.innerHTML = `<option>Select a date first</option>`;
+    return;
+  }
 
   const slots = [
     "08:00-10:00",
@@ -113,7 +117,7 @@ function updateSlots() {
   });
 }
 
-/* ================= BOOK NOW ================= */
+/* ================= BOOK ================= */
 async function bookNow() {
 
   const data = {
@@ -126,42 +130,22 @@ async function bookNow() {
     service: document.getElementById("service").value
   };
 
-  if (!selectedDate) return alert("Select date");
+  if (!selectedDate) return alert("Select date first");
 
-  try {
+  const res = await fetch(API + "/book", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
 
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
+  const result = await res.json();
 
-    const result = await res.json();
+  if (!res.ok) return alert(result.error);
 
-    if (!res.ok) {
-      return alert(result.error || "Booking failed");
-    }
-
-    window.location.href =
-      "/payment.html?bookingId=" + result.bookingId;
-
-  } catch (err) {
-    alert("Error: " + err.message);
-  }
-}
-
-/* ================= SAVE CARD ================= */
-async function saveCardAndBook() {
-  await bookNow();
+  window.location.href = "/payment.html?bookingId=" + result.bookingId;
 }
 
 </script>
-
-<style>
-#calendar {
-  margin-top: 20px;
-}
-</style>
 
 </head>
 
@@ -184,36 +168,28 @@ async function saveCardAndBook() {
 
 <h2>📅 Book Cleaning Service</h2>
 
-<!-- CALENDAR -->
 <div id="calendar"></div>
 
 <p id="selectedDate">No date selected</p>
 
-<!-- FORM -->
-<form id="bookingForm">
+<form>
 
-  <select id="timeSlot" class="input" required></select>
+<select id="timeSlot" class="input"></select>
 
-  <input id="name" class="input" placeholder="Full Name" required>
-  <input id="phone" class="input" placeholder="Phone" required>
-  <input id="email" class="input" type="email" placeholder="Email" required>
-  <input id="address" class="input" placeholder="Address" required>
+<input id="name" placeholder="Full Name" class="input">
+<input id="phone" placeholder="Phone" class="input">
+<input id="email" placeholder="Email" class="input">
+<input id="address" placeholder="Address" class="input">
 
-  <select id="service" class="input" required>
-    <option value="">Select Service</option>
-    <option value="Home Cleaning">Home Cleaning - $120</option>
-    <option value="Deep Cleaning">Deep Cleaning - $200</option>
-    <option value="Office Cleaning">Office Cleaning - $150</option>
-    <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
-  </select>
+<select id="service" class="input">
+  <option value="">Select Service</option>
+  <option>Home Cleaning</option>
+  <option>Deep Cleaning</option>
+  <option>Office Cleaning</option>
+  <option>Move In/Out Cleaning</option>
+</select>
 
-  <button type="button" class="btn" onclick="bookNow()">
-    📩 Book Now
-  </button>
-
-  <button type="button" class="btn" onclick="saveCardAndBook()">
-    💳 Save Card & Pay Later
-  </button>
+<button type="button" class="btn" onclick="bookNow()">Book Now</button>
 
 </form>
 
