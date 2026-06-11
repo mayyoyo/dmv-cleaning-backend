@@ -1,3 +1,7 @@
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT ERROR:", err);
+});
+
 require("dotenv").config(); // MUST BE FIRST
 
 const express = require("express");
@@ -78,10 +82,10 @@ app.post("/api/book", async (req, res) => {
 
   io.emit("new-booking", booking);
 
-  /* ================= DEBUG EMAIL ================= */
+  /* ================= EMAIL DEBUG ================= */
   console.log("Sending email to:", email);
 
-  /* ================= EMAIL RECEIPT (FIXED) ================= */
+  /* ================= EMAIL RECEIPT ================= */
   try {
     await resend.emails.send({
       from: "DMV Cleaning <no-reply@yourdomain.com>",
@@ -195,9 +199,9 @@ app.get("/api/analytics", (req, res) => {
   res.json(monthly);
 });
 
-/* ================= RENDER SAFE FIX ================= */
-const PORT = process.env.PORT || 3000;
+/* ================= RENDER START FIX ================= */
+const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, () => {
-  console.log("🚀 SaaS Running on port", PORT);
+  console.log("🚀 Server running on port", PORT);
 });
