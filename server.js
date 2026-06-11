@@ -215,7 +215,7 @@ cron.schedule("0 20 * * *", async () => {
 
 });
 
-/* ================= START SERVER ================= */
+/* ================= START SERVER (IMPORTANT - DEPLOY FIX) ================= */
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, "0.0.0.0", () => {
