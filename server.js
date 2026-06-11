@@ -28,8 +28,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= DATABASE (TEMP MEMORY) ================= */
-global.bookings = [];
-global.users = [];
+global.bookings = global.bookings || [];
 
 /* ================= SOCKET ================= */
 io.on("connection", (socket) => {
@@ -100,7 +99,7 @@ app.post("/api/book", async (req, res) => {
   res.json({ success: true, bookingId: booking.id, total });
 });
 
-/* ================= STRIPE: SAVE CARD (SaaS CORE) ================= */
+/* ================= STRIPE: SAVE CARD ================= */
 app.post("/api/create-setup-intent", async (req, res) => {
   try {
     const setupIntent = await stripe.setupIntents.create({
@@ -113,7 +112,7 @@ app.post("/api/create-setup-intent", async (req, res) => {
   }
 });
 
-/* ================= STRIPE: CHARGE SAVED CARD ================= */
+/* ================= STRIPE: CHARGE CUSTOMER ================= */
 app.post("/api/charge-customer", async (req, res) => {
   try {
 
@@ -132,7 +131,6 @@ app.post("/api/charge-customer", async (req, res) => {
 
     io.emit("update-slots", global.bookings);
 
-    /* EMAIL RECEIPT AFTER PAYMENT */
     await resend.emails.send({
       from: "DMV Cleaning <onboarding@resend.dev>",
       to: email,
@@ -140,7 +138,7 @@ app.post("/api/charge-customer", async (req, res) => {
       html: `
         <h2>Payment Successful</h2>
         <p>Amount: $${amount}</p>
-        <p>Thank you!</p>
+        <p>Thank you for your payment!</p>
       `
     });
 
@@ -170,6 +168,7 @@ app.get("/api/invoice/:id", (req, res) => {
   doc.text(`Service: ${booking.service}`);
   doc.text(`Date: ${booking.date}`);
   doc.text(`Total: $${booking.total}`);
+  doc.text(`Status: ${booking.status}`);
 
   doc.end();
 });
@@ -187,7 +186,9 @@ app.get("/api/analytics", (req, res) => {
   res.json(monthly);
 });
 
-/* ================= START ================= */
-server.listen(3000, () => {
-  console.log("🚀 SaaS Running on port 3000");
+/* ================= START SERVER (FIXED FOR RENDER) ================= */
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+  console.log("🚀 SaaS Running on port", PORT);
 });
