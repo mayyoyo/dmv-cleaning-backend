@@ -30,7 +30,7 @@ const ADMIN_USER = "admin";
 const ADMIN_PASS = "123456";
 const JWT_SECRET = "dmv_secret";
 
-/* ================= MONGODB ================= */
+/* ================= DATABASE ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch(err => console.log(err));
@@ -61,8 +61,9 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(bookings);
 });
 
-/* ================= BOOK (FIXED) ================= */
+/* ================= 🔥 FIXED BOOK ROUTE ================= */
 app.post("/api/book", async (req, res) => {
+
   try {
 
     const {
@@ -75,14 +76,14 @@ app.post("/api/book", async (req, res) => {
       service
     } = req.body;
 
-    /* VALIDATION */
+    /* ❗ VALIDATION (prevents crash / 505 error) */
     if (!name || !email || !date || !timeSlot) {
       return res.status(400).json({
         error: "Missing required fields"
       });
     }
 
-    /* AUTO PRICE */
+    /* 💰 AUTO PRICING */
     let total = 0;
 
     if (service === "Home Cleaning") total = 120;
@@ -90,7 +91,7 @@ app.post("/api/book", async (req, res) => {
     if (service === "Office Cleaning") total = 150;
     if (service === "Move In/Out Cleaning") total = 180;
 
-    /* CREATE */
+    /* 🧾 CREATE BOOKING */
     const booking = await Booking.create({
       name,
       email,
@@ -103,7 +104,7 @@ app.post("/api/book", async (req, res) => {
       status: "UNPAID"
     });
 
-    /* LIVE UPDATE */
+    /* 🔄 REALTIME UPDATE */
     io.emit("new-booking", booking);
     io.emit("update-slots", await Booking.find());
 
@@ -114,26 +115,26 @@ app.post("/api/book", async (req, res) => {
     });
 
   } catch (err) {
+
     console.error("BOOK ERROR:", err);
-    res.status(500).json({ error: "Server error" });
+
+    res.status(500).json({
+      error: "Server error"
+    });
   }
 });
 
-/* ================= DELETE ================= */
+/* ================= DELETE BOOKING ================= */
 app.delete("/api/delete-booking/:id", async (req, res) => {
   await Booking.findByIdAndDelete(req.params.id);
-
   io.emit("update-slots", await Booking.find());
-
   res.json({ success: true });
 });
 
-/* ================= EDIT ================= */
+/* ================= EDIT BOOKING ================= */
 app.put("/api/edit-booking/:id", async (req, res) => {
   await Booking.findByIdAndUpdate(req.params.id, req.body);
-
   io.emit("update-slots", await Booking.find());
-
   res.json({ success: true });
 });
 
@@ -178,8 +179,9 @@ app.post("/api/create-setup-intent", async (req, res) => {
   }
 });
 
-/* ================= ADMIN ANALYTICS ================= */
+/* ================= ANALYTICS ================= */
 app.get("/api/admin/analytics", async (req, res) => {
+
   try {
 
     const bookings = await Booking.find();
@@ -214,7 +216,7 @@ function getWeekNumber(d) {
   return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
 }
 
-/* ================= INVOICE PDF ================= */
+/* ================= PDF INVOICE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
 
   const b = await Booking.findById(req.params.id);
@@ -239,7 +241,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= DAILY EMAIL REPORT ================= */
+/* ================= EMAIL REPORT ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
