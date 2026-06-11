@@ -43,6 +43,12 @@ document.addEventListener("DOMContentLoaded", async () => {
       initialView: "dayGridMonth",
       height: 500,
 
+      /* ✅ ADD THIS (calendar styling fix) */
+      eventDidMount: function(info) {
+        info.el.style.backgroundColor = "#111";
+        info.el.style.color = "white";
+      },
+
       dateClick: function(info) {
         selectedDate = info.dateStr;
 
@@ -56,21 +62,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   calendar.render();
 
+  /* ================= SOCKET FIXED ================= */
   socket.on("new-booking", (b) => {
     bookings.unshift(b);
-    calendar.render();
-    updateSlots();
+    updateSlots();   // 🔥 MUST
   });
 
   socket.on("update-slots", (data) => {
     bookings = data;
-    calendar.render();
-    updateSlots();
+    updateSlots();   // 🔥 MUST
   });
 
 });
 
-/* ================= SLOTS ================= */
+/* ================= FIXED SLOTS FUNCTION ================= */
 function updateSlots() {
 
   const select = document.getElementById("timeSlot");
@@ -98,6 +103,7 @@ function updateSlots() {
     if (booked.includes(slot)) {
       option.textContent = slot + " ❌ Booked";
       option.disabled = true;
+      option.style.background = "#ffdddd";
       option.style.color = "red";
     } else {
       option.textContent = slot + " ✅ Available";
@@ -136,7 +142,6 @@ async function bookNow() {
       return alert(result.error || "Booking failed");
     }
 
-    /* ✅ REDIRECT TO STRIPE SAVE CARD PAGE */
     window.location.href =
       "/payment.html?bookingId=" + result.bookingId;
 
@@ -145,9 +150,9 @@ async function bookNow() {
   }
 }
 
-/* ================= SAVE CARD BUTTON ================= */
+/* ================= SAVE CARD ================= */
 async function saveCardAndBook() {
-  await bookNow(); // book first, then redirect to payment
+  await bookNow();
 }
 
 </script>
@@ -202,12 +207,10 @@ async function saveCardAndBook() {
     <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
   </select>
 
-  <!-- BOOK BUTTON -->
   <button type="button" class="btn" onclick="bookNow()">
     📩 Book Now
   </button>
 
-  <!-- SAVE CARD BUTTON -->
   <button type="button" class="btn" onclick="saveCardAndBook()">
     💳 Save Card & Pay Later
   </button>

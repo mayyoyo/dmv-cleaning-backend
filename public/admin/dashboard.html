@@ -1,39 +1,137 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Admin Dashboard</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <link rel="stylesheet" href="css/dashboard.css">
+<title>Admin Dashboard</title>
 
-  <script src="/socket.io/socket.io.js" defer></script>
-  <script src="js/dashboard.js" defer></script>
+<link rel="stylesheet" href="dashboard.css">
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/socket.io/socket.io.js" defer></script>
+
+<script defer>
+const socket = io();
+
+let bookings = [];
+
+/* ================= LOAD ================= */
+async function load() {
+  const res = await fetch("/api/public-bookings");
+  bookings = await res.json();
+  render();
+}
+
+/* ================= RENDER ================= */
+function render() {
+
+  const table = document.getElementById("table");
+  table.innerHTML = "";
+
+  bookings.forEach(b => {
+
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${b.name}</td>
+      <td>${b.service}</td>
+      <td>${b.date}</td>
+      <td>${b.timeSlot}</td>
+      <td>$${b.total}</td>
+      <td>${b.status}</td>
+      <td>
+        <button onclick="del(${b.id})">Delete</button>
+      </td>
+    `;
+
+    table.appendChild(row);
+  });
+
+  document.getElementById("totalRevenue").innerText =
+    "$" + bookings.reduce((a,b) => a + (b.total || 0), 0);
+}
+
+/* ================= DELETE ================= */
+async function del(id) {
+  bookings = bookings.filter(b => b.id !== id);
+  render();
+}
+
+/* ================= SOCKET ================= */
+socket.on("update-slots", (data) => {
+  bookings = data;
+  render();
+});
+
+socket.on("new-booking", (b) => {
+  bookings.unshift(b);
+  render();
+});
+
+/* ================= INIT ================= */
+load();
+
+/* ================= MENU ================= */
+function toggleMenu() {
+  document.getElementById("nav").classList.toggle("active");
+}
+</script>
+
 </head>
 
 <body>
 
-<header class="header">
-  <h1>📊 Admin Dashboard</h1>
+<header class="topbar">
 
-  <div class="hamburger" onclick="toggleMenu()">☰</div>
+  <div class="logo">🧼 Admin Dashboard</div>
 
-  <nav class="nav" id="navMenu">
-    <a href="#">Dashboard</a>
-    <a href="#">Bookings</a>
-    <a href="#">Income</a>
-    <a href="#">Settings</a>
+  <div class="menu-icon" onclick="toggleMenu()">☰</div>
+
+  <nav id="nav" class="nav">
+    <a href="/admin/login.html">Logout</a>
   </nav>
+
 </header>
 
-<!-- STATS -->
-<div id="stats"></div>
+<main class="dashboard">
 
-<!-- CHART -->
-<canvas id="incomeChart"></canvas>
+  <!-- CARDS -->
+  <div class="cards">
 
-<!-- BOOKINGS -->
-<div id="dashboard"></div>
+    <div class="card">
+      <h3>Total Revenue</h3>
+      <p id="totalRevenue">$0</p>
+    </div>
+
+    <div class="card">
+      <h3>Total Bookings</h3>
+      <p id="count">Live</p>
+    </div>
+
+  </div>
+
+  <!-- TABLE -->
+  <div class="table-container">
+
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Service</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Total</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+
+      <tbody id="table"></tbody>
+    </table>
+
+  </div>
+
+</main>
 
 </body>
 </html>

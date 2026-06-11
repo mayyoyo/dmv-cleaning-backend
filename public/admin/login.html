@@ -4,129 +4,72 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Admin Login - DMV Cleaning</title>
+<title>Admin Login</title>
 
-<link rel="stylesheet" href="../css/admin-login.css">
-
+<link rel="stylesheet" href="admin-login.css">
 </head>
 
 <body>
 
-<!-- ================= LOGIN ================= -->
-<div class="login-container" id="loginBox">
+<header class="topbar">
 
-  <div class="login-card">
-    <h2>Admin Login</h2>
+  <div class="logo">🧼 DMV Admin</div>
 
-    <input id="username" placeholder="Username" autocomplete="off">
-    <input id="password" type="password" placeholder="Password">
+  <!-- Hamburger icon (mobile) -->
+  <div class="menu-icon" onclick="toggleMenu()">☰</div>
+
+  <!-- Navigation -->
+  <nav id="nav" class="nav">
+    <a href="#">Login</a>
+  </nav>
+
+</header>
+
+<main class="login-container">
+
+  <div class="login-box">
+
+    <h1>Admin Login</h1>
+
+    <input id="u" type="text" placeholder="Username">
+    <input id="p" type="password" placeholder="Password">
 
     <button onclick="login()">Login</button>
 
     <p id="msg"></p>
+
   </div>
 
-</div>
-
-<!-- ================= DASHBOARD ================= -->
-<div class="dashboard" id="dashboard" style="display:none;">
-
-  <header class="dash-header">
-    <h2>📊 DMV Cleaning Admin Dashboard</h2>
-    <span class="status">🟢 Live</span>
-  </header>
-
-  <section class="card" id="liveStatus">
-    Waiting for new bookings...
-  </section>
-
-  <section class="card" id="bookingsList">
-    Loading bookings...
-  </section>
-
-</div>
-
-<!-- ================= SOCKET ================= -->
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</main>
 
 <script>
-
-const API = "https://dmv-cleaning-backend.onrender.com/api";
-const socket = io("https://dmv-cleaning-backend.onrender.com");
+/* ================= MENU TOGGLE ================= */
+function toggleMenu() {
+  document.getElementById("nav").classList.toggle("active");
+}
 
 /* ================= LOGIN ================= */
 async function login() {
+  const res = await fetch("/api/admin/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: u.value,
+      password: p.value
+    })
+  });
 
-  const username = document.getElementById("username").value.trim();
-  const password = document.getElementById("password").value.trim();
+  const data = await res.json();
 
-  try {
-
-    const res = await fetch(API + "/admin/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
-    });
-
-    const data = await res.json();
-
-    if (!data.token) {
-      document.getElementById("msg").innerText = "❌ Invalid login";
-      return;
-    }
-
-    // SAVE TOKEN
-    localStorage.setItem("adminToken", data.token);
-
-    document.getElementById("loginBox").style.display = "none";
-    document.getElementById("dashboard").style.display = "block";
-
-    loadBookings();
-
-  } catch (err) {
-    console.error(err);
-    document.getElementById("msg").innerText = "❌ Server error";
+  if (!data.token) {
+    document.getElementById("msg").innerText = "❌ Login failed";
+    return;
   }
+
+  localStorage.setItem("token", data.token);
+
+  window.location.href = "/admin/dashboard.html";
 }
-
-/* ================= LOAD BOOKINGS (SECURED) ================= */
-async function loadBookings() {
-
-  try {
-
-    const res = await fetch(API + "/bookings", {
-      headers: {
-        Authorization: localStorage.getItem("adminToken")
-      }
-    });
-
-    const bookings = await res.json();
-
-    document.getElementById("bookingsList").innerHTML =
-      "<h3>All Bookings</h3>" +
-      bookings.map(b => `
-        <div class="booking-item">
-          <b>${b.name}</b> — ${b.service}<br>
-          📅 ${b.date} | ⏰ ${b.timeSlot}<br>
-          📍 ${b.address}<br>
-          💰 $${b.total || 0}
-        </div>
-      `).join("");
-
-  } catch (err) {
-    console.error("LOAD ERROR:", err);
-  }
-}
-
-/* ================= LIVE ================= */
-socket.on("new-booking", (booking) => {
-
-  document.getElementById("liveStatus").innerHTML =
-    "🔥 New Booking: <b>" + booking.name + "</b> - " + booking.service;
-
-  loadBookings();
-});
-
 </script>
 
 </body>
