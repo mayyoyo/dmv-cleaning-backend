@@ -5,13 +5,17 @@ const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const nodemailer = require("nodemailer");
+const PDFDocument = require("pdfkit");
+const cron = require("node-cron");
+const jwt = require("jsonwebtoken");
 const Stripe = require("stripe");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-/* ================= STRIPE ================= */
+/* ================= ENV ================= */
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -20,6 +24,11 @@ const stripe = process.env.STRIPE_SECRET_KEY
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
+
+/* ================= ADMIN ================= */
+const ADMIN_USER = "admin";
+const ADMIN_PASS = "123456";
+const JWT_SECRET = "dmv_secret";
 
 /* ================= MONGODB ================= */
 mongoose.connect(process.env.MONGO_URI)
@@ -52,10 +61,13 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(bookings);
 });
 
-/* ================= SAFE BOOKING (FIXED) ================= */
+/* ================= BOOK (FIXED VERSION) ================= */
 app.post("/api/book", async (req, res) => {
 
   try {
+
+    /* 🔍 DEBUG (VERY IMPORTANT) */
+    console.log("BOOK REQUEST BODY:", req.body);
 
     const {
       name,
@@ -68,12 +80,16 @@ app.post("/api/book", async (req, res) => {
       paymentType
     } = req.body;
 
-    /* 🔴 SAFETY CHECK */
-    if (!name || !email || !date || !timeSlot) {
-      return res.status(400).json({ error: "Missing required fields" });
+    /* ❌ SAFETY VALIDATION */
+    if (!name || !email || !date || !timeSlot || !service) {
+      console.log("❌ Missing fields detected:", req.body);
+
+      return res.status(400).json({
+        error: "Missing required fields"
+      });
     }
 
-    /* 💰 PRICE SYSTEM (4 SERVICES) */
+    /* 💰 AUTO PRICING */
     let total = 0;
 
     if (service === "Home Cleaning") total = 120;
@@ -94,47 +110,75 @@ app.post("/api/book", async (req, res) => {
       status: paymentType === "pay_now" ? "UNPAID" : "PAY_LATER"
     });
 
-    /* 🔔 LIVE UPDATE */
+    /* 🔔 REAL-TIME UPDATE */
     io.emit("new-booking", booking);
     io.emit("update-slots", await Booking.find());
 
-    /* 📦 RESPONSE */
+    console.log("✅ BOOKING SAVED:", booking._id);
+
     res.json({
       success: true,
       bookingId: booking._id
     });
 
   } catch (err) {
-    console.error("BOOK ERROR:", err);
-    res.status(500).json({ error: "Server error" });
+
+    console.error("🔥 BOOK ERROR FULL:", err);
+
+    res.status(500).json({
+      error: err.message || "Server error"
+    });
   }
 });
 
-/* ================= STRIPE PAY NOW ================= */
-app.post("/api/create-checkout-session", async (req, res) => {
+/* ================= DELETE ================= */
+app.delete("/api/delete-booking/:id", async (req, res) => {
+  await Booking.findByIdAndDelete(req.params.id);
+  io.emit("update-slots", await Booking.find());
+  res.json({ success: true });
+});
 
+/* ================= EDIT ================= */
+app.put("/api/edit-booking/:id", async (req, res) => {
+  await Booking.findByIdAndUpdate(req.params.id, req.body);
+  io.emit("update-slots", await Booking.find());
+  res.json({ success: true });
+});
+
+/* ================= ADMIN LOGIN ================= */
+app.post("/api/admin-login", (req, res) => {
+
+  const { username, password } = req.body;
+
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+
+    const token = jwt.sign(
+      { admin: true },
+      JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    return res.json({ token });
+  }
+
+  res.status(401).json({ error: "Invalid login" });
+});
+
+/* ================= STRIPE SETUP ================= */
+app.post("/api/create-setup-intent", async (req, res) => {
   try {
 
-    if (!stripe) return res.status(500).json({ error: "Stripe not configured" });
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
+    }
 
-    const { service, total, bookingId } = req.body;
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: { name: service },
-          unit_amount: total * 100
-        },
-        quantity: 1
-      }],
-      success_url: "https://your-site.com/success.html",
-      cancel_url: "https://your-site.com/cancel.html"
+    const intent = await stripe.setupIntents.create({
+      payment_method_types: ["card"]
     });
 
-    res.json({ url: session.url });
+    res.json({
+      clientSecret: intent.client_secret
+    });
 
   } catch (err) {
     console.error(err);
@@ -142,7 +186,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= START SERVER (FIX 502 ISSUE) ================= */
+/* ================= SERVER START ================= */
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, "0.0.0.0", () => {
