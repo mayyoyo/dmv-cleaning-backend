@@ -62,7 +62,6 @@ app.post(
           { new: true }
         );
 
-        /* ✅ SEND PAID EMAIL ONLY AFTER PAYMENT */
         sendEmail(booking, "paid").catch(console.error);
 
         io.emit("payment-updated", booking);
@@ -128,9 +127,11 @@ app.get("/api/bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= CREATE BOOKING ================= */
+/* ================= CREATE BOOKING (FIXED) ================= */
 app.post("/api/book", async (req, res) => {
   try {
+    console.log("📥 Incoming booking:", req.body);
+
     const newBooking = await Booking.create({
       ...req.body,
       paymentStatus: "PENDING"
@@ -144,8 +145,11 @@ app.post("/api/book", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false });
+    console.error("❌ BOOKING ERROR:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
