@@ -33,44 +33,6 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= STRIPE WEBHOOK (RAW FIRST) ================= */
-app.post(
-  "/api/stripe-webhook",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    let event;
-
-    try {
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        req.headers["stripe-signature"],
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
-    } catch (err) {
-      console.error("Webhook Error:", err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const bookingId = session.metadata?.bookingId;
-
-      if (bookingId) {
-        const booking = await Booking.findByIdAndUpdate(
-          bookingId,
-          { paymentStatus: "PAID" },
-          { new: true }
-        );
-
-        sendEmail(booking, "paid").catch(console.error);
-        io.emit("payment-updated", booking);
-      }
-    }
-
-    res.json({ received: true });
-  }
-);
-
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
@@ -87,13 +49,6 @@ app.get("/admin/dashboard", (req, res) => {
 
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
-
-/* ================= ROUTES ================= */
-
-// HOME
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
 
 /* ================= MODEL ================= */
 const Booking = mongoose.model(
@@ -126,7 +81,7 @@ app.get("/api/bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= CREATE BOOKING (FINAL FIX) ================= */
+/* ================= CREATE BOOKING (FIXED) ================= */
 app.post("/api/book", async (req, res) => {
   try {
     console.log("📥 Incoming booking:", req.body);
@@ -257,18 +212,17 @@ app.get("/api/invoice/:id", async (req, res) => {
 });
 
 /* ================= START SERVER ================= */
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB Connected ✅");
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => {
+  console.log("MongoDB Connected ✅");
 
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log("Server running on", PORT);
-    });
-  })
-  .catch(err => {
-    console.error(err);
-
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log("Server running WITHOUT DB");
-    });
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log("Server running on", PORT);
   });
+})
+.catch(err => {
+  console.error("MongoDB error ❌", err);
+});
