@@ -15,7 +15,7 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-/* ================= ENV ================= */
+/* ================= STRIPE ================= */
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -30,7 +30,7 @@ const ADMIN_USER = "admin";
 const ADMIN_PASS = "123456";
 const JWT_SECRET = "dmv_secret";
 
-/* ================= MONGODB ================= */
+/* ================= DATABASE ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch(err => console.log(err));
@@ -61,12 +61,11 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(bookings);
 });
 
-/* ================= BOOK (FIXED VERSION) ================= */
+/* ================= BOOK ================= */
 app.post("/api/book", async (req, res) => {
 
   try {
 
-    /* 🔍 DEBUG (VERY IMPORTANT) */
     console.log("BOOK REQUEST BODY:", req.body);
 
     const {
@@ -80,16 +79,13 @@ app.post("/api/book", async (req, res) => {
       paymentType
     } = req.body;
 
-    /* ❌ SAFETY VALIDATION */
     if (!name || !email || !date || !timeSlot || !service) {
-      console.log("❌ Missing fields detected:", req.body);
-
       return res.status(400).json({
         error: "Missing required fields"
       });
     }
 
-    /* 💰 AUTO PRICING */
+    /* PRICE SYSTEM */
     let total = 0;
 
     if (service === "Home Cleaning") total = 120;
@@ -97,7 +93,6 @@ app.post("/api/book", async (req, res) => {
     if (service === "Office Cleaning") total = 150;
     if (service === "Move In/Out Cleaning") total = 180;
 
-    /* 💾 SAVE BOOKING */
     const booking = await Booking.create({
       name,
       email,
@@ -110,11 +105,8 @@ app.post("/api/book", async (req, res) => {
       status: paymentType === "pay_now" ? "UNPAID" : "PAY_LATER"
     });
 
-    /* 🔔 REAL-TIME UPDATE */
     io.emit("new-booking", booking);
     io.emit("update-slots", await Booking.find());
-
-    console.log("✅ BOOKING SAVED:", booking._id);
 
     res.json({
       success: true,
@@ -122,27 +114,53 @@ app.post("/api/book", async (req, res) => {
     });
 
   } catch (err) {
-
-    console.error("🔥 BOOK ERROR FULL:", err);
-
-    res.status(500).json({
-      error: err.message || "Server error"
-    });
+    console.error("BOOK ERROR FULL:", err);
+    res.status(500).json({ error: err.message || "Server error" });
   }
 });
 
-/* ================= DELETE ================= */
-app.delete("/api/delete-booking/:id", async (req, res) => {
-  await Booking.findByIdAndDelete(req.params.id);
-  io.emit("update-slots", await Booking.find());
-  res.json({ success: true });
-});
+/* ================= STRIPE CHECKOUT ================= */
+app.post("/api/create-checkout-session", async (req, res) => {
 
-/* ================= EDIT ================= */
-app.put("/api/edit-booking/:id", async (req, res) => {
-  await Booking.findByIdAndUpdate(req.params.id, req.body);
-  io.emit("update-slots", await Booking.find());
-  res.json({ success: true });
+  try {
+
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
+    }
+
+    const { service, total, customer } = req.body;
+
+    if (!service || !total || !customer) {
+      return res.status(400).json({ error: "Missing checkout data" });
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: service || "Cleaning Service"
+          },
+          unit_amount: Math.round(total * 100)
+        },
+        quantity: 1
+      }],
+
+      customer_email: customer.email,
+
+      success_url: "https://dmv-cleaning-backend.onrender.com/success.html",
+      cancel_url: "https://dmv-cleaning-backend.onrender.com/cancel.html"
+    });
+
+    res.json({ url: session.url });
+
+  } catch (err) {
+    console.error("STRIPE ERROR:", err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 /* ================= ADMIN LOGIN ================= */
@@ -151,20 +169,14 @@ app.post("/api/admin-login", (req, res) => {
   const { username, password } = req.body;
 
   if (username === ADMIN_USER && password === ADMIN_PASS) {
-
-    const token = jwt.sign(
-      { admin: true },
-      JWT_SECRET,
-      { expiresIn: "1d" }
-    );
-
+    const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: "1d" });
     return res.json({ token });
   }
 
   res.status(401).json({ error: "Invalid login" });
 });
 
-/* ================= STRIPE SETUP ================= */
+/* ================= SETUP INTENT ================= */
 app.post("/api/create-setup-intent", async (req, res) => {
   try {
 
@@ -176,9 +188,7 @@ app.post("/api/create-setup-intent", async (req, res) => {
       payment_method_types: ["card"]
     });
 
-    res.json({
-      clientSecret: intent.client_secret
-    });
+    res.json({ clientSecret: intent.client_secret });
 
   } catch (err) {
     console.error(err);
@@ -186,7 +196,7 @@ app.post("/api/create-setup-intent", async (req, res) => {
   }
 });
 
-/* ================= SERVER START ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 10000;
 
 server.listen(PORT, "0.0.0.0", () => {
