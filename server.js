@@ -26,8 +26,6 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-const PORT = process.env.PORT || 10000;
-
 /* ================= STRIPE ================= */
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
@@ -38,7 +36,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= ADMIN ROUTES FIRST ================= */
+/* ================= ADMIN ROUTES (IMPORTANT FIRST) ================= */
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -50,7 +48,12 @@ app.get("/admin/dashboard", (req, res) => {
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= MODEL ================= */
+/* ================= HOME ROUTE ================= */
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/index.html"));
+});
+
+/* ================= BOOKING MODEL ================= */
 const Booking = mongoose.model(
   "Booking",
   new mongoose.Schema({
@@ -69,7 +72,7 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= SOCKET ================= */
+/* ================= SOCKET LIVE ================= */
 io.on("connection", async (socket) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
   socket.emit("init-bookings", bookings);
@@ -81,7 +84,7 @@ app.get("/api/bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= CREATE BOOKING (FIXED) ================= */
+/* ================= CREATE BOOKING ================= */
 app.post("/api/book", async (req, res) => {
   try {
     console.log("📥 Incoming booking:", req.body);
@@ -99,8 +102,6 @@ app.post("/api/book", async (req, res) => {
       paymentStatus: "PENDING"
     });
 
-    console.log("✅ Booking saved:", newBooking._id);
-
     io.emit("new-booking", newBooking);
 
     res.json({
@@ -110,7 +111,6 @@ app.post("/api/book", async (req, res) => {
 
   } catch (err) {
     console.error("❌ BOOKING ERROR:", err);
-
     res.status(500).json({
       success: false,
       error: err.message
@@ -141,7 +141,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
         }
       ],
       customer_email: email,
-      success_url: `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
+      success_url:
+        `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
       cancel_url: `${process.env.BASE_URL}/cancel.html`,
       metadata: { bookingId }
     });
@@ -171,6 +172,9 @@ app.get("/api/verify-payment", async (req, res) => {
       );
 
       io.emit("payment-updated", booking);
+
+      /* 🔥 EMAIL AFTER PAYMENT */
+      sendEmail(booking, "paid").catch(console.error);
 
       return res.json({ success: true });
     }
@@ -211,7 +215,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= START SERVER ================= */
+/* ================= DATABASE + SERVER START (FIXED SAFE MODE) ================= */
 mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true
@@ -219,10 +223,18 @@ mongoose.connect(process.env.MONGO_URI, {
 .then(() => {
   console.log("MongoDB Connected ✅");
 
+  const PORT = process.env.PORT || 10000;
+
   server.listen(PORT, "0.0.0.0", () => {
     console.log("Server running on", PORT);
   });
 })
 .catch(err => {
   console.error("MongoDB error ❌", err);
+
+  const PORT = process.env.PORT || 10000;
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log("Server running WITHOUT DB (SAFE MODE)");
+  });
 });
