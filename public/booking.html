@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -19,14 +20,11 @@ let selectedDate = null;
 let bookings = [];
 let calendar;
 
-/* ================= SAFE LOAD BOOKINGS (FIXED) ================= */
+/* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
-
   try {
-
     const res = await fetch(API + "/public-bookings");
 
-    /* 🔥 SAFETY FIX */
     if (!res.ok) {
       console.error("API FAILED:", await res.text());
       bookings = [];
@@ -87,33 +85,7 @@ const servicePrices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= PAY NOW (STRIPE FUNCTION ADDED) ================= */
-async function payNow() {
-
-  const res = await fetch(API + "/create-checkout-session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      service: document.getElementById("service").value,
-      total: Number(document.getElementById("totalPrice").innerText.replace("$", "")),
-      customer: {
-        name: document.getElementById("name").value,
-        email: document.getElementById("email").value
-      }
-    })
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    console.error(data);
-    return alert(data.error);
-  }
-
-  window.location.href = data.url;
-}
-
-/* ================= BOOK SYSTEM ================= */
+/* ================= BOOK SYSTEM (FIXED) ================= */
 async function bookNow(paymentType) {
 
   if (!selectedDate) {
@@ -136,22 +108,55 @@ async function bookNow(paymentType) {
     paymentType
   };
 
-  const res = await fetch(API + "/book", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
-
-  const result = await res.json();
-
-  if (!res.ok) {
-    return alert(result.error || "Booking failed");
+  if (!data.name || !data.email || !data.timeSlot || !service) {
+    return alert("Please fill all required fields");
   }
 
-  if (paymentType === "pay_now") {
-    window.location.href = "/payment.html?bookingId=" + result.bookingId;
-  } else {
-    alert("Booking saved (Pay Later selected)");
+  try {
+
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      return alert(result.error || "Booking failed");
+    }
+
+    /* 🔥 PAY NOW FLOW (STRIPE AFTER BOOKING) */
+    if (paymentType === "pay_now") {
+
+      const stripeRes = await fetch(API + "/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          service,
+          total,
+          customer: {
+            name: data.name,
+            email: data.email
+          }
+        })
+      });
+
+      const stripeData = await stripeRes.json();
+
+      if (!stripeRes.ok) {
+        return alert(stripeData.error || "Stripe failed");
+      }
+
+      window.location.href = stripeData.url;
+
+    } else {
+      alert("Booking saved (Pay Later selected) ✅");
+    }
+
+  } catch (err) {
+    console.error(err);
+    alert("Error: " + err.message);
   }
 }
 
@@ -195,8 +200,8 @@ async function bookNow(paymentType) {
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<!-- BUTTONS -->
-<button class="btn primary" onclick="payNow()">
+<!-- ✅ FIXED BUTTONS -->
+<button class="btn primary" onclick="bookNow('pay_now')">
 💳 Pay Now (Stripe)
 </button>
 
@@ -210,3 +215,4 @@ async function bookNow(paymentType) {
 
 </body>
 </html>
+```

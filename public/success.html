@@ -1,21 +1,16 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Booking Confirmed</title>
 
-
 <link rel="stylesheet" href="css/success.css">
-
 </head>
 
 <body>
 
 <div class="wrapper">
-
-  <!-- ✅ SUCCESS HEADER -->
 
   <div class="success-header">
     <div class="checkmark">✔</div>
@@ -23,64 +18,57 @@
     <p>Thank you for choosing DMV Cleaning Services</p>
   </div>
 
-  <!-- ✅ CARD -->
-
   <div class="card">
 
-```
-<div class="top">
-  <h2>🧼 DMV Cleaning Services LLC</h2>
-  <p>📞 703-967-0674</p>
-</div>
+    <div class="top">
+      <h2>🧼 DMV Cleaning Services LLC</h2>
+      <p>📞 703-967-0674</p>
+    </div>
 
-<div class="details">
+    <div class="details">
 
-  <div class="row">
-    <span>Booking ID</span>
-    <b id="bookingId"></b>
-  </div>
+      <div class="row">
+        <span>Booking ID</span>
+        <b id="bookingId"></b>
+      </div>
 
-  <div class="row">
-    <span>Status</span>
-    <b id="status" class="status"></b>
-  </div>
+      <div class="row">
+        <span>Status</span>
+        <b id="status" class="status"></b>
+      </div>
 
-  <div class="divider"></div>
+      <div class="divider"></div>
 
-  <div class="row"><span>Name</span><b id="name"></b></div>
-  <div class="row"><span>Email</span><b id="email"></b></div>
-  <div class="row"><span>Phone</span><b id="phone"></b></div>
+      <div class="row"><span>Name</span><b id="name"></b></div>
+      <div class="row"><span>Email</span><b id="email"></b></div>
+      <div class="row"><span>Phone</span><b id="phone"></b></div>
 
-  <div class="divider"></div>
+      <div class="divider"></div>
 
-  <div class="row"><span>Service</span><b id="service"></b></div>
-  <div class="row"><span>Date</span><b id="date"></b></div>
-  <div class="row"><span>Time</span><b id="time"></b></div>
+      <div class="row"><span>Service</span><b id="service"></b></div>
+      <div class="row"><span>Date</span><b id="date"></b></div>
+      <div class="row"><span>Time</span><b id="time"></b></div>
 
-</div>
+    </div>
 
-<!-- ✅ PRICE BOX -->
-<div class="price-box">
-  <p>Total Due Amount</p>
-  <h2>$<span id="total">0</span></h2>
-</div>
+    <div class="price-box">
+      <p>Total Due Amount</p>
+      <h2>$<span id="total">0</span></h2>
+    </div>
 
-<!-- ✅ NEXT STEPS (ADDED HERE) -->
-<div class="next-steps">
-  <h3>What Happens Next?</h3>
-  <ul>
-    <li>✔ Our team will contact you shortly</li>
-    <li>✔ Please be available at your scheduled time</li>
-    <li>✔ Prepare access to your home</li>
-  </ul>
-</div>
+    <div class="next-steps">
+      <h3>What Happens Next?</h3>
+      <ul>
+        <li>✔ Our team will contact you shortly</li>
+        <li>✔ Please be available at your scheduled time</li>
+        <li>✔ Prepare access to your home</li>
+      </ul>
+    </div>
 
-<!-- ✅ ACTION BUTTONS -->
-<div class="actions">
-  <a href="index.html" class="btn">🏠 Back Home</a>
-  <a href="tel:7039670674" class="btn outline">📞 Call Us</a>
-</div>
-```
+    <div class="actions">
+      <a href="index.html" class="btn">🏠 Back Home</a>
+      <a href="tel:7039670674" class="btn outline">📞 Call Us</a>
+    </div>
 
   </div>
 
@@ -97,14 +85,15 @@ async function loadBooking() {
     const res = await fetch(API + "/public-bookings");
     const bookings = await res.json();
 
-    const booking = bookings.find(b => b.id == bookingId);
+    // ✅ FIXED: MongoDB uses _id
+    const booking = bookings.find(b => b._id === bookingId);
 
     if (!booking) {
       document.body.innerHTML = "<h2>❌ Booking Not Found</h2>";
       return;
     }
 
-    document.getElementById("bookingId").innerText = booking.id;
+    document.getElementById("bookingId").innerText = booking._id;
     document.getElementById("status").innerText = booking.status;
     document.getElementById("name").innerText = booking.name;
     document.getElementById("email").innerText = booking.email;
@@ -112,8 +101,6 @@ async function loadBooking() {
     document.getElementById("service").innerText = booking.service;
     document.getElementById("date").innerText = booking.date;
     document.getElementById("time").innerText = booking.timeSlot;
-
-    /* ✅ FIXED TOTAL */
     document.getElementById("total").innerText = booking.total || 0;
 
   } catch (err) {
