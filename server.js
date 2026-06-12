@@ -5,9 +5,6 @@ const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const nodemailer = require("nodemailer");
-const PDFDocument = require("pdfkit");
-const cron = require("node-cron");
 const jwt = require("jsonwebtoken");
 const Stripe = require("stripe");
 
@@ -26,7 +23,14 @@ const stripe = process.env.STRIPE_SECRET_KEY
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public")); // ✅ IMPORTANT (fixes /admin/login.html issue)
+
+/* 🔥 REQUIRED (STATIC FILES) */
+app.use(express.static("public"));
+
+/* ================= HOME ROUTE (REQUIRED FIX) ================= */
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/public/index.html");
+});
 
 /* ================= ADMIN ================= */
 const ADMIN_USER = "admin";
@@ -34,18 +38,21 @@ const ADMIN_PASS = "123456";
 const JWT_SECRET = "dmv_secret";
 
 /* ================= MODEL ================= */
-const Booking = mongoose.model("Booking", new mongoose.Schema({
-  name: String,
-  email: String,
-  phone: String,
-  address: String,
-  date: String,
-  timeSlot: String,
-  service: String,
-  total: Number,
-  status: { type: String, default: "UNPAID" },
-  createdAt: { type: Date, default: Date.now }
-}));
+const Booking = mongoose.model(
+  "Booking",
+  new mongoose.Schema({
+    name: String,
+    email: String,
+    phone: String,
+    address: String,
+    date: String,
+    timeSlot: String,
+    service: String,
+    total: Number,
+    status: { type: String, default: "UNPAID" },
+    createdAt: { type: Date, default: Date.now }
+  })
+);
 
 /* ================= DB EVENTS ================= */
 mongoose.connection.on("connected", () => {
@@ -59,12 +66,23 @@ mongoose.connection.on("error", (err) => {
 /* ================= SAFE DB CHECK ================= */
 async function ensureDB(req, res, next) {
   if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({
-      error: "Database not ready, try again"
-    });
+    return res.status(503).json({ error: "Database not ready" });
   }
   next();
 }
+
+/* ================= ADMIN ROUTES ================= */
+app.get("/admin", (req, res) => {
+  res.sendFile(__dirname + "/public/admin/login.html");
+});
+
+app.get("/admin/login.html", (req, res) => {
+  res.sendFile(__dirname + "/public/admin/login.html");
+});
+
+app.get("/admin/dashboard.html", (req, res) => {
+  res.sendFile(__dirname + "/public/admin/dashboard.html");
+});
 
 /* ================= SOCKET ================= */
 io.on("connection", async (socket) => {
@@ -80,11 +98,7 @@ app.get("/api/public-bookings", async (req, res) => {
 
 /* ================= BOOKING API ================= */
 app.post("/api/book", ensureDB, async (req, res) => {
-
   try {
-
-    console.log("BOOK REQUEST BODY:", req.body);
-
     const {
       name,
       email,
@@ -97,14 +111,10 @@ app.post("/api/book", ensureDB, async (req, res) => {
     } = req.body;
 
     if (!name || !email || !date || !timeSlot || !service) {
-      return res.status(400).json({
-        error: "Missing required fields"
-      });
+      return res.status(400).json({ error: "Missing required fields" });
     }
 
-    /* AUTO PRICING */
     let total = 0;
-
     if (service === "Home Cleaning") total = 120;
     if (service === "Deep Cleaning") total = 200;
     if (service === "Office Cleaning") total = 150;
@@ -125,22 +135,17 @@ app.post("/api/book", ensureDB, async (req, res) => {
     io.emit("new-booking", booking);
     io.emit("update-slots", await Booking.find());
 
-    res.json({
-      success: true,
-      bookingId: booking._id
-    });
+    res.json({ success: true, bookingId: booking._id });
 
   } catch (err) {
-    console.error("BOOK ERROR FULL:", err);
-    res.status(500).json({ error: err.message || "Server error" });
+    console.error("BOOK ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 /* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
-
   try {
-
     if (!stripe) {
       return res.status(500).json({ error: "Stripe not configured" });
     }
@@ -155,16 +160,18 @@ app.post("/api/create-checkout-session", async (req, res) => {
       payment_method_types: ["card"],
       mode: "payment",
 
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: {
-            name: service || "Cleaning Service"
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: service
+            },
+            unit_amount: Math.round(total * 100)
           },
-          unit_amount: Math.round(total * 100)
-        },
-        quantity: 1
-      }],
+          quantity: 1
+        }
+      ],
 
       customer_email: customer.email,
 
@@ -182,22 +189,22 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
 /* ================= ADMIN LOGIN ================= */
 app.post("/api/admin-login", (req, res) => {
-
   const { username, password } = req.body;
 
   if (username === ADMIN_USER && password === ADMIN_PASS) {
-    const token = jwt.sign({ admin: true }, JWT_SECRET, { expiresIn: "1d" });
+    const token = jwt.sign({ admin: true }, JWT_SECRET, {
+      expiresIn: "1d"
+    });
+
     return res.json({ token });
   }
 
   res.status(401).json({ error: "Invalid login" });
 });
 
-/* ================= STRIPE SETUP INTENT ================= */
+/* ================= STRIPE SETUP ================= */
 app.post("/api/create-setup-intent", async (req, res) => {
-
   try {
-
     if (!stripe) {
       return res.status(500).json({ error: "Stripe not configured" });
     }
@@ -214,11 +221,9 @@ app.post("/api/create-setup-intent", async (req, res) => {
   }
 });
 
-/* ================= STRIPE DB START ================= */
+/* ================= ONLY ONE START FUNCTION ================= */
 async function startServer() {
-
   try {
-
     await mongoose.connect(process.env.MONGO_URI, {
       serverSelectionTimeoutMS: 5000
     });
