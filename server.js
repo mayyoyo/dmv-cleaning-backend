@@ -1,4 +1,4 @@
-require("dotenv").config();
+require("dotenv").config(); // ✅ LOAD ENV FIRST
 
 const express = require("express");
 const mongoose = require("mongoose");
@@ -16,6 +16,12 @@ const io = new Server(server, { cors: { origin: "*" } });
 /* ================= ENV ================= */
 const PORT = process.env.PORT || 10000;
 
+// ❗ Prevent crash if MONGO_URI missing
+if (!process.env.MONGO_URI) {
+  console.error("❌ MONGO_URI is missing in environment variables");
+  process.exit(1);
+}
+
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
@@ -23,11 +29,9 @@ const stripe = process.env.STRIPE_SECRET_KEY
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public")); // ✅ serves admin + frontend
 
-/* 🔥 REQUIRED (STATIC FILES) */
-app.use(express.static("public"));
-
-/* ================= HOME ROUTE (REQUIRED FIX) ================= */
+/* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(__dirname + "/public/index.html");
 });
@@ -35,7 +39,7 @@ app.get("/", (req, res) => {
 /* ================= ADMIN ================= */
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "123456";
-const JWT_SECRET = "dmv_secret";
+const JWT_SECRET = process.env.JWT_SECRET || "dmv_secret";
 
 /* ================= MODEL ================= */
 const Booking = mongoose.model(
@@ -53,23 +57,6 @@ const Booking = mongoose.model(
     createdAt: { type: Date, default: Date.now }
   })
 );
-
-/* ================= DB EVENTS ================= */
-mongoose.connection.on("connected", () => {
-  console.log("MongoDB connection ready ✅");
-});
-
-mongoose.connection.on("error", (err) => {
-  console.error("MongoDB error ❌", err);
-});
-
-/* ================= SAFE DB CHECK ================= */
-async function ensureDB(req, res, next) {
-  if (mongoose.connection.readyState !== 1) {
-    return res.status(503).json({ error: "Database not ready" });
-  }
-  next();
-}
 
 /* ================= ADMIN ROUTES ================= */
 app.get("/admin", (req, res) => {
@@ -96,7 +83,15 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(bookings);
 });
 
-/* ================= BOOKING API ================= */
+/* ================= SAFE DB CHECK ================= */
+function ensureDB(req, res, next) {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ error: "Database not ready" });
+  }
+  next();
+}
+
+/* ================= BOOKING ================= */
 app.post("/api/book", ensureDB, async (req, res) => {
   try {
     const {
@@ -111,7 +106,7 @@ app.post("/api/book", ensureDB, async (req, res) => {
     } = req.body;
 
     if (!name || !email || !date || !timeSlot || !service) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return res.status(400).json({ error: "Missing fields" });
     }
 
     let total = 0;
@@ -135,15 +130,15 @@ app.post("/api/book", ensureDB, async (req, res) => {
     io.emit("new-booking", booking);
     io.emit("update-slots", await Booking.find());
 
-    res.json({ success: true, bookingId: booking._id });
+    res.json({ success: true });
 
   } catch (err) {
-    console.error("BOOK ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= STRIPE ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     if (!stripe) {
@@ -152,37 +147,28 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
     const { service, total, customer } = req.body;
 
-    if (!service || !total || !customer) {
-      return res.status(400).json({ error: "Missing checkout data" });
-    }
-
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
-
       line_items: [
         {
           price_data: {
             currency: "usd",
-            product_data: {
-              name: service
-            },
+            product_data: { name: service },
             unit_amount: Math.round(total * 100)
           },
           quantity: 1
         }
       ],
-
       customer_email: customer.email,
-
-      success_url: "https://dmv-cleaning-backend.onrender.com/success.html",
-      cancel_url: "https://dmv-cleaning-backend.onrender.com/cancel.html"
+      success_url: `${req.headers.origin}/success.html`,
+      cancel_url: `${req.headers.origin}/cancel.html`
     });
 
     res.json({ url: session.url });
 
   } catch (err) {
-    console.error("STRIPE ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -195,48 +181,21 @@ app.post("/api/admin-login", (req, res) => {
     const token = jwt.sign({ admin: true }, JWT_SECRET, {
       expiresIn: "1d"
     });
-
     return res.json({ token });
   }
 
   res.status(401).json({ error: "Invalid login" });
 });
 
-/* ================= STRIPE SETUP ================= */
-app.post("/api/create-setup-intent", async (req, res) => {
-  try {
-    if (!stripe) {
-      return res.status(500).json({ error: "Stripe not configured" });
-    }
-
-    const intent = await stripe.setupIntents.create({
-      payment_method_types: ["card"]
-    });
-
-    res.json({ clientSecret: intent.client_secret });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Stripe error" });
-  }
-});
-
-/* ================= ONLY ONE START FUNCTION ================= */
-async function startServer() {
-  try {
-    await mongoose.connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 5000
-    });
-
-    console.log("MongoDB Connected (FINAL FIX) ✅");
+/* ================= START SERVER ================= */
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => {
+    console.log("MongoDB Connected ✅");
 
     server.listen(PORT, "0.0.0.0", () => {
       console.log("Server running on", PORT);
     });
-
-  } catch (err) {
-    console.error("❌ MongoDB connection failed:", err);
-  }
-}
-
-startServer();
+  })
+  .catch(err => {
+    console.error("MongoDB error ❌", err);
+  });
