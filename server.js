@@ -63,7 +63,6 @@ app.post(
         );
 
         sendEmail(booking, "paid").catch(console.error);
-
         io.emit("payment-updated", booking);
       }
     }
@@ -77,7 +76,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= 🔥 ADMIN ROUTES FIRST ================= */
+/* ================= ADMIN ROUTES FIRST ================= */
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -127,15 +126,25 @@ app.get("/api/bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= CREATE BOOKING (FIXED) ================= */
+/* ================= CREATE BOOKING (FINAL FIX) ================= */
 app.post("/api/book", async (req, res) => {
   try {
     console.log("📥 Incoming booking:", req.body);
 
     const newBooking = await Booking.create({
-      ...req.body,
+      name: req.body.name || "N/A",
+      email: req.body.email || "N/A",
+      phone: req.body.phone || "N/A",
+      address: req.body.address || "N/A",
+      date: req.body.date || "",
+      timeSlot: req.body.timeSlot || "",
+      service: req.body.service || "",
+      total: req.body.total || 0,
+      paymentType: req.body.paymentType || "online",
       paymentStatus: "PENDING"
     });
+
+    console.log("✅ Booking saved:", newBooking._id);
 
     io.emit("new-booking", newBooking);
 
@@ -146,6 +155,7 @@ app.post("/api/book", async (req, res) => {
 
   } catch (err) {
     console.error("❌ BOOKING ERROR:", err);
+
     res.status(500).json({
       success: false,
       error: err.message
@@ -156,27 +166,29 @@ app.post("/api/book", async (req, res) => {
 /* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
+    }
+
     const { service, total, bookingId, email } = req.body;
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
-      line_items: [{
-        price_data: {
-          currency: "usd",
-          product_data: { name: service },
-          unit_amount: Math.round(total * 100)
-        },
-        quantity: 1
-      }],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: service },
+            unit_amount: Math.round(total * 100)
+          },
+          quantity: 1
+        }
+      ],
       customer_email: email,
-      success_url:
-        `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
-      cancel_url:
-        `${process.env.BASE_URL}/cancel.html`,
-      metadata: {
-        bookingId: bookingId
-      }
+      success_url: `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
+      cancel_url: `${process.env.BASE_URL}/cancel.html`,
+      metadata: { bookingId }
     });
 
     await Booking.findByIdAndUpdate(bookingId, {
@@ -204,6 +216,7 @@ app.get("/api/verify-payment", async (req, res) => {
       );
 
       io.emit("payment-updated", booking);
+
       return res.json({ success: true });
     }
 
@@ -251,7 +264,6 @@ mongoose.connect(process.env.MONGO_URI)
     server.listen(PORT, "0.0.0.0", () => {
       console.log("Server running on", PORT);
     });
-
   })
   .catch(err => {
     console.error(err);
