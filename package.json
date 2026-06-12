@@ -18,12 +18,24 @@
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^8.24.0",
     "node-cron": "^4.2.1",
-    "nodemailer": "^6.9.8",
+    "nodemailer": "^8.0.11",
     "openai": "^6.42.0",
     "path": "^0.12.7",
-    "pdfkit": "^0.19.0",
+    "pdfkit": "^0.19.1",
     "resend": "^6.12.4",
     "socket.io": "^4.8.3",
     "stripe": "^22.2.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mayyoyo/dmv-cleaning-backend.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mayyoyo/dmv-cleaning-backend/issues"
+  },
+  "homepage": "https://github.com/mayyoyo/dmv-cleaning-backend#readme"
 }

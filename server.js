@@ -9,15 +9,16 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 const Stripe = require("stripe");
+const PDFDocument = require("pdfkit");
 
-/* ================= EMAIL IMPORT (SAFE CLEAN FIX) ================= */
+/* ================= EMAIL IMPORT (SAFE FIX) ================= */
 let sendEmail = () => Promise.resolve();
 
 try {
-  const gmail = require("./gmail");
-  sendEmail = gmail.sendEmail || sendEmail;
+  const email = require("./email");
+  sendEmail = email.sendEmail || sendEmail;
 } catch (e) {
-  console.log("⚠️ gmail.js not found — email disabled");
+  console.log("⚠️ email.js not found — email disabled");
 }
 
 /* ================= APP INIT ================= */
@@ -37,7 +38,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* 🔥 STATIC FILES (IMPORTANT) */
+/* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= ROUTES ================= */
@@ -57,7 +58,7 @@ app.get("/admin/dashboard.html", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= BOOKING MODEL ================= */
+/* ================= MODEL ================= */
 const Booking = mongoose.model(
   "Booking",
   new mongoose.Schema({
@@ -79,7 +80,7 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= SOCKET LIVE ADMIN ================= */
+/* ================= SOCKET ================= */
 io.on("connection", async (socket) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
   socket.emit("init-bookings", bookings);
@@ -99,10 +100,8 @@ app.post("/api/book", async (req, res) => {
       paymentStatus: "PENDING"
     });
 
-    /* 🔥 LIVE UPDATE ADMIN */
     io.emit("new-booking", newBooking);
 
-    /* 🔥 EMAIL SEND */
     sendEmail(newBooking, "received").catch(console.error);
 
     res.json({
@@ -111,44 +110,12 @@ app.post("/api/book", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("BOOK ERROR:", err);
+    console.error(err);
     res.status(500).json({ success: false });
   }
 });
 
-/* ================= UPDATE STATUS ================= */
-app.put("/api/bookings/:id/status", async (req, res) => {
-  try {
-    const updated = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { paymentStatus: req.body.status },
-      { new: true }
-    );
-
-    io.emit("payment-updated", updated);
-
-    res.json(updated);
-
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ================= DELETE BOOKING ================= */
-app.delete("/api/bookings/:id", async (req, res) => {
-  try {
-    await Booking.findByIdAndDelete(req.params.id);
-
-    io.emit("booking-deleted", req.params.id);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ================= STRIPE ================= */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     if (!stripe) {
@@ -176,7 +143,11 @@ app.post("/api/create-checkout-session", async (req, res) => {
         `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
 
       cancel_url:
-        `${process.env.BASE_URL}/cancel.html`
+        `${process.env.BASE_URL}/cancel.html`,
+
+      metadata: {
+        bookingId: bookingId
+      }
     });
 
     await Booking.findByIdAndUpdate(bookingId, {
@@ -186,10 +157,53 @@ app.post("/api/create-checkout-session", async (req, res) => {
     res.json({ url: session.url });
 
   } catch (err) {
-    console.error("STRIPE ERROR:", err);
+    console.error(err);
     res.status(500).json({ error: "Stripe error" });
   }
 });
+
+/* ================= STRIPE WEBHOOK ================= */
+app.post(
+  "/api/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        req.headers["stripe-signature"],
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("Webhook Error:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === "checkout.session.completed") {
+
+      const session = event.data.object;
+      const bookingId = session.metadata?.bookingId;
+
+      if (bookingId) {
+
+        const booking = await Booking.findByIdAndUpdate(
+          bookingId,
+          { paymentStatus: "PAID" },
+          { new: true }
+        );
+
+        /* 🔥 SEND PAID EMAIL */
+        sendEmail(booking, "paid").catch(console.error);
+
+        io.emit("payment-updated", booking);
+      }
+    }
+
+    res.json({ received: true });
+  }
+);
 
 /* ================= VERIFY PAYMENT ================= */
 app.get("/api/verify-payment", async (req, res) => {
@@ -217,6 +231,35 @@ app.get("/api/verify-payment", async (req, res) => {
   }
 });
 
+/* ================= INVOICE PDF ================= */
+app.get("/api/invoice/:id", async (req, res) => {
+
+  const booking = await Booking.findById(req.params.id);
+
+  if (!booking) {
+    return res.status(404).send("Booking not found");
+  }
+
+  const doc = new PDFDocument();
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=invoice.pdf");
+
+  doc.pipe(res);
+
+  doc.fontSize(20).text("DMV Cleaning Services Invoice", { align: "center" });
+  doc.moveDown();
+
+  doc.fontSize(14).text(`Name: ${booking.name}`);
+  doc.text(`Service: ${booking.service}`);
+  doc.text(`Date: ${booking.date}`);
+  doc.text(`Time: ${booking.timeSlot}`);
+  doc.text(`Total: $${booking.total}`);
+  doc.text(`Status: ${booking.paymentStatus}`);
+
+  doc.end();
+});
+
 /* ================= START SERVER ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
@@ -228,7 +271,7 @@ mongoose.connect(process.env.MONGO_URI)
 
   })
   .catch(err => {
-    console.error("MongoDB error ❌", err);
+    console.error(err);
 
     server.listen(PORT, "0.0.0.0", () => {
       console.log("Server running WITHOUT DB");
