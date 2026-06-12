@@ -1,42 +1,27 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Login</title>
-<link rel="stylesheet" href="/admin/admin-login.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login</title>
+
+  <!-- CSS -->
+  <link rel="stylesheet" href="/admin/css/login.css">
 </head>
 
 <body>
 
-<div class="login-box">
-  <h2>Admin Login</h2>
+  <div class="box">
+    <h2>Admin Login</h2>
 
-  <input id="u" placeholder="Username">
-  <input id="p" type="password" placeholder="Password">
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
 
-  <button onclick="login()">Login</button>
-</div>
+    <button onclick="login()">Login</button>
+  </div>
 
-<script>
-async function login() {
-  const res = await fetch("/api/admin-login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: u.value,
-      password: p.value
-    })
-  });
-
-  const data = await res.json();
-
-  if (!data.token) return alert("Wrong login");
-
-  localStorage.setItem("token", data.token);
-  window.location.href = "/admin/dashboard.html";
-}
-</script>
+  <!-- JS PATH FIXED -->
+  <script src="/admin/js/admin-login.js"></script>
 
 </body>
 </html>
