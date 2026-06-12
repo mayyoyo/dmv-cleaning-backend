@@ -11,21 +11,22 @@ const cron = require("node-cron");
 const jwt = require("jsonwebtoken");
 const Stripe = require("stripe");
 
+/* ================= APP INIT ================= */
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
 /* ================= ENV ================= */
+const PORT = process.env.PORT || 10000;
+
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-const PORT = process.env.PORT || 10000;
-
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static("public")); // ✅ IMPORTANT (fixes /admin/login.html issue)
 
 /* ================= ADMIN ================= */
 const ADMIN_USER = "admin";
@@ -55,12 +56,6 @@ mongoose.connection.on("error", (err) => {
   console.error("MongoDB error ❌", err);
 });
 
-/* ================= SOCKET ================= */
-io.on("connection", async (socket) => {
-  const bookings = await Booking.find();
-  socket.emit("init-bookings", bookings);
-});
-
 /* ================= SAFE DB CHECK ================= */
 async function ensureDB(req, res, next) {
   if (mongoose.connection.readyState !== 1) {
@@ -70,6 +65,12 @@ async function ensureDB(req, res, next) {
   }
   next();
 }
+
+/* ================= SOCKET ================= */
+io.on("connection", async (socket) => {
+  const bookings = await Booking.find();
+  socket.emit("init-bookings", bookings);
+});
 
 /* ================= PUBLIC BOOKINGS ================= */
 app.get("/api/public-bookings", async (req, res) => {
@@ -213,8 +214,9 @@ app.post("/api/create-setup-intent", async (req, res) => {
   }
 });
 
-/* ================= SAFE SERVER START ================= */
+/* ================= STRIPE DB START ================= */
 async function startServer() {
+
   try {
 
     await mongoose.connect(process.env.MONGO_URI, {
