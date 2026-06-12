@@ -10,8 +10,15 @@ const http = require("http");
 const { Server } = require("socket.io");
 const Stripe = require("stripe");
 
-/* ================= EMAIL + WHATSAPP ================= */
-const { sendEmail, sendWhatsApp } = require("./gmail");
+/* ================= EMAIL IMPORT (SAFE CLEAN FIX) ================= */
+let sendEmail = () => Promise.resolve();
+
+try {
+  const gmail = require("./gmail");
+  sendEmail = gmail.sendEmail || sendEmail;
+} catch (e) {
+  console.log("⚠️ gmail.js not found — email disabled");
+}
 
 /* ================= APP INIT ================= */
 const app = express();
@@ -30,28 +37,27 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* 🔥 STATIC FILES (REQUIRED FIX) */
+/* 🔥 STATIC FILES (IMPORTANT) */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HOME ================= */
+/* ================= ROUTES ================= */
+
+// HOME
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN ROUTES ================= */
+// ADMIN LOGIN
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
 
-app.get("/admin/login.html", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/login.html"));
-});
-
+// ADMIN DASHBOARD
 app.get("/admin/dashboard.html", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= MODEL ================= */
+/* ================= BOOKING MODEL ================= */
 const Booking = mongoose.model(
   "Booking",
   new mongoose.Schema({
@@ -79,7 +85,7 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= PUBLIC API ================= */
+/* ================= GET BOOKINGS ================= */
 app.get("/api/bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
@@ -93,12 +99,11 @@ app.post("/api/book", async (req, res) => {
       paymentStatus: "PENDING"
     });
 
-    /* 🔥 LIVE ADMIN UPDATE */
+    /* 🔥 LIVE UPDATE ADMIN */
     io.emit("new-booking", newBooking);
 
-    /* 🔥 EMAIL + WHATSAPP (NON BLOCKING) */
+    /* 🔥 EMAIL SEND */
     sendEmail(newBooking, "received").catch(console.error);
-    sendWhatsApp(newBooking).catch(console.error);
 
     res.json({
       success: true,
@@ -111,10 +116,44 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= UPDATE STATUS ================= */
+app.put("/api/bookings/:id/status", async (req, res) => {
+  try {
+    const updated = await Booking.findByIdAndUpdate(
+      req.params.id,
+      { paymentStatus: req.body.status },
+      { new: true }
+    );
+
+    io.emit("payment-updated", updated);
+
+    res.json(updated);
+
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= DELETE BOOKING ================= */
+app.delete("/api/bookings/:id", async (req, res) => {
+  try {
+    await Booking.findByIdAndDelete(req.params.id);
+
+    io.emit("booking-deleted", req.params.id);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= STRIPE ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
-    if (!stripe) return res.status(500).json({ error: "Stripe not configured" });
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
+    }
 
     const { service, total, bookingId, email } = req.body;
 
@@ -133,7 +172,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
       customer_email: email,
 
-      /* ✅ SUCCESS + CANCEL REDIRECT */
       success_url:
         `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
 
@@ -153,7 +191,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= PAYMENT VERIFICATION ================= */
+/* ================= VERIFY PAYMENT ================= */
 app.get("/api/verify-payment", async (req, res) => {
   try {
     const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
@@ -166,7 +204,6 @@ app.get("/api/verify-payment", async (req, res) => {
         { new: true }
       );
 
-      /* 🔥 REAL TIME ADMIN UPDATE */
       io.emit("payment-updated", booking);
 
       return res.json({ success: true });
@@ -180,37 +217,7 @@ app.get("/api/verify-payment", async (req, res) => {
   }
 });
 
-/* ================= DELETE BOOKING ================= */
-app.delete("/api/bookings/:id", async (req, res) => {
-  try {
-    await Booking.findByIdAndDelete(req.params.id);
-
-    io.emit("booking-deleted", req.params.id);
-
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ================= UPDATE BOOKING ================= */
-app.put("/api/bookings/:id", async (req, res) => {
-  try {
-    const updated = await Booking.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-
-    io.emit("booking-updated", updated);
-
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ================= DATABASE ================= */
+/* ================= START SERVER ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB Connected ✅");

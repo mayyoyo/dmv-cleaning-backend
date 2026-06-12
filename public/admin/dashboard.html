@@ -1,86 +1,145 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Admin Dashboard</title>
-
-<link rel="stylesheet" href="../css/admin.css">
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="./js/admin-dashboard.js" defer></script>
+<!-- <link rel="stylesheet" href="../css/admin.css"> -->
+<link rel="stylesheet" href="./css/admin-dashboard.css">
+<script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
 
-<header>
-  <div class="logo">Admin Panel</div>
-  <div class="hamburger" onclick="toggleMenu()">☰</div>
+<h1>🧼 Admin Dashboard</h1>
 
-  <nav id="menu">
-    <a href="#">Dashboard</a>
-    <a href="#" onclick="logout()">Logout</a>
-  </nav>
-</header>
+<div id="stats"></div>
 
-<main>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Service</th>
+      <th>Date</th>
+      <th>Status</th>
+      <th>Total</th>
+      <th>Actions</th>
+    </tr>
+  </thead>
 
-<h2>Revenue</h2>
-<canvas id="chart"></canvas>
-
-<h2>Bookings</h2>
-<div id="list"></div>
-
-</main>
+  <tbody id="tableBody"></tbody>
+</table>
 
 <script>
-const API = "/api";
+const socket = io();
+let bookings = [];
 
-function toggleMenu() {
-  document.getElementById("menu").classList.toggle("active");
-}
-
-function logout() {
-  localStorage.removeItem("token");
-  window.location.href = "/admin/login.html";
-}
-
+/* ================= LOAD ================= */
 async function load() {
-  const res = await fetch(API + "/public-bookings");
-  const data = await res.json();
+  const res = await fetch("/api/bookings");
+  bookings = await res.json();
+  render();
+}
 
-  let revenue = 0;
+/* ================= RENDER ================= */
+function render() {
 
-  document.getElementById("list").innerHTML =
-    data.map(b => {
-      revenue += b.total || 0;
+  const tbody = document.getElementById("tableBody");
+  tbody.innerHTML = "";
 
-      return `
-      <div class="card">
-        <p>${b.name} - ${b.service}</p>
-        <p>$${b.total}</p>
+  let total = 0;
 
-        <button onclick="del('${b._id}')">Delete</button>
-      </div>`;
-    }).join("");
+  bookings.forEach(b => {
 
-  new Chart(document.getElementById("chart"), {
-    type: "bar",
-    data: {
-      labels: ["Revenue"],
-      datasets: [{
-        label: "Total",
-        data: [revenue],
-        backgroundColor: "#00c3ff"
-      }]
-    }
+    total += b.total || 0;
+
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${b.name}</td>
+      <td>${b.service}</td>
+      <td>${b.date}</td>
+
+      <td>
+        <span class="badge ${b.paymentStatus}">
+          ${b.paymentStatus}
+        </span>
+      </td>
+
+      <td>$${b.total}</td>
+
+      <td>
+        <button onclick="markPaid('${b._id}')">✔ Paid</button>
+        <button onclick="deleteBooking('${b._id}')">❌ Delete</button>
+        <button onclick="downloadInvoice('${b._id}')">📄 Invoice</button>
+      </td>
+    `;
+
+    tbody.appendChild(row);
+  });
+
+  document.getElementById("stats").innerHTML =
+    `<h3>Total Bookings: ${bookings.length} | Income: $${total}</h3>`;
+}
+
+/* ================= SOCKET LIVE ================= */
+socket.on("init-bookings", (data) => {
+  bookings = data;
+  render();
+});
+
+socket.on("new-booking", (b) => {
+  bookings.unshift(b);
+  render();
+});
+
+socket.on("payment-updated", (b) => {
+  const i = bookings.findIndex(x => x._id === b._id);
+  if (i !== -1) bookings[i] = b;
+  render();
+});
+
+socket.on("booking-deleted", (id) => {
+  bookings = bookings.filter(b => b._id !== id);
+  render();
+});
+
+/* ================= ACTIONS ================= */
+async function markPaid(id) {
+  await fetch(`/api/bookings/${id}/status`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ status: "PAID" })
   });
 }
 
-async function del(id) {
-  await fetch(API + "/delete-booking/" + id, { method: "DELETE" });
-  load();
+async function deleteBooking(id) {
+  await fetch(`/api/bookings/${id}`, {
+    method: "DELETE"
+  });
+}
+
+/* ================= INVOICE ================= */
+function downloadInvoice(id) {
+
+  const b = bookings.find(x => x._id === id);
+  if (!b) return;
+
+  const win = window.open("", "", "width=800,height=600");
+
+  win.document.write(`
+    <html>
+    <body>
+      <h1>Invoice</h1>
+      <p>Name: ${b.name}</p>
+      <p>Service: ${b.service}</p>
+      <p>Date: ${b.date}</p>
+      <p>Status: ${b.paymentStatus}</p>
+      <p>Total: $${b.total}</p>
+      <script>
+        window.print();
+      </script>
+    </body>
+    </html>
+  `);
 }
 
 load();
