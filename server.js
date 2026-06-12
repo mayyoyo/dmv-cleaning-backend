@@ -15,10 +15,12 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
-/* ================= STRIPE ================= */
+/* ================= ENV ================= */
 const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
+
+const PORT = process.env.PORT || 10000;
 
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
@@ -29,11 +31,6 @@ app.use(express.static("public"));
 const ADMIN_USER = "admin";
 const ADMIN_PASS = "123456";
 const JWT_SECRET = "dmv_secret";
-
-/* ================= DATABASE ================= */
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log(err));
 
 /* ================= MODEL ================= */
 const Booking = mongoose.model("Booking", new mongoose.Schema({
@@ -49,11 +46,30 @@ const Booking = mongoose.model("Booking", new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 }));
 
+/* ================= DB EVENTS ================= */
+mongoose.connection.on("connected", () => {
+  console.log("MongoDB connection ready ✅");
+});
+
+mongoose.connection.on("error", (err) => {
+  console.error("MongoDB error ❌", err);
+});
+
 /* ================= SOCKET ================= */
 io.on("connection", async (socket) => {
   const bookings = await Booking.find();
   socket.emit("init-bookings", bookings);
 });
+
+/* ================= SAFE DB CHECK ================= */
+async function ensureDB(req, res, next) {
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({
+      error: "Database not ready, try again"
+    });
+  }
+  next();
+}
 
 /* ================= PUBLIC BOOKINGS ================= */
 app.get("/api/public-bookings", async (req, res) => {
@@ -61,8 +77,8 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(bookings);
 });
 
-/* ================= BOOK ================= */
-app.post("/api/book", async (req, res) => {
+/* ================= BOOKING API ================= */
+app.post("/api/book", ensureDB, async (req, res) => {
 
   try {
 
@@ -85,7 +101,7 @@ app.post("/api/book", async (req, res) => {
       });
     }
 
-    /* PRICE SYSTEM */
+    /* AUTO PRICING */
     let total = 0;
 
     if (service === "Home Cleaning") total = 120;
@@ -176,8 +192,9 @@ app.post("/api/admin-login", (req, res) => {
   res.status(401).json({ error: "Invalid login" });
 });
 
-/* ================= SETUP INTENT ================= */
+/* ================= STRIPE SETUP INTENT ================= */
 app.post("/api/create-setup-intent", async (req, res) => {
+
   try {
 
     if (!stripe) {
@@ -196,9 +213,23 @@ app.post("/api/create-setup-intent", async (req, res) => {
   }
 });
 
-/* ================= START SERVER ================= */
-const PORT = process.env.PORT || 10000;
+/* ================= SAFE SERVER START ================= */
+async function startServer() {
+  try {
 
-server.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on port", PORT);
-});
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 5000
+    });
+
+    console.log("MongoDB Connected (FINAL FIX) ✅");
+
+    server.listen(PORT, "0.0.0.0", () => {
+      console.log("Server running on", PORT);
+    });
+
+  } catch (err) {
+    console.error("❌ MongoDB connection failed:", err);
+  }
+}
+
+startServer();
