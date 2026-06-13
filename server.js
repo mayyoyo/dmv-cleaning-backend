@@ -27,7 +27,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= EMAIL FUNCTION ================= */
+/* ================= EMAIL ================= */
 async function sendConfirmationEmail(booking) {
   try {
     const transporter = nodemailer.createTransport({
@@ -104,15 +104,23 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN LOGIN ================= */
+/* =========================================================
+   🔥 ADMIN LOGIN ROUTE (FIXED EXACTLY AS REQUESTED)
+========================================================= */
 app.post("/admin-login", (req, res) => {
   const { username, password } = req.body || {};
 
   if (username === "admin" && password === "1234") {
-    return res.json({ success: true });
+    return res.json({
+      success: true,
+      token: "demo-token"
+    });
   }
 
-  return res.json({ success: false });
+  return res.status(401).json({
+    success: false,
+    error: "Invalid credentials"
+  });
 });
 
 /* ================= SOCKET ================= */
@@ -127,7 +135,7 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= BOOK SLOT ================= */
+/* ================= BOOKING ================= */
 app.post("/api/book", async (req, res) => {
   try {
     const count = await Booking.countDocuments({
@@ -176,7 +184,7 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= STRIPE ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     const { service, total, bookingId, email } = req.body;
@@ -184,7 +192,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
-
       line_items: [
         {
           price_data: {
@@ -195,12 +202,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
           quantity: 1
         }
       ],
-
       customer_email: email,
-
       success_url: `${BASE_URL}/success.html?bookingId=${bookingId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${BASE_URL}/booking.html`,
-
       metadata: { bookingId }
     });
 
@@ -216,14 +220,12 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= INVOICE PDF ================= */
+/* ================= INVOICE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
-
   if (!booking) return res.status(404).send("Not found");
 
   const doc = new PDFDocument();
-
   res.setHeader("Content-Type", "application/pdf");
   doc.pipe(res);
 
@@ -238,7 +240,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK ================= */
+/* ================= FALLBACK (LAST ROUTE - IMPORTANT) ================= */
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
@@ -247,7 +249,6 @@ app.use((req, res) => {
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
-
     console.log("MongoDB Connected ✅");
 
     const PORT = process.env.PORT || 10000;

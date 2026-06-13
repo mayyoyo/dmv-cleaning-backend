@@ -1,24 +1,25 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin Login</title>
+async function login() {
+  try {
+    const res = await fetch("/admin-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: document.getElementById("username").value,
+        password: document.getElementById("password").value
+      })
+    });
 
-  <link rel="stylesheet" href="/admin/css/admin-login.css">
-</head>
+    const data = await res.json();
 
-<body>
+    if (data.success) {
+      localStorage.setItem("token", data.token);
+      window.location.href = "/admin/dashboard.html";
+    } else {
+      alert(data.error || "Invalid login");
+    }
 
-  <div class="box">
-    <h2>Admin Login</h2>
-
-    <input id="username" placeholder="Username">
-    <input id="password" type="password" placeholder="Password">
-
-    <button id="loginBtn">Login</button>
-  </div>
-
-  <script src="/js/admin-login.js"></script>
-</body>
-</html>
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    alert("Server error");
+  }
+}
