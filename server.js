@@ -13,6 +13,9 @@ const PDFDocument = require("pdfkit");
 const BASE_URL =
   process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 
+/* ================= SLOT LIMIT ================= */
+const MAX_PER_SLOT = 3;
+
 /* ================= INIT ================= */
 const app = express();
 const server = http.createServer(app);
@@ -23,13 +26,45 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= EMAIL SAFE ================= */
-let sendEmail = async () => {};
-try {
-  const email = require("./email");
-  sendEmail = email.sendEmail;
-} catch {
-  console.log("⚠️ Email disabled");
+/* ================= EMAIL ================= */
+const nodemailer = require("nodemailer");
+
+async function sendConfirmationEmail(booking) {
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
+  const invoiceUrl = booking.invoiceUrl;
+
+  const mailOptions = {
+    from: process.env.EMAIL_USER,
+    to: booking.email,
+    subject: "🧼 Booking Confirmed - DMV Cleaning Services",
+    html: `
+      <h2>🧼 Booking Confirmed</h2>
+
+      <p><b>Name:</b> ${booking.name}</p>
+      <p><b>Service:</b> ${booking.service}</p>
+      <p><b>Date:</b> ${booking.date}</p>
+      <p><b>Time:</b> ${booking.timeSlot}</p>
+      <p><b>Total:</b> $${booking.total}</p>
+
+      <hr>
+
+      <p>📄 Invoice:</p>
+      <a href="${invoiceUrl}">${invoiceUrl}</a>
+
+      <hr>
+
+      <p>📞 703-967-0674</p>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
 }
 
 /* ================= MONGOOSE ================= */
@@ -54,50 +89,6 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= WEBHOOK ================= */
-app.post(
-  "/api/stripe-webhook",
-  express.raw({ type: "application/json" }),
-  async (req, res) => {
-    if (!stripe) return res.sendStatus(200);
-
-    let event;
-
-    try {
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        req.headers["stripe-signature"],
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
-    } catch (err) {
-      console.error("Webhook Error:", err.message);
-      return res.status(400).send("Webhook Error");
-    }
-
-    if (event.type === "checkout.session.completed") {
-      const session = event.data.object;
-      const bookingId = session.metadata?.bookingId;
-
-      if (bookingId) {
-        const booking = await Booking.findByIdAndUpdate(
-          bookingId,
-          { paymentStatus: "PAID" },
-          { new: true }
-        );
-
-        if (booking) {
-          io.emit("payment-updated", booking);
-
-          // ✅ EMAIL AFTER PAYMENT
-          sendEmail(booking, "paid").catch(console.error);
-        }
-      }
-    }
-
-    res.json({ received: true });
-  }
-);
-
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
@@ -117,21 +108,30 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= BOOKINGS ================= */
-app.get("/api/bookings", async (req, res) => {
-  const data = await Booking.find().sort({ createdAt: -1 });
-  res.json(data);
-});
-
-/* ✅ PUBLIC BOOKINGS (SUCCESS PAGE FIX) */
+/* ================= PUBLIC BOOKINGS ================= */
 app.get("/api/public-bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
 });
 
-/* ================= CREATE BOOKING ================= */
+/* ================= CREATE BOOKING (FULL SLOT CHECK FIX) ================= */
 app.post("/api/book", async (req, res) => {
   try {
+
+    // ❗ SLOT LIMIT CHECK (SERVER SIDE)
+    const count = await Booking.countDocuments({
+      date: req.body.date,
+      timeSlot: req.body.timeSlot
+    });
+
+    if (count >= MAX_PER_SLOT) {
+      return res.status(400).json({
+        success: false,
+        error: "This slot is fully booked"
+      });
+    }
+
+    // CREATE BOOKING
     const booking = await Booking.create({
       name: req.body.name || "N/A",
       email: req.body.email || "N/A",
@@ -146,12 +146,14 @@ app.post("/api/book", async (req, res) => {
     });
 
     io.emit("new-booking", booking);
-    io.emit("update-slots"); // ✅ calendar sync
+    io.emit("update-slots");
 
-    // ✅ EMAIL AFTER BOOKING
-    if (booking.email) {
-      sendEmail(booking, "created").catch(console.error);
-    }
+    const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
+
+    sendConfirmationEmail({
+      ...booking._doc,
+      invoiceUrl
+    }).catch(console.error);
 
     res.json({
       success: true,
@@ -160,16 +162,13 @@ app.post("/api/book", async (req, res) => {
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-/* ================= STRIPE ================= */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
-    if (!stripe) {
-      return res.status(500).json({ error: "Stripe not configured" });
-    }
 
     const { service, total, bookingId, email } = req.body;
 
@@ -190,7 +189,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
       customer_email: email,
 
-      // ✅ FINAL FIXED URLS
+      // ✅ FIXED URLS (YOUR REQUEST)
       success_url: `${BASE_URL}/success.html?bookingId=${bookingId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${BASE_URL}/booking.html`,
 
@@ -209,12 +208,15 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= INVOICE ================= */
+/* ================= INVOICE PDF ================= */
 app.get("/api/invoice/:id", async (req, res) => {
+
   const booking = await Booking.findById(req.params.id);
+
   if (!booking) return res.status(404).send("Not found");
 
   const doc = new PDFDocument();
+
   res.setHeader("Content-Type", "application/pdf");
   doc.pipe(res);
 
@@ -234,9 +236,10 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 async function startServer() {
   try {
+
     await mongoose.connect(process.env.MONGO_URI);
 
     console.log("MongoDB Connected ✅");

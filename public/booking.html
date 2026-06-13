@@ -42,18 +42,29 @@ function isSlotFull(date, timeSlot) {
   return count >= MAX_PER_SLOT;
 }
 
+/* ================= UPDATE TIME SLOTS (FIXED) ================= */
 function updateTimeSlots() {
   const timeSelect = document.getElementById("timeSlot");
 
   Array.from(timeSelect.options).forEach(option => {
     if (!selectedDate) return;
 
-    if (isSlotFull(selectedDate, option.value)) {
+    const count = bookings.filter(b =>
+      b.date === selectedDate && b.timeSlot === option.value
+    ).length;
+
+    const remaining = MAX_PER_SLOT - count;
+
+    if (remaining <= 0) {
       option.disabled = true;
       option.text = option.value + " (FULL)";
+      option.style.color = "red";
+      option.style.fontWeight = "bold";
     } else {
       option.disabled = false;
-      option.text = option.value;
+      option.text = `${option.value} (${remaining}/${MAX_PER_SLOT} spots left)`;
+      option.style.color = remaining === 1 ? "orange" : "green";
+      option.style.fontWeight = "normal";
     }
   });
 }
@@ -62,6 +73,8 @@ function updateTimeSlots() {
 document.addEventListener("DOMContentLoaded", async function () {
 
   await loadBookings();
+
+  updateTimeSlots(); // ✅ ADDED HERE (IMPORTANT)
 
   calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
 
@@ -74,14 +87,47 @@ document.addEventListener("DOMContentLoaded", async function () {
 
       bookings.forEach(b => {
         if (!b.date) return;
-        grouped[b.date] = (grouped[b.date] || 0) + 1;
+
+        if (!grouped[b.date]) {
+          grouped[b.date] = {};
+        }
+
+        if (!grouped[b.date][b.timeSlot]) {
+          grouped[b.date][b.timeSlot] = 0;
+        }
+
+        grouped[b.date][b.timeSlot]++;
       });
 
-      const events = Object.keys(grouped).map(date => ({
-        title: grouped[date] + " Booked",
-        start: date,
-        color: "#ef4444"
-      }));
+      const events = Object.keys(grouped).map(date => {
+
+        let totalSlots = Object.keys(grouped[date]).length;
+        let fullSlots = 0;
+        let almostFull = false;
+
+        Object.values(grouped[date]).forEach(count => {
+          if (count >= MAX_PER_SLOT) {
+            fullSlots++;
+          }
+          if (count === MAX_PER_SLOT - 1) {
+            almostFull = true;
+          }
+        });
+
+        let color = "green";
+
+        if (fullSlots === totalSlots && totalSlots > 0) {
+          color = "red";
+        } else if (almostFull) {
+          color = "orange";
+        }
+
+        return {
+          title: `${fullSlots}/${totalSlots || 1} full`,
+          start: date,
+          color: color
+        };
+      });
 
       successCallback(events);
     },
@@ -92,7 +138,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       document.getElementById("selectedDate").innerText =
         "Selected Date: " + selectedDate;
 
-      updateTimeSlots(); // 🔥 FIX
+      updateTimeSlots();
     }
   });
 
@@ -202,8 +248,9 @@ async function handlePayLater() {
 
   if (result.success) {
 
-    await loadBookings();     // 🔥 refresh
-    updateTimeSlots();        // 🔥 refresh UI
+    await loadBookings();
+    updateTimeSlots();
+    calendar.refetchEvents();
 
     const id = result.bookingId || result._id;
 
