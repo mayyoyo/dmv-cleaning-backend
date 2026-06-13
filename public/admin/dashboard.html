@@ -1,147 +1,73 @@
 <!DOCTYPE html>
-<html>
+
+<html lang="en">
 <head>
+  <meta charset="UTF-8">
   <title>Admin Dashboard</title>
-
-  <!-- ✅ CORRECT CSS PATH -->
-  <link rel="stylesheet" href="./css/admin-dashboard.css">
-
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="../css/admin-dashboard.css">
 </head>
-
 <body>
 
-<h1>🧼 Admin Dashboard</h1>
+<header class="navbar">
+  <div class="logo">Admin Dashboard</div>
+  <div class="menu-toggle" onclick="toggleMenu()">☰</div>
+  <nav id="nav">
+    <a href="#" onclick="logout()">Logout</a>
+  </nav>
+</header>
 
-<div id="stats"></div>
-
-<table>
-  <thead>
-    <tr>
-      <th>Name</th>
-      <th>Service</th>
-      <th>Date</th>
-      <th>Status</th>
-      <th>Total</th>
-      <th>Actions</th>
-    </tr>
-  </thead>
-
-  <tbody id="tableBody"></tbody>
-</table>
+<div class="container">
+  <h2>Bookings</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Service</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="bookingsTable"></tbody>
+  </table>
+</div>
 
 <script>
-const socket = io();
-let bookings = [];
-
-/* ================= LOAD ================= */
-async function load() {
-  try {
-    const res = await fetch("/api/bookings");
-    bookings = await res.json();
-    render();
-  } catch (err) {
-    console.error("LOAD ERROR:", err);
-  }
+if (!localStorage.getItem("adminAuth")) {
+  window.location.href = "login.html";
 }
 
-/* ================= RENDER ================= */
-function render() {
+function toggleMenu() {
+  document.getElementById("nav").classList.toggle("active");
+}
 
-  const tbody = document.getElementById("tableBody");
-  tbody.innerHTML = "";
+function logout() {
+  localStorage.removeItem("adminAuth");
+  window.location.href = "login.html";
+}
 
-  let total = 0;
+async function loadBookings() {
+  const res = await fetch("/bookings");
+  const bookings = await res.json();
+
+  const table = document.getElementById("bookingsTable");
+  table.innerHTML = "";
 
   bookings.forEach(b => {
-
-    total += b.total || 0;
-
-    const row = document.createElement("tr");
-
-    row.innerHTML = `
-      <td>${b.name || ""}</td>
-      <td>${b.service || ""}</td>
-      <td>${b.date || ""}</td>
-
-      <td>
-        <span class="badge ${b.paymentStatus}">
-          ${b.paymentStatus}
-        </span>
-      </td>
-
-      <td>$${b.total || 0}</td>
-
-      <td>
-        <button onclick="markPaid('${b._id}')">✔ Paid</button>
-        <button onclick="deleteBooking('${b._id}')">❌ Delete</button>
-        <button onclick="downloadInvoice('${b._id}')">📄 Invoice</button>
-      </td>
+    table.innerHTML += `
+      <tr>
+        <td>${b.name}</td>
+        <td>${b.service}</td>
+        <td>${b.date}</td>
+        <td>${b.time}</td>
+        <td>${b.status}</td>
+      </tr>
     `;
-
-    tbody.appendChild(row);
   });
-
-  document.getElementById("stats").innerHTML =
-    `<h3>Total Bookings: ${bookings.length} | Income: $${total}</h3>`;
 }
 
-/* ================= SOCKET LIVE ================= */
-socket.on("init-bookings", (data) => {
-  bookings = data;
-  render();
-});
-
-socket.on("new-booking", (b) => {
-  bookings.unshift(b);
-  render();
-});
-
-socket.on("payment-updated", (b) => {
-  const i = bookings.findIndex(x => x._id === b._id);
-  if (i !== -1) bookings[i] = b;
-  render();
-});
-
-socket.on("booking-deleted", (id) => {
-  bookings = bookings.filter(b => b._id !== id);
-  render();
-});
-
-/* ================= ACTIONS ================= */
-
-// ⚠️ THIS ROUTE WAS MISSING IN YOUR SERVER
-async function markPaid(id) {
-  try {
-    await fetch(`/api/bookings/${id}/status`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "PAID" })
-    });
-  } catch (err) {
-    console.error("MARK PAID ERROR:", err);
-  }
-}
-
-// ⚠️ THIS ROUTE ALSO MISSING IN SERVER
-async function deleteBooking(id) {
-  try {
-    await fetch(`/api/bookings/${id}`, {
-      method: "DELETE"
-    });
-  } catch (err) {
-    console.error("DELETE ERROR:", err);
-  }
-}
-
-/* ================= INVOICE (FIXED) ================= */
-function downloadInvoice(id) {
-  // ✅ USE SERVER PDF ROUTE INSTEAD
-  window.open(`/api/invoice/${id}`, "_blank");
-}
-
-load();
+loadBookings();
 </script>
 
 </body>

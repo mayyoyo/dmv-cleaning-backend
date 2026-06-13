@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -42,7 +41,7 @@ function isSlotFull(date, timeSlot) {
   return count >= MAX_PER_SLOT;
 }
 
-/* ================= UPDATE TIME SLOTS (FIXED) ================= */
+/* ================= UPDATE TIME SLOTS ================= */
 function updateTimeSlots() {
   const timeSelect = document.getElementById("timeSlot");
 
@@ -73,8 +72,7 @@ function updateTimeSlots() {
 document.addEventListener("DOMContentLoaded", async function () {
 
   await loadBookings();
-
-  updateTimeSlots(); // ✅ ADDED HERE (IMPORTANT)
+  updateTimeSlots();
 
   calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
 
@@ -88,13 +86,8 @@ document.addEventListener("DOMContentLoaded", async function () {
       bookings.forEach(b => {
         if (!b.date) return;
 
-        if (!grouped[b.date]) {
-          grouped[b.date] = {};
-        }
-
-        if (!grouped[b.date][b.timeSlot]) {
-          grouped[b.date][b.timeSlot] = 0;
-        }
+        if (!grouped[b.date]) grouped[b.date] = {};
+        if (!grouped[b.date][b.timeSlot]) grouped[b.date][b.timeSlot] = 0;
 
         grouped[b.date][b.timeSlot]++;
       });
@@ -106,12 +99,8 @@ document.addEventListener("DOMContentLoaded", async function () {
         let almostFull = false;
 
         Object.values(grouped[date]).forEach(count => {
-          if (count >= MAX_PER_SLOT) {
-            fullSlots++;
-          }
-          if (count === MAX_PER_SLOT - 1) {
-            almostFull = true;
-          }
+          if (count >= MAX_PER_SLOT) fullSlots++;
+          if (count === MAX_PER_SLOT - 1) almostFull = true;
         });
 
         let color = "green";
@@ -145,12 +134,16 @@ document.addEventListener("DOMContentLoaded", async function () {
   calendar.render();
 });
 
-/* ================= SERVICE PRICES ================= */
+/* ================= SERVICE PRICES (UPDATED) ================= */
 const servicePrices = {
   "Home Cleaning": 120,
   "Deep Cleaning": 200,
   "Office Cleaning": 150,
-  "Move In/Out Cleaning": 180
+  "Move In/Out Cleaning": 180,
+
+  "Inside Fridge Cleaning": 35,
+  "Inside Oven Cleaning": 45,
+  "Window Cleaning": 10
 };
 
 /* ================= FORM DATA ================= */
@@ -192,10 +185,8 @@ async function handlePayNow() {
 
   const result = await bookingRes.json();
 
-  console.log("BOOKING RESULT:", result);
-
   if (!result.success) {
-    alert("Booking failed");
+    alert(result.error || "Booking failed");
     return;
   }
 
@@ -244,8 +235,6 @@ async function handlePayLater() {
 
   const result = await res.json();
 
-  console.log("BOOKING RESULT:", result);
-
   if (result.success) {
 
     await loadBookings();
@@ -257,7 +246,7 @@ async function handlePayLater() {
     window.location.href = "/success.html?bookingId=" + id;
 
   } else {
-    alert("Booking failed");
+    alert(result.error || "Booking failed");
   }
 }
 
@@ -269,6 +258,11 @@ async function handlePayLater() {
 
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
+
+  <div class="nav-links">
+    <a href="/">🏠 Home</a>
+    <a href="/booking.html">📅 Booking</a>
+  </div>
 </header>
 
 <main class="booking-page">
@@ -281,12 +275,20 @@ async function handlePayLater() {
 
 <p id="selectedDate">No date selected</p>
 
+<!-- ✅ UPDATED SERVICE SELECT -->
 <select id="service" class="input">
   <option value="">Select Service</option>
+
+  <!-- MAIN -->
   <option value="Home Cleaning">Home Cleaning - $120</option>
   <option value="Deep Cleaning">Deep Cleaning - $200</option>
   <option value="Office Cleaning">Office Cleaning - $150</option>
-  <option value="Move In/Out Cleaning">Move In/Out - $180</option>
+  <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
+
+  <!-- ADD-ONS -->
+  <option value="Inside Fridge Cleaning">Inside Fridge Cleaning (+$25 - $50)</option>
+  <option value="Inside Oven Cleaning">Inside Oven Cleaning (+$30 - $60)</option>
+  <option value="Window Cleaning">Window Cleaning (+$5 - $10 per window)</option>
 </select>
 
 <select id="timeSlot" class="input">

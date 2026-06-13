@@ -1,32 +1,24 @@
-const API = "https://dmv-cleaning-backend.onrender.com/api";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Login</title>
 
-async function login() {
+  <link rel="stylesheet" href="/admin/css/admin-login.css">
+</head>
 
-  try {
+<body>
 
-    const res = await fetch(API + "/admin-login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        username: document.getElementById("username").value,
-        password: document.getElementById("password").value
-      })
-    });
+  <div class="box">
+    <h2>Admin Login</h2>
 
-    const data = await res.json();
+    <input id="username" placeholder="Username">
+    <input id="password" type="password" placeholder="Password">
 
-    if (!res.ok) {
-      return alert(data.error || "Login failed");
-    }
+    <button id="loginBtn">Login</button>
+  </div>
 
-    localStorage.setItem("token", data.token);
-
-    alert("Login success ✅");
-
-    window.location.href = "/admin/dashboard.html";
-
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
-    alert("Server error");
-  }
-}
+  <script src="/js/admin-login.js"></script>
+</body>
+</html>

@@ -8,8 +8,9 @@ const http = require("http");
 const { Server } = require("socket.io");
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
+const nodemailer = require("nodemailer");
 
-/* ================= SAFE BASE URL ================= */
+/* ================= BASE URL ================= */
 const BASE_URL =
   process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 
@@ -26,50 +27,51 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= EMAIL ================= */
-const nodemailer = require("nodemailer");
-
+/* ================= EMAIL FUNCTION ================= */
 async function sendConfirmationEmail(booking) {
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
+  try {
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
 
-  const invoiceUrl = booking.invoiceUrl;
+    const invoiceUrl = booking.invoiceUrl;
 
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: booking.email,
-    subject: "🧼 Booking Confirmed - DMV Cleaning Services",
-    html: `
-      <h2>🧼 Booking Confirmed</h2>
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: booking.email,
+      subject: "🧼 Booking Confirmed - DMV Cleaning Services",
+      html: `
+        <h2>🧼 Booking Confirmed</h2>
 
-      <p><b>Name:</b> ${booking.name}</p>
-      <p><b>Service:</b> ${booking.service}</p>
-      <p><b>Date:</b> ${booking.date}</p>
-      <p><b>Time:</b> ${booking.timeSlot}</p>
-      <p><b>Total:</b> $${booking.total}</p>
+        <p><b>Name:</b> ${booking.name}</p>
+        <p><b>Service:</b> ${booking.service}</p>
+        <p><b>Date:</b> ${booking.date}</p>
+        <p><b>Time:</b> ${booking.timeSlot}</p>
+        <p><b>Total:</b> $${booking.total}</p>
 
-      <hr>
+        <hr>
 
-      <p>📄 Invoice:</p>
-      <a href="${invoiceUrl}">${invoiceUrl}</a>
+        <p>📄 Invoice:</p>
+        <a href="${invoiceUrl}">${invoiceUrl}</a>
 
-      <hr>
+        <hr>
 
-      <p>📞 703-967-0674</p>
-    `
-  };
+        <p>📞 703-967-0674</p>
+      `
+    });
 
-  await transporter.sendMail(mailOptions);
+    console.log("Email sent to:", booking.email);
+  } catch (err) {
+    console.error("EMAIL ERROR:", err.message);
+  }
 }
 
 /* ================= MONGOOSE ================= */
 mongoose.set("strictQuery", true);
-mongoose.set("bufferCommands", false);
 
 const Booking = mongoose.model(
   "Booking",
@@ -94,12 +96,23 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= STATIC ================= */
+/* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
+});
+
+/* ================= ADMIN LOGIN ================= */
+app.post("/admin-login", (req, res) => {
+  const { username, password } = req.body || {};
+
+  if (username === "admin" && password === "1234") {
+    return res.json({ success: true });
+  }
+
+  return res.json({ success: false });
 });
 
 /* ================= SOCKET ================= */
@@ -114,11 +127,9 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= CREATE BOOKING (FULL SLOT CHECK FIX) ================= */
+/* ================= BOOK SLOT ================= */
 app.post("/api/book", async (req, res) => {
   try {
-
-    // ❗ SLOT LIMIT CHECK (SERVER SIDE)
     const count = await Booking.countDocuments({
       date: req.body.date,
       timeSlot: req.body.timeSlot
@@ -131,7 +142,6 @@ app.post("/api/book", async (req, res) => {
       });
     }
 
-    // CREATE BOOKING
     const booking = await Booking.create({
       name: req.body.name || "N/A",
       email: req.body.email || "N/A",
@@ -169,7 +179,6 @@ app.post("/api/book", async (req, res) => {
 /* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
-
     const { service, total, bookingId, email } = req.body;
 
     const session = await stripe.checkout.sessions.create({
@@ -189,7 +198,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
       customer_email: email,
 
-      // ✅ FIXED URLS (YOUR REQUEST)
       success_url: `${BASE_URL}/success.html?bookingId=${bookingId}&session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${BASE_URL}/booking.html`,
 
@@ -210,7 +218,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
 
 /* ================= INVOICE PDF ================= */
 app.get("/api/invoice/:id", async (req, res) => {
-
   const booking = await Booking.findById(req.params.id);
 
   if (!booking) return res.status(404).send("Not found");
@@ -239,7 +246,6 @@ app.use((req, res) => {
 /* ================= START SERVER ================= */
 async function startServer() {
   try {
-
     await mongoose.connect(process.env.MONGO_URI);
 
     console.log("MongoDB Connected ✅");

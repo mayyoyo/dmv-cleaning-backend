@@ -1,33 +1,81 @@
 body {
-  font-family: Arial;
-  background: #111;
-  color: white;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  margin: 0;
+margin: 0;
+font-family: Arial, sans-serif;
+background: #f4f6f9;
 }
 
-.box {
-  background: #222;
-  padding: 30px;
-  border-radius: 10px;
-  width: 320px;
+.navbar {
+display: flex;
+justify-content: space-between;
+align-items: center;
+background: #1e2a38;
+color: #fff;
+padding: 15px;
 }
 
-input {
-  width: 100%;
-  padding: 10px;
-  margin: 10px 0;
-  border: none;
+.navbar nav {
+display: flex;
+gap: 15px;
 }
 
-button {
-  width: 100%;
-  padding: 10px;
-  background: green;
-  color: white;
-  border: none;
-  cursor: pointer;
+.navbar nav a {
+color: white;
+text-decoration: none;
+}
+
+.menu-toggle {
+display: none;
+font-size: 24px;
+cursor: pointer;
+}
+
+.login-container {
+max-width: 350px;
+margin: 80px auto;
+background: white;
+padding: 30px;
+border-radius: 8px;
+}
+
+.login-container h2 {
+text-align: center;
+}
+
+.login-container input {
+width: 100%;
+padding: 10px;
+margin: 10px 0;
+}
+
+.login-container button {
+width: 100%;
+padding: 10px;
+background: #1e2a38;
+color: white;
+border: none;
+}
+
+#error {
+color: red;
+text-align: center;
+}
+
+@media (max-width: 768px) {
+.menu-toggle {
+display: block;
+}
+
+.navbar nav {
+display: none;
+flex-direction: column;
+background: #1e2a38;
+position: absolute;
+top: 60px;
+right: 0;
+width: 200px;
+}
+
+.navbar nav.active {
+display: flex;
+}
 }
