@@ -99,7 +99,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= ADMIN ROUTES ================= */
+/* ================= ADMIN FIX (IMPORTANT) ================= */
 app.use("/admin", express.static(path.join(__dirname, "public/admin")));
 
 /* ================= STATIC FILES ================= */
@@ -116,15 +116,12 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= REQUIRED API ROUTES ================= */
-
-/* 1️⃣ GET BOOKINGS */
+/* ================= API ================= */
 app.get("/api/bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
 });
 
-/* 2️⃣ CREATE BOOKING */
 app.post("/api/book", async (req, res) => {
   try {
     const newBooking = await Booking.create({
@@ -156,7 +153,7 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* 3️⃣ STRIPE CHECKOUT */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     if (!stripe) {
@@ -222,7 +219,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= 404 FIX (IMPORTANT) ================= */
+/* ================= 404 FIX ================= */
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
