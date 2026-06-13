@@ -105,7 +105,7 @@ app.use("/admin", express.static(path.join(__dirname, "public/admin")));
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HOME ROUTE ================= */
+/* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
@@ -116,13 +116,15 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= GET BOOKINGS ================= */
+/* ================= REQUIRED API ROUTES ================= */
+
+/* 1️⃣ GET BOOKINGS */
 app.get("/api/bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
 });
 
-/* ================= CREATE BOOKING (FIXED SAFE) ================= */
+/* 2️⃣ CREATE BOOKING */
 app.post("/api/book", async (req, res) => {
   try {
     const newBooking = await Booking.create({
@@ -154,7 +156,7 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= STRIPE CHECKOUT ================= */
+/* 3️⃣ STRIPE CHECKOUT */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     if (!stripe) {
@@ -194,34 +196,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= VERIFY PAYMENT ================= */
-app.get("/api/verify-payment", async (req, res) => {
-  try {
-    if (!stripe) return res.json({ success: false });
-
-    const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
-
-    if (session.payment_status === "paid") {
-      const booking = await Booking.findByIdAndUpdate(
-        req.query.bookingId,
-        { paymentStatus: "PAID" },
-        { new: true }
-      );
-
-      io.emit("payment-updated", booking);
-      sendEmail(booking, "paid").catch(console.error);
-
-      return res.json({ success: true });
-    }
-
-    res.json({ success: false });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false });
-  }
-});
-
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
@@ -253,7 +227,7 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= START SERVER (PRODUCTION SAFE) ================= */
+/* ================= START SERVER ================= */
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
