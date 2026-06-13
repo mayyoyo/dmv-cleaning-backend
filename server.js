@@ -238,3 +238,37 @@ mongoose.connect(process.env.MONGO_URI, {
     console.log("Server running WITHOUT DB (SAFE MODE)");
   });
 });
+// 
+/* ================= UPDATE STATUS ================= */
+app.put("/api/bookings/:id/status", async (req, res) => {
+  try {
+    const booking = await Booking.findByIdAndUpdate(
+      req.params.id,
+      { paymentStatus: req.body.status },
+      { new: true }
+    );
+
+    io.emit("payment-updated", booking);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= DELETE BOOKING ================= */
+app.delete("/api/bookings/:id", async (req, res) => {
+  try {
+    await Booking.findByIdAndDelete(req.params.id);
+
+    io.emit("booking-deleted", req.params.id);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});

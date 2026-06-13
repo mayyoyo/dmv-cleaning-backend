@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html>
 <head>
-<title>Admin Dashboard</title>
+  <title>Admin Dashboard</title>
 
-<!-- ✅ CORRECT CSS PATH -->
-<link rel="stylesheet" href="/admin/css/admin-dashboard.css">
+  <!-- ✅ CORRECT CSS PATH -->
+  <link rel="stylesheet" href="/admin/css/admin-dashboard.css">
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -37,9 +37,13 @@ let bookings = [];
 
 /* ================= LOAD ================= */
 async function load() {
-  const res = await fetch("/api/bookings");
-  bookings = await res.json();
-  render();
+  try {
+    const res = await fetch("/api/bookings");
+    bookings = await res.json();
+    render();
+  } catch (err) {
+    console.error("LOAD ERROR:", err);
+  }
 }
 
 /* ================= RENDER ================= */
@@ -57,9 +61,9 @@ function render() {
     const row = document.createElement("tr");
 
     row.innerHTML = `
-      <td>${b.name}</td>
-      <td>${b.service}</td>
-      <td>${b.date}</td>
+      <td>${b.name || ""}</td>
+      <td>${b.service || ""}</td>
+      <td>${b.date || ""}</td>
 
       <td>
         <span class="badge ${b.paymentStatus}">
@@ -67,7 +71,7 @@ function render() {
         </span>
       </td>
 
-      <td>$${b.total}</td>
+      <td>$${b.total || 0}</td>
 
       <td>
         <button onclick="markPaid('${b._id}')">✔ Paid</button>
@@ -106,43 +110,35 @@ socket.on("booking-deleted", (id) => {
 });
 
 /* ================= ACTIONS ================= */
+
+// ⚠️ THIS ROUTE WAS MISSING IN YOUR SERVER
 async function markPaid(id) {
-  await fetch(`/api/bookings/${id}/status`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ status: "PAID" })
-  });
+  try {
+    await fetch(`/api/bookings/${id}/status`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "PAID" })
+    });
+  } catch (err) {
+    console.error("MARK PAID ERROR:", err);
+  }
 }
 
+// ⚠️ THIS ROUTE ALSO MISSING IN SERVER
 async function deleteBooking(id) {
-  await fetch(`/api/bookings/${id}`, {
-    method: "DELETE"
-  });
+  try {
+    await fetch(`/api/bookings/${id}`, {
+      method: "DELETE"
+    });
+  } catch (err) {
+    console.error("DELETE ERROR:", err);
+  }
 }
 
-/* ================= INVOICE ================= */
+/* ================= INVOICE (FIXED) ================= */
 function downloadInvoice(id) {
-
-  const b = bookings.find(x => x._id === id);
-  if (!b) return;
-
-  const win = window.open("", "", "width=800,height=600");
-
-  win.document.write(`
-    <html>
-    <body>
-      <h1>Invoice</h1>
-      <p>Name: ${b.name}</p>
-      <p>Service: ${b.service}</p>
-      <p>Date: ${b.date}</p>
-      <p>Status: ${b.paymentStatus}</p>
-      <p>Total: $${b.total}</p>
-      <script>
-        window.print();
-      </script>
-    </body>
-    </html>
-  `);
+  // ✅ USE SERVER PDF ROUTE INSTEAD
+  window.open(`/api/invoice/${id}`, "_blank");
 }
 
 load();
