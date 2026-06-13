@@ -11,9 +11,8 @@ const { Server } = require("socket.io");
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
 
-/* ================= EMAIL IMPORT ================= */
+/* ================= EMAIL ================= */
 let sendEmail = () => Promise.resolve();
-
 try {
   const email = require("./email");
   sendEmail = email.sendEmail || sendEmail;
@@ -21,7 +20,7 @@ try {
   console.log("⚠️ email.js not found — email disabled");
 }
 
-/* ================= APP INIT ================= */
+/* ================= INIT ================= */
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -31,12 +30,53 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= MIDDLEWARE ================= */
+/* ================= STRIPE WEBHOOK (MUST BE FIRST) ================= */
+app.post(
+  "/api/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!stripe) return res.sendStatus(200);
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        req.headers["stripe-signature"],
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("❌ Webhook Error:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+
+      const bookingId = session.metadata.bookingId;
+
+      const booking = await Booking.findByIdAndUpdate(
+        bookingId,
+        { paymentStatus: "PAID" },
+        { new: true }
+      );
+
+      if (booking) {
+        io.emit("payment-updated", booking);
+        sendEmail(booking, "paid").catch(console.error);
+      }
+    }
+
+    res.json({ received: true });
+  }
+);
+
+/* ================= NORMAL MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= ADMIN ROUTES (IMPORTANT FIRST) ================= */
+/* ================= ADMIN ROUTES ================= */
 app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -45,15 +85,15 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= STATIC FILES ================= */
+/* ================= STATIC ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HOME ROUTE ================= */
+/* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= BOOKING MODEL ================= */
+/* ================= MODEL ================= */
 const Booking = mongoose.model(
   "Booking",
   new mongoose.Schema({
@@ -72,7 +112,7 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= SOCKET LIVE ================= */
+/* ================= SOCKET ================= */
 io.on("connection", async (socket) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
   socket.emit("init-bookings", bookings);
@@ -87,8 +127,6 @@ app.get("/api/bookings", async (req, res) => {
 /* ================= CREATE BOOKING ================= */
 app.post("/api/book", async (req, res) => {
   try {
-    console.log("📥 Incoming booking:", req.body);
-
     const newBooking = await Booking.create({
       name: req.body.name || "N/A",
       email: req.body.email || "N/A",
@@ -162,6 +200,8 @@ app.post("/api/create-checkout-session", async (req, res) => {
 /* ================= VERIFY PAYMENT ================= */
 app.get("/api/verify-payment", async (req, res) => {
   try {
+    if (!stripe) return res.json({ success: false });
+
     const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
 
     if (session.payment_status === "paid") {
@@ -172,8 +212,6 @@ app.get("/api/verify-payment", async (req, res) => {
       );
 
       io.emit("payment-updated", booking);
-
-      /* 🔥 EMAIL AFTER PAYMENT */
       sendEmail(booking, "paid").catch(console.error);
 
       return res.json({ success: true });
@@ -191,9 +229,7 @@ app.get("/api/verify-payment", async (req, res) => {
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
 
-  if (!booking) {
-    return res.status(404).send("Booking not found");
-  }
+  if (!booking) return res.status(404).send("Booking not found");
 
   const doc = new PDFDocument();
 
@@ -215,11 +251,40 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= DATABASE + SERVER START (FIXED SAFE MODE) ================= */
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
+/* ================= UPDATE STATUS ================= */
+app.put("/api/bookings/:id/status", async (req, res) => {
+  try {
+    const booking = await Booking.findByIdAndUpdate(
+      req.params.id,
+      { paymentStatus: req.body.status },
+      { new: true }
+    );
+
+    io.emit("payment-updated", booking);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= DELETE ================= */
+app.delete("/api/bookings/:id", async (req, res) => {
+  try {
+    await Booking.findByIdAndDelete(req.params.id);
+
+    io.emit("booking-deleted", req.params.id);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= CONNECT DB ================= */
+mongoose.connect(process.env.MONGO_URI)
 .then(() => {
   console.log("MongoDB Connected ✅");
 
@@ -235,40 +300,6 @@ mongoose.connect(process.env.MONGO_URI, {
   const PORT = process.env.PORT || 10000;
 
   server.listen(PORT, "0.0.0.0", () => {
-    console.log("Server running WITHOUT DB (SAFE MODE)");
+    console.log("Server running WITHOUT DB");
   });
-});
-// 
-/* ================= UPDATE STATUS ================= */
-app.put("/api/bookings/:id/status", async (req, res) => {
-  try {
-    const booking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      { paymentStatus: req.body.status },
-      { new: true }
-    );
-
-    io.emit("payment-updated", booking);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false });
-  }
-});
-
-/* ================= DELETE BOOKING ================= */
-app.delete("/api/bookings/:id", async (req, res) => {
-  try {
-    await Booking.findByIdAndDelete(req.params.id);
-
-    io.emit("booking-deleted", req.params.id);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false });
-  }
 });
