@@ -25,7 +25,7 @@ try {
   console.log("⚠️ email.js not found — email disabled");
 }
 
-/* ================= APP INIT ================= */
+/* ================= INIT ================= */
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -35,19 +35,53 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
+/* ================= STRIPE WEBHOOK (KEEP FIRST) ================= */
+app.post(
+  "/api/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    if (!stripe) return res.sendStatus(200);
+
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(
+        req.body,
+        req.headers["stripe-signature"],
+        process.env.STRIPE_WEBHOOK_SECRET
+      );
+    } catch (err) {
+      console.error("❌ Webhook Error:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      const bookingId = session.metadata?.bookingId;
+
+      const booking = await Booking.findByIdAndUpdate(
+        bookingId,
+        { paymentStatus: "PAID" },
+        { new: true }
+      );
+
+      if (booking) {
+        io.emit("payment-updated", booking);
+        sendEmail(booking, "paid").catch(console.error);
+      }
+    }
+
+    res.json({ received: true });
+  }
+);
+
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= ADMIN ROUTES ================= */
-app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/login.html"));
-});
-
-app.get("/admin/dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
-});
+/* ================= ADMIN ROUTES (FIXED EXACT REQUEST) ================= */
+app.use("/admin", express.static(path.join(__dirname, "public/admin")));
 
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
@@ -88,7 +122,6 @@ app.get("/api/bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= CREATE BOOKING ================= */
 app.post("/api/book", async (req, res) => {
   try {
     const newBooking = await Booking.create({
