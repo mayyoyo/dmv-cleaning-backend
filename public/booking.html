@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -19,23 +20,42 @@ let selectedDate = null;
 let bookings = [];
 let calendar;
 
+const MAX_PER_SLOT = 3;
+
 /* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
   try {
-    const res = await fetch(API + "/bookings");
-
-    if (!res.ok) {
-      console.error("API FAILED:", await res.text());
-      bookings = [];
-      return;
-    }
-
+    const res = await fetch(API + "/public-bookings");
     bookings = await res.json();
-
   } catch (err) {
     console.error("LOAD ERROR:", err);
     bookings = [];
   }
+}
+
+/* ================= SLOT LOGIC ================= */
+function isSlotFull(date, timeSlot) {
+  const count = bookings.filter(b =>
+    b.date === date && b.timeSlot === timeSlot
+  ).length;
+
+  return count >= MAX_PER_SLOT;
+}
+
+function updateTimeSlots() {
+  const timeSelect = document.getElementById("timeSlot");
+
+  Array.from(timeSelect.options).forEach(option => {
+    if (!selectedDate) return;
+
+    if (isSlotFull(selectedDate, option.value)) {
+      option.disabled = true;
+      option.text = option.value + " (FULL)";
+    } else {
+      option.disabled = false;
+      option.text = option.value;
+    }
+  });
 }
 
 /* ================= INIT ================= */
@@ -68,8 +88,11 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     dateClick: function(info) {
       selectedDate = info.dateStr;
+
       document.getElementById("selectedDate").innerText =
         "Selected Date: " + selectedDate;
+
+      updateTimeSlots(); // 🔥 FIX
     }
   });
 
@@ -84,7 +107,7 @@ const servicePrices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= COLLECT FORM DATA ================= */
+/* ================= FORM DATA ================= */
 function collectFormData() {
   return {
     name: document.getElementById("name").value,
@@ -98,8 +121,18 @@ function collectFormData() {
   };
 }
 
-/* ================= PAY NOW (UNCHANGED LOGIC + LOG ADDED) ================= */
+/* ================= PAY NOW ================= */
 async function handlePayNow() {
+
+  if (!selectedDate) return alert("Please select a date");
+
+  const timeSlot = document.getElementById("timeSlot").value;
+
+  if (isSlotFull(selectedDate, timeSlot)) {
+    alert("❌ This time slot is fully booked.");
+    return;
+  }
+
   const data = collectFormData();
 
   const bookingRes = await fetch(API + "/book", {
@@ -113,7 +146,6 @@ async function handlePayNow() {
 
   const result = await bookingRes.json();
 
-  // 🔥 TEMP LOG (ADDED AS REQUESTED)
   console.log("BOOKING RESULT:", result);
 
   if (!result.success) {
@@ -141,11 +173,19 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER (YOUR FIXED VERSION) ================= */
+/* ================= PAY LATER ================= */
 async function handlePayLater() {
-  const data = collectFormData();
 
-  if (!selectedDate) return alert("Please select a date first");
+  if (!selectedDate) return alert("Please select a date");
+
+  const timeSlot = document.getElementById("timeSlot").value;
+
+  if (isSlotFull(selectedDate, timeSlot)) {
+    alert("❌ This time slot is fully booked.");
+    return;
+  }
+
+  const data = collectFormData();
 
   const res = await fetch(API + "/book", {
     method: "POST",
@@ -158,14 +198,15 @@ async function handlePayLater() {
 
   const result = await res.json();
 
-  // 🔥 TEMP LOG (ADDED AS REQUESTED)
   console.log("BOOKING RESULT:", result);
 
   if (result.success) {
 
+    await loadBookings();     // 🔥 refresh
+    updateTimeSlots();        // 🔥 refresh UI
+
     const id = result.bookingId || result._id;
 
-    // ✅ FORCE REDIRECT TO SUCCESS PAGE
     window.location.href = "/success.html?bookingId=" + id;
 
   } else {

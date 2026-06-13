@@ -84,13 +84,17 @@ const API = "https://dmv-cleaning-backend.onrender.com/api";
 const params = new URLSearchParams(window.location.search);
 const bookingId = params.get("bookingId");
 
+console.log("BOOKING ID:", bookingId);
+
 async function loadBooking() {
   try {
     const res = await fetch(API + "/public-bookings");
     const bookings = await res.json();
 
-    // ✅ FIX: support both _id and bookingId
-    const booking = bookings.find(b => 
+    console.log("BOOKINGS:", bookings);
+
+    // ✅ FIXED (YOUR REQUEST)
+    const booking = bookings.find(b =>
       b._id === bookingId || b.bookingId === bookingId
     );
 
@@ -103,7 +107,7 @@ async function loadBooking() {
       booking._id || booking.bookingId;
 
     document.getElementById("status").innerText =
-      booking.status || "Pending";
+      booking.paymentStatus || booking.status || "Pending";
 
     document.getElementById("name").innerText = booking.name || "";
     document.getElementById("email").innerText = booking.email || "";
@@ -116,7 +120,7 @@ async function loadBooking() {
     document.getElementById("total").innerText = booking.total || 0;
 
   } catch (err) {
-    console.error(err);
+    console.error("LOAD ERROR:", err);
     document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
   }
 }
