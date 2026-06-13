@@ -1,7 +1,5 @@
 require("dotenv").config();
 
-console.log("ENV CHECK:", process.env.MONGO_URI);
-
 const express = require("express");
 const mongoose = require("mongoose");
 const path = require("path");
@@ -11,7 +9,9 @@ const { Server } = require("socket.io");
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
 
-/* ================= MONGOOSE FIX ================= */
+console.log("ENV CHECK:", process.env.MONGO_URI);
+
+/* ================= MONGOOSE SAFE FIX ================= */
 mongoose.set("strictQuery", true);
 mongoose.set("bufferCommands", false);
 
@@ -22,7 +22,7 @@ try {
   const email = require("./email");
   sendEmail = email.sendEmail || sendEmail;
 } catch (e) {
-  console.log("⚠️ email.js not found — email disabled");
+  console.log("⚠️ Email disabled");
 }
 
 /* ================= INIT ================= */
@@ -35,7 +35,26 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= STRIPE WEBHOOK (KEEP FIRST) ================= */
+/* ================= DATABASE MODEL ================= */
+const Booking = mongoose.model(
+  "Booking",
+  new mongoose.Schema({
+    name: String,
+    email: String,
+    phone: String,
+    address: String,
+    date: String,
+    timeSlot: String,
+    service: String,
+    total: Number,
+    paymentType: String,
+    paymentStatus: { type: String, default: "PENDING" },
+    stripeSessionId: String,
+    createdAt: { type: Date, default: Date.now }
+  })
+);
+
+/* ================= STRIPE WEBHOOK (MUST BE FIRST) ================= */
 app.post(
   "/api/stripe-webhook",
   express.raw({ type: "application/json" }),
@@ -80,35 +99,16 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= ADMIN ROUTES (FIXED EXACT REQUEST) ================= */
+/* ================= ADMIN ROUTES ================= */
 app.use("/admin", express.static(path.join(__dirname, "public/admin")));
 
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HOME ================= */
+/* ================= HOME ROUTE ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
-
-/* ================= MODEL ================= */
-const Booking = mongoose.model(
-  "Booking",
-  new mongoose.Schema({
-    name: String,
-    email: String,
-    phone: String,
-    address: String,
-    date: String,
-    timeSlot: String,
-    service: String,
-    total: Number,
-    paymentType: String,
-    paymentStatus: { type: String, default: "PENDING" },
-    stripeSessionId: String,
-    createdAt: { type: Date, default: Date.now }
-  })
-);
 
 /* ================= SOCKET ================= */
 io.on("connection", async (socket) => {
@@ -116,12 +116,13 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= API ================= */
+/* ================= GET BOOKINGS ================= */
 app.get("/api/bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
 });
 
+/* ================= CREATE BOOKING (FIXED SAFE) ================= */
 app.post("/api/book", async (req, res) => {
   try {
     const newBooking = await Booking.create({
@@ -145,7 +146,7 @@ app.post("/api/book", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("❌ BOOKING ERROR:", err);
+    console.error("BOOKING ERROR:", err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -153,7 +154,106 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= START SERVER ================= */
+/* ================= STRIPE CHECKOUT ================= */
+app.post("/api/create-checkout-session", async (req, res) => {
+  try {
+    if (!stripe) {
+      return res.status(500).json({ error: "Stripe not configured" });
+    }
+
+    const { service, total, bookingId, email } = req.body;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: service },
+            unit_amount: Math.round(total * 100)
+          },
+          quantity: 1
+        }
+      ],
+      customer_email: email,
+      success_url: `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
+      cancel_url: `${process.env.BASE_URL}/cancel.html`,
+      metadata: { bookingId }
+    });
+
+    await Booking.findByIdAndUpdate(bookingId, {
+      stripeSessionId: session.id
+    });
+
+    res.json({ url: session.url });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Stripe error" });
+  }
+});
+
+/* ================= VERIFY PAYMENT ================= */
+app.get("/api/verify-payment", async (req, res) => {
+  try {
+    if (!stripe) return res.json({ success: false });
+
+    const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
+
+    if (session.payment_status === "paid") {
+      const booking = await Booking.findByIdAndUpdate(
+        req.query.bookingId,
+        { paymentStatus: "PAID" },
+        { new: true }
+      );
+
+      io.emit("payment-updated", booking);
+      sendEmail(booking, "paid").catch(console.error);
+
+      return res.json({ success: true });
+    }
+
+    res.json({ success: false });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= INVOICE ================= */
+app.get("/api/invoice/:id", async (req, res) => {
+  const booking = await Booking.findById(req.params.id);
+
+  if (!booking) return res.status(404).send("Booking not found");
+
+  const doc = new PDFDocument();
+
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=invoice.pdf");
+
+  doc.pipe(res);
+
+  doc.fontSize(20).text("DMV Cleaning Services Invoice", { align: "center" });
+  doc.moveDown();
+
+  doc.fontSize(14).text(`Name: ${booking.name}`);
+  doc.text(`Service: ${booking.service}`);
+  doc.text(`Date: ${booking.date}`);
+  doc.text(`Time: ${booking.timeSlot}`);
+  doc.text(`Total: $${booking.total}`);
+  doc.text(`Status: ${booking.paymentStatus}`);
+
+  doc.end();
+});
+
+/* ================= 404 FIX (IMPORTANT) ================= */
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, "public/index.html"));
+});
+
+/* ================= START SERVER (PRODUCTION SAFE) ================= */
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
