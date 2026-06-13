@@ -80,17 +80,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= ROUTES ================= */
-app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/login.html"));
-});
+/* ================= ADMIN STATIC (FIXED) ================= */
+app.use("/admin", express.static(path.join(__dirname, "public/admin")));
 
-app.get("/admin/dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
-});
-
+/* ================= PUBLIC STATIC ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
+/* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
@@ -157,7 +153,7 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= START SERVER (FIXED) ================= */
+/* ================= START SERVER ================= */
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
@@ -172,7 +168,7 @@ async function startServer() {
 
   } catch (err) {
     console.error("❌ MongoDB FAILED:", err.message);
-    process.exit(1); // ⛔ STOP if DB fails
+    process.exit(1);
   }
 }
 
