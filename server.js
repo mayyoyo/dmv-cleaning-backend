@@ -9,11 +9,9 @@ const { Server } = require("socket.io");
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
 
-console.log("ENV CHECK:", process.env.MONGO_URI);
-
-/* ================= MONGOOSE SAFE FIX ================= */
-mongoose.set("strictQuery", true);
-mongoose.set("bufferCommands", false);
+/* ================= SAFE BASE URL ================= */
+const BASE_URL =
+  process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 
 /* ================= INIT ================= */
 const app = express();
@@ -26,15 +24,18 @@ const stripe = process.env.STRIPE_SECRET_KEY
   : null;
 
 /* ================= EMAIL SAFE ================= */
-let sendEmail = () => Promise.resolve();
+let sendEmail = async () => {};
 try {
   const email = require("./email");
-  sendEmail = email.sendEmail || sendEmail;
-} catch (e) {
+  sendEmail = email.sendEmail;
+} catch {
   console.log("⚠️ Email disabled");
 }
 
-/* ================= MODEL ================= */
+/* ================= MONGOOSE ================= */
+mongoose.set("strictQuery", true);
+mongoose.set("bufferCommands", false);
+
 const Booking = mongoose.model(
   "Booking",
   new mongoose.Schema({
@@ -53,7 +54,7 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= STRIPE WEBHOOK (FIRST) ================= */
+/* ================= WEBHOOK ================= */
 app.post(
   "/api/stripe-webhook",
   express.raw({ type: "application/json" }),
@@ -70,12 +71,11 @@ app.post(
       );
     } catch (err) {
       console.error("Webhook Error:", err.message);
-      return res.status(400).send(`Webhook Error`);
+      return res.status(400).send("Webhook Error");
     }
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
-
       const bookingId = session.metadata?.bookingId;
 
       if (bookingId) {
@@ -87,6 +87,8 @@ app.post(
 
         if (booking) {
           io.emit("payment-updated", booking);
+
+          // ✅ EMAIL AFTER PAYMENT
           sendEmail(booking, "paid").catch(console.error);
         }
       }
@@ -101,16 +103,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= FIX ADMIN ROUTES (IMPORTANT) ================= */
-app.get("/admin", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/login.html"));
-});
-
-app.get("/admin/dashboard", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
-});
-
-/* ================= STATIC FILES ================= */
+/* ================= STATIC ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= HOME ================= */
@@ -124,8 +117,14 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= GET BOOKINGS ================= */
+/* ================= BOOKINGS ================= */
 app.get("/api/bookings", async (req, res) => {
+  const data = await Booking.find().sort({ createdAt: -1 });
+  res.json(data);
+});
+
+/* ✅ PUBLIC BOOKINGS (SUCCESS PAGE FIX) */
+app.get("/api/public-bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
 });
@@ -147,6 +146,12 @@ app.post("/api/book", async (req, res) => {
     });
 
     io.emit("new-booking", booking);
+    io.emit("update-slots"); // ✅ calendar sync
+
+    // ✅ EMAIL AFTER BOOKING
+    if (booking.email) {
+      sendEmail(booking, "created").catch(console.error);
+    }
 
     res.json({
       success: true,
@@ -154,12 +159,12 @@ app.post("/api/book", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("BOOKING ERROR:", err);
+    console.error("BOOK ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= STRIPE ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
     if (!stripe) {
@@ -171,6 +176,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
+
       line_items: [
         {
           price_data: {
@@ -181,9 +187,13 @@ app.post("/api/create-checkout-session", async (req, res) => {
           quantity: 1
         }
       ],
+
       customer_email: email,
-      success_url: `${process.env.BASE_URL}/success.html`,
-      cancel_url: `${process.env.BASE_URL}/cancel.html`,
+
+      // ✅ FINAL FIXED URLS
+      success_url: `${BASE_URL}/success.html?bookingId=${bookingId}&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${BASE_URL}/booking.html`,
+
       metadata: { bookingId }
     });
 
@@ -202,11 +212,9 @@ app.post("/api/create-checkout-session", async (req, res) => {
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
-
   if (!booking) return res.status(404).send("Not found");
 
   const doc = new PDFDocument();
-
   res.setHeader("Content-Type", "application/pdf");
   doc.pipe(res);
 
@@ -221,18 +229,14 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= 404 FIX ================= */
+/* ================= FALLBACK ================= */
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 async function startServer() {
   try {
-    if (!process.env.MONGO_URI) {
-      throw new Error("MONGO_URI is missing in Render env");
-    }
-
     await mongoose.connect(process.env.MONGO_URI);
 
     console.log("MongoDB Connected ✅");
@@ -244,7 +248,7 @@ async function startServer() {
     });
 
   } catch (err) {
-    console.error("MongoDB FAILED:", err.message);
+    console.error("DB ERROR:", err.message);
     process.exit(1);
   }
 }

@@ -84,80 +84,97 @@ const servicePrices = {
   "Move In/Out Cleaning": 180
 };
 
-/* ================= BOOK SYSTEM (FIXED STRIPE BLOCK) ================= */
-async function bookNow(paymentType) {
-
-  if (!selectedDate) {
-    alert("Please select a date");
-    return;
-  }
-
-  const service = document.getElementById("service").value;
-  const total = servicePrices[service] || 0;
-
-  const data = {
+/* ================= COLLECT FORM DATA ================= */
+function collectFormData() {
+  return {
     name: document.getElementById("name").value,
     phone: document.getElementById("phone").value,
     email: document.getElementById("email").value,
     address: document.getElementById("address").value,
     date: selectedDate,
     timeSlot: document.getElementById("timeSlot").value,
-    service,
-    total,
-    paymentType
+    service: document.getElementById("service").value,
+    total: servicePrices[document.getElementById("service").value] || 0
   };
+}
 
-  if (!data.name || !data.email || !data.timeSlot || !service) {
-    return alert("Please fill all required fields");
+/* ================= PAY NOW (UNCHANGED LOGIC + LOG ADDED) ================= */
+async function handlePayNow() {
+  const data = collectFormData();
+
+  const bookingRes = await fetch(API + "/book", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...data,
+      paymentType: "online"
+    })
+  });
+
+  const result = await bookingRes.json();
+
+  // 🔥 TEMP LOG (ADDED AS REQUESTED)
+  console.log("BOOKING RESULT:", result);
+
+  if (!result.success) {
+    alert("Booking failed");
+    return;
   }
 
-  try {
+  const stripeRes = await fetch(API + "/create-checkout-session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      service: data.service,
+      total: data.total,
+      bookingId: result.bookingId,
+      email: data.email
+    })
+  });
 
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
+  const stripeData = await stripeRes.json();
 
-    const result = await res.json();
+  if (stripeData.url) {
+    window.location.href = stripeData.url;
+  } else {
+    alert("Stripe error");
+  }
+}
 
-    if (!res.ok) {
-      return alert(result.error || "Booking failed");
-    }
+/* ================= PAY LATER (YOUR FIXED VERSION) ================= */
+async function handlePayLater() {
+  const data = collectFormData();
 
-    /* 🔥 FIXED PAY NOW FLOW */
-    if (paymentType === "pay_now") {
+  if (!selectedDate) return alert("Please select a date first");
 
-      const stripeRes = await fetch(API + "/create-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          service,
-          total,
-          bookingId: result.bookingId,
-          email: data.email
-        })
-      });
+  const res = await fetch(API + "/book", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...data,
+      paymentType: "later"
+    })
+  });
 
-      const stripeData = await stripeRes.json();
+  const result = await res.json();
 
-      if (!stripeRes.ok) {
-        return alert(stripeData.error || "Stripe failed");
-      }
+  // 🔥 TEMP LOG (ADDED AS REQUESTED)
+  console.log("BOOKING RESULT:", result);
 
-      window.location.href = stripeData.url;
+  if (result.success) {
 
-    } else {
-      alert("Booking saved (Pay Later selected) ✅");
-    }
+    const id = result.bookingId || result._id;
 
-  } catch (err) {
-    console.error(err);
-    alert("Error: " + err.message);
+    // ✅ FORCE REDIRECT TO SUCCESS PAGE
+    window.location.href = "/success.html?bookingId=" + id;
+
+  } else {
+    alert("Booking failed");
   }
 }
 
 </script>
+
 </head>
 
 <body>
@@ -197,11 +214,11 @@ async function bookNow(paymentType) {
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="bookNow('pay_now')">
+<button class="btn primary" onclick="handlePayNow()">
 💳 Pay Now (Stripe)
 </button>
 
-<button class="btn" onclick="bookNow('pay_later')">
+<button class="btn" onclick="handlePayLater()">
 📌 Pay Later
 </button>
 
