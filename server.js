@@ -15,16 +15,6 @@ console.log("ENV CHECK:", process.env.MONGO_URI);
 mongoose.set("strictQuery", true);
 mongoose.set("bufferCommands", false);
 
-/* ================= EMAIL ================= */
-let sendEmail = () => Promise.resolve();
-
-try {
-  const email = require("./email");
-  sendEmail = email.sendEmail || sendEmail;
-} catch (e) {
-  console.log("⚠️ Email disabled");
-}
-
 /* ================= INIT ================= */
 const app = express();
 const server = http.createServer(app);
@@ -35,7 +25,16 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= DATABASE MODEL ================= */
+/* ================= EMAIL SAFE ================= */
+let sendEmail = () => Promise.resolve();
+try {
+  const email = require("./email");
+  sendEmail = email.sendEmail || sendEmail;
+} catch (e) {
+  console.log("⚠️ Email disabled");
+}
+
+/* ================= MODEL ================= */
 const Booking = mongoose.model(
   "Booking",
   new mongoose.Schema({
@@ -54,7 +53,7 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= STRIPE WEBHOOK (MUST BE FIRST) ================= */
+/* ================= STRIPE WEBHOOK (FIRST) ================= */
 app.post(
   "/api/stripe-webhook",
   express.raw({ type: "application/json" }),
@@ -70,23 +69,26 @@ app.post(
         process.env.STRIPE_WEBHOOK_SECRET
       );
     } catch (err) {
-      console.error("❌ Webhook Error:", err.message);
-      return res.status(400).send(`Webhook Error: ${err.message}`);
+      console.error("Webhook Error:", err.message);
+      return res.status(400).send(`Webhook Error`);
     }
 
     if (event.type === "checkout.session.completed") {
       const session = event.data.object;
+
       const bookingId = session.metadata?.bookingId;
 
-      const booking = await Booking.findByIdAndUpdate(
-        bookingId,
-        { paymentStatus: "PAID" },
-        { new: true }
-      );
+      if (bookingId) {
+        const booking = await Booking.findByIdAndUpdate(
+          bookingId,
+          { paymentStatus: "PAID" },
+          { new: true }
+        );
 
-      if (booking) {
-        io.emit("payment-updated", booking);
-        sendEmail(booking, "paid").catch(console.error);
+        if (booking) {
+          io.emit("payment-updated", booking);
+          sendEmail(booking, "paid").catch(console.error);
+        }
       }
     }
 
@@ -99,8 +101,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= ADMIN FIX (IMPORTANT) ================= */
-app.use("/admin", express.static(path.join(__dirname, "public/admin")));
+/* ================= FIX ADMIN ROUTES (IMPORTANT) ================= */
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/admin/login.html"));
+});
+
+app.get("/admin/dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
+});
 
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
@@ -116,15 +124,16 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= API ================= */
+/* ================= GET BOOKINGS ================= */
 app.get("/api/bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
 });
 
+/* ================= CREATE BOOKING ================= */
 app.post("/api/book", async (req, res) => {
   try {
-    const newBooking = await Booking.create({
+    const booking = await Booking.create({
       name: req.body.name || "N/A",
       email: req.body.email || "N/A",
       phone: req.body.phone || "N/A",
@@ -137,19 +146,16 @@ app.post("/api/book", async (req, res) => {
       paymentStatus: "PENDING"
     });
 
-    io.emit("new-booking", newBooking);
+    io.emit("new-booking", booking);
 
     res.json({
       success: true,
-      bookingId: newBooking._id
+      bookingId: booking._id
     });
 
   } catch (err) {
     console.error("BOOKING ERROR:", err);
-    res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -176,7 +182,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
         }
       ],
       customer_email: email,
-      success_url: `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}&bookingId=${bookingId}`,
+      success_url: `${process.env.BASE_URL}/success.html`,
       cancel_url: `${process.env.BASE_URL}/cancel.html`,
       metadata: { bookingId }
     });
@@ -188,7 +194,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
     res.json({ url: session.url });
 
   } catch (err) {
-    console.error(err);
+    console.error("Stripe Error:", err);
     res.status(500).json({ error: "Stripe error" });
   }
 });
@@ -197,22 +203,18 @@ app.post("/api/create-checkout-session", async (req, res) => {
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
 
-  if (!booking) return res.status(404).send("Booking not found");
+  if (!booking) return res.status(404).send("Not found");
 
   const doc = new PDFDocument();
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", "attachment; filename=invoice.pdf");
-
   doc.pipe(res);
 
-  doc.fontSize(20).text("DMV Cleaning Services Invoice", { align: "center" });
+  doc.fontSize(20).text("Invoice", { align: "center" });
   doc.moveDown();
 
-  doc.fontSize(14).text(`Name: ${booking.name}`);
+  doc.text(`Name: ${booking.name}`);
   doc.text(`Service: ${booking.service}`);
-  doc.text(`Date: ${booking.date}`);
-  doc.text(`Time: ${booking.timeSlot}`);
   doc.text(`Total: $${booking.total}`);
   doc.text(`Status: ${booking.paymentStatus}`);
 
@@ -227,6 +229,10 @@ app.use((req, res) => {
 /* ================= START SERVER ================= */
 async function startServer() {
   try {
+    if (!process.env.MONGO_URI) {
+      throw new Error("MONGO_URI is missing in Render env");
+    }
+
     await mongoose.connect(process.env.MONGO_URI);
 
     console.log("MongoDB Connected ✅");
@@ -238,7 +244,7 @@ async function startServer() {
     });
 
   } catch (err) {
-    console.error("❌ MongoDB FAILED:", err.message);
+    console.error("MongoDB FAILED:", err.message);
     process.exit(1);
   }
 }
