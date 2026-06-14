@@ -27,7 +27,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= EMAIL ================= */
+/* ================= EMAIL FUNCTION (FIXED) ================= */
 async function sendConfirmationEmail(booking) {
   try {
     const transporter = nodemailer.createTransport({
@@ -40,33 +40,38 @@ async function sendConfirmationEmail(booking) {
 
     const invoiceUrl = booking.invoiceUrl;
 
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
+    const mailOptions = {
+      from: `"DMV Cleaning Services" <${process.env.EMAIL_USER}>`,
       to: booking.email,
       subject: "🧼 Booking Confirmed - DMV Cleaning Services",
       html: `
-        <h2>🧼 Booking Confirmed</h2>
+        <div style="font-family: Arial; padding: 20px;">
+          <h2>🧼 Booking Confirmed</h2>
 
-        <p><b>Name:</b> ${booking.name}</p>
-        <p><b>Service:</b> ${booking.service}</p>
-        <p><b>Date:</b> ${booking.date}</p>
-        <p><b>Time:</b> ${booking.timeSlot}</p>
-        <p><b>Total:</b> $${booking.total}</p>
+          <p><b>Name:</b> ${booking.name}</p>
+          <p><b>Service:</b> ${booking.service}</p>
+          <p><b>Date:</b> ${booking.date}</p>
+          <p><b>Time:</b> ${booking.timeSlot}</p>
+          <p><b>Total:</b> $${booking.total}</p>
 
-        <hr>
+          <hr>
 
-        <p>📄 Invoice:</p>
-        <a href="${invoiceUrl}">${invoiceUrl}</a>
+          <p><b>Invoice:</b></p>
+          <a href="${invoiceUrl}">${invoiceUrl}</a>
 
-        <hr>
+          <hr>
 
-        <p>📞 703-967-0674</p>
+          <p>📞 703-967-0674</p>
+        </div>
       `
-    });
+    };
 
-    console.log("Email sent to:", booking.email);
+    const info = await transporter.sendMail(mailOptions);
+
+    console.log("📧 EMAIL SENT SUCCESSFULLY:", info.messageId);
+
   } catch (err) {
-    console.error("EMAIL ERROR:", err.message);
+    console.error("❌ EMAIL ERROR:", err);
   }
 }
 
@@ -105,7 +110,7 @@ app.get("/", (req, res) => {
 });
 
 /* =========================================================
-   🔥 ADMIN LOGIN ROUTE (FIXED EXACTLY AS REQUESTED)
+   🔥 ADMIN LOGIN (YOUR EXACT REQUEST — FIXED)
 ========================================================= */
 app.post("/admin-login", (req, res) => {
   const { username, password } = req.body || {};
@@ -240,7 +245,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK (LAST ROUTE - IMPORTANT) ================= */
+/* ================= FALLBACK (MUST BE LAST) ================= */
 app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
