@@ -1,6 +1,8 @@
+const API = "https://dmv-cleaning-backend.onrender.com";
+
 async function login() {
   try {
-    const res = await fetch("/admin-login", {
+    const res = await fetch(API + "/admin-login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -19,7 +21,7 @@ async function login() {
     }
 
   } catch (err) {
-    console.error("LOGIN ERROR:", err);
+    console.error(err);
     alert("Server error");
   }
 }
