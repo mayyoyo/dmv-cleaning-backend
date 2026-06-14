@@ -27,7 +27,20 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= EMAIL FUNCTION (FIXED) ================= */
+/* ================= MIDDLEWARE (MUST BE ABOVE ROUTES) ================= */
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+/* ================= STATIC FILES ================= */
+app.use(express.static(path.join(__dirname, "public")));
+
+/* ================= HOME ================= */
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/index.html"));
+});
+
+/* ================= EMAIL FUNCTION ================= */
 async function sendConfirmationEmail(booking) {
   try {
     const transporter = nodemailer.createTransport({
@@ -96,36 +109,33 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= MIDDLEWARE ================= */
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-
-/* ================= STATIC FILES ================= */
-app.use(express.static(path.join(__dirname, "public")));
-
-/* ================= HOME ================= */
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
-
-/* =========================================================
-   🔥 ADMIN LOGIN (YOUR EXACT REQUEST — FIXED)
-========================================================= */
+/* ================= ADMIN LOGIN (FIXED EXACTLY AS YOU WANTED) ================= */
 app.post("/admin-login", (req, res) => {
-  const { username, password } = req.body || {};
+  try {
+    console.log("LOGIN REQUEST BODY:", req.body);
 
-  if (username === "admin" && password === "1234") {
-    return res.json({
-      success: true,
-      token: "demo-token"
+    const username = req.body?.username;
+    const password = req.body?.password;
+
+    if (username === "admin" && password === "1234") {
+      return res.json({
+        success: true,
+        token: "demo-token"
+      });
+    }
+
+    return res.status(401).json({
+      success: false,
+      error: "Invalid credentials"
+    });
+
+  } catch (err) {
+    console.error("LOGIN SERVER ERROR:", err);
+    return res.status(500).json({
+      success: false,
+      error: "Server crashed"
     });
   }
-
-  return res.status(401).json({
-    success: false,
-    error: "Invalid credentials"
-  });
 });
 
 /* ================= SOCKET ================= */
