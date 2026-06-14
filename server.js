@@ -27,7 +27,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= MIDDLEWARE (MUST BE ABOVE ROUTES) ================= */
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -38,6 +38,15 @@ app.use(express.static(path.join(__dirname, "public")));
 /* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
+});
+
+/* ================= ADMIN PAGES (FIXED) ================= */
+app.get("/admin-login", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/admin/login.html"));
+});
+
+app.get("/admin/dashboard", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
 /* ================= EMAIL FUNCTION ================= */
@@ -80,8 +89,7 @@ async function sendConfirmationEmail(booking) {
     };
 
     const info = await transporter.sendMail(mailOptions);
-
-    console.log("📧 EMAIL SENT SUCCESSFULLY:", info.messageId);
+    console.log("📧 EMAIL SENT:", info.response);
 
   } catch (err) {
     console.error("❌ EMAIL ERROR:", err);
@@ -109,13 +117,10 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= ADMIN LOGIN (FIXED EXACTLY AS YOU WANTED) ================= */
+/* ================= ADMIN LOGIN ================= */
 app.post("/admin-login", (req, res) => {
   try {
-    console.log("LOGIN REQUEST BODY:", req.body);
-
-    const username = req.body?.username;
-    const password = req.body?.password;
+    const { username, password } = req.body;
 
     if (username === "admin" && password === "1234") {
       return res.json({
@@ -130,11 +135,8 @@ app.post("/admin-login", (req, res) => {
     });
 
   } catch (err) {
-    console.error("LOGIN SERVER ERROR:", err);
-    return res.status(500).json({
-      success: false,
-      error: "Server crashed"
-    });
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ success: false });
   }
 });
 
@@ -166,15 +168,7 @@ app.post("/api/book", async (req, res) => {
     }
 
     const booking = await Booking.create({
-      name: req.body.name || "N/A",
-      email: req.body.email || "N/A",
-      phone: req.body.phone || "N/A",
-      address: req.body.address || "N/A",
-      date: req.body.date || "",
-      timeSlot: req.body.timeSlot || "",
-      service: req.body.service || "",
-      total: req.body.total || 0,
-      paymentType: req.body.paymentType || "online",
+      ...req.body,
       paymentStatus: "PENDING"
     });
 
@@ -183,10 +177,10 @@ app.post("/api/book", async (req, res) => {
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
 
-    sendConfirmationEmail({
+    await sendConfirmationEmail({
       ...booking._doc,
       invoiceUrl
-    }).catch(console.error);
+    });
 
     res.json({
       success: true,
@@ -195,7 +189,7 @@ app.post("/api/book", async (req, res) => {
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ success: false });
   }
 });
 
@@ -218,7 +212,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
         }
       ],
       customer_email: email,
-      success_url: `${BASE_URL}/success.html?bookingId=${bookingId}&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${BASE_URL}/success.html?bookingId=${bookingId}`,
       cancel_url: `${BASE_URL}/booking.html`,
       metadata: { bookingId }
     });
@@ -255,12 +249,16 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK (MUST BE LAST) ================= */
+/* ================= FALLBACK (FIXED) ================= */
 app.use((req, res) => {
+  if (req.path.startsWith("/admin")) {
+    return res.status(404).send("Admin page not found");
+  }
+
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
