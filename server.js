@@ -27,20 +27,39 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
+/* ================= EMAIL (GLOBAL TRANSPORTER) ================= */
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 465,
+  secure: true,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+/* VERIFY EMAIL */
+transporter.verify((err, success) => {
+  if (err) {
+    console.error("❌ EMAIL CONFIG ERROR:", err);
+  } else {
+    console.log("✅ EMAIL SERVER READY");
+  }
+});
+
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-/* ================= STATIC FILES ================= */
+/* ================= STATIC ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HOME ================= */
+/* ================= ROUTES ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN PAGES ================= */
 app.get("/admin-login", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -49,65 +68,38 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= EMAIL (RETRY SYSTEM) ================= */
-async function sendConfirmationEmail(booking, retryCount = 0) {
+/* ================= EMAIL FUNCTION ================= */
+async function sendConfirmationEmail(booking, retry = 0) {
   try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       console.log("❌ EMAIL NOT CONFIGURED");
       return;
     }
 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
-      }
-    });
-
-    const invoiceUrl = booking.invoiceUrl || "Not available";
-
-    const info = await transporter.sendMail({
+    await transporter.sendMail({
       from: `"DMV Cleaning Services" <${process.env.EMAIL_USER}>`,
       to: booking.email,
-      subject: "🧼 Booking Confirmed - DMV Cleaning Services",
+      subject: "🧼 Booking Confirmed",
       html: `
-        <div style="font-family: Arial; padding: 20px;">
-          <h2>🧼 Booking Confirmed</h2>
-
-          <p><b>Name:</b> ${booking.name || ""}</p>
-          <p><b>Service:</b> ${booking.service || ""}</p>
-          <p><b>Date:</b> ${booking.date || ""}</p>
-          <p><b>Time:</b> ${booking.timeSlot || ""}</p>
-          <p><b>Total:</b> $${booking.total || 0}</p>
-
-          <hr>
-
-          <p><b>Invoice:</b></p>
-          <a href="${invoiceUrl}">${invoiceUrl}</a>
-
-          <hr>
-
-          <p>📞 703-967-0674</p>
-        </div>
+        <h2>Booking Confirmed</h2>
+        <p><b>Name:</b> ${booking.name}</p>
+        <p><b>Service:</b> ${booking.service}</p>
+        <p><b>Date:</b> ${booking.date}</p>
+        <p><b>Time:</b> ${booking.timeSlot}</p>
+        <p><b>Total:</b> $${booking.total}</p>
+        <p><a href="${booking.invoiceUrl}">View Invoice</a></p>
       `
     });
 
-    console.log("📧 EMAIL SENT:", info.messageId);
+    console.log("📧 EMAIL SENT");
 
   } catch (err) {
-    console.error(`❌ EMAIL FAILED (attempt ${retryCount + 1}):`, err.message);
+    console.error("❌ EMAIL ERROR:", err.message);
 
-    if (retryCount < 3) {
-      const delay = (retryCount + 1) * 5000;
-
-      console.log(`🔁 Retrying in ${delay / 1000}s`);
-
+    if (retry < 3) {
       setTimeout(() => {
-        sendConfirmationEmail(booking, retryCount + 1);
-      }, delay);
-    } else {
-      console.log("🚨 FINAL EMAIL FAILURE:", booking.email);
+        sendConfirmationEmail(booking, retry + 1);
+      }, 5000);
     }
   }
 }
@@ -133,32 +125,18 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= ADMIN LOGIN (FIXED) ================= */
+/* ================= ADMIN LOGIN ================= */
 app.post("/admin-login", (req, res) => {
-  try {
-    const { username, password } = req.body || {};
+  const { username, password } = req.body || {};
 
-    console.log("LOGIN REQUEST:", username, password);
-
-    if (username === "admin" && password === "1234") {
-      return res.json({
-        success: true,
-        token: "demo-token"
-      });
-    }
-
-    return res.status(401).json({
-      success: false,
-      error: "Invalid credentials"
-    });
-
-  } catch (err) {
-    console.error("LOGIN ERROR:", err);
-    return res.status(500).json({
-      success: false,
-      error: "Server error"
-    });
+  if (username === "admin" && password === "1234") {
+    return res.json({ success: true, token: "demo-token" });
   }
+
+  return res.status(401).json({
+    success: false,
+    error: "Invalid credentials"
+  });
 });
 
 /* ================= SOCKET ================= */
@@ -194,7 +172,6 @@ app.post("/api/book", async (req, res) => {
     });
 
     io.emit("new-booking", booking);
-    io.emit("update-slots");
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
 
@@ -203,16 +180,50 @@ app.post("/api/book", async (req, res) => {
       invoiceUrl
     });
 
-    res.json({
-      success: true,
-      bookingId: booking._id
-    });
+    res.json({ success: true });
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
     res.status(500).json({
       success: false,
       error: err.message
+    });
+  }
+});
+
+/* ================= CONTACT ================= */
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { name, email, message } = req.body;
+
+    if (!name || !email || !message) {
+      return res.status(400).json({
+        success: false,
+        error: "All fields required"
+      });
+    }
+
+    await transporter.sendMail({
+      from: `"Website Contact" <${process.env.EMAIL_USER}>`,
+      to: process.env.EMAIL_USER,
+      subject: "📩 New Contact Message",
+      html: `
+        <h3>New Message</h3>
+        <p><b>Name:</b> ${name}</p>
+        <p><b>Email:</b> ${email}</p>
+        <p><b>Message:</b><br>${message}</p>
+      `
+    });
+
+    console.log("📩 CONTACT EMAIL SENT");
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("❌ CONTACT ERROR:", err.message);
+    res.status(500).json({
+      success: false,
+      error: "Email failed"
     });
   }
 });
