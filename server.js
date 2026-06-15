@@ -27,7 +27,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= MIDDLEWARE (IMPORTANT ORDER) ================= */
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -40,7 +40,7 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN ROUTES (FIXED - NO LOOP) ================= */
+/* ================= ADMIN ROUTES ================= */
 app.get("/admin-login", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -49,8 +49,8 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= EMAIL FUNCTION (SAFE + WORKING) ================= */
-async function sendConfirmationEmail(booking) {
+/* ================= EMAIL FUNCTION (RETRY SYSTEM ADDED) ================= */
+async function sendConfirmationEmail(booking, retryCount = 0) {
   try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
       console.log("❌ EMAIL NOT CONFIGURED");
@@ -93,10 +93,23 @@ async function sendConfirmationEmail(booking) {
       `
     });
 
-    console.log("📧 EMAIL SENT:", info.messageId);
+    console.log("📧 EMAIL SENT SUCCESSFULLY:", info.messageId);
 
   } catch (err) {
-    console.error("❌ EMAIL ERROR:", err.message);
+    console.error(`❌ EMAIL FAILED (attempt ${retryCount + 1}):`, err.message);
+
+    // ================= RETRY SYSTEM =================
+    if (retryCount < 3) {
+      const delay = (retryCount + 1) * 5000; // 5s, 10s, 15s
+
+      console.log(`🔁 Retrying email in ${delay / 1000}s...`);
+
+      setTimeout(() => {
+        sendConfirmationEmail(booking, retryCount + 1);
+      }, delay);
+    } else {
+      console.log("🚨 EMAIL FAILED AFTER 3 RETRIES:", booking.email);
+    }
   }
 }
 
@@ -153,13 +166,13 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= BOOKINGS ================= */
+/* ================= PUBLIC BOOKINGS ================= */
 app.get("/api/public-bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
 });
 
-/* ================= BOOKING ================= */
+/* ================= BOOKING (SAFE + RETRY EMAIL USED HERE) ================= */
 app.post("/api/book", async (req, res) => {
   try {
     const count = await Booking.countDocuments({
@@ -186,6 +199,7 @@ app.post("/api/book", async (req, res) => {
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
 
+    // ================= SAFE EMAIL WITH RETRY =================
     sendConfirmationEmail({
       ...booking._doc,
       invoiceUrl
@@ -270,7 +284,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK (FIXED - NO LOOP) ================= */
+/* ================= FALLBACK ================= */
 app.use((req, res) => {
   if (req.path.startsWith("/admin")) {
     return res.sendFile(path.join(__dirname, "public/admin/login.html"));
