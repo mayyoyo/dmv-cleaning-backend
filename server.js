@@ -35,12 +35,12 @@ app.use(express.urlencoded({ extended: true }));
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HOME ================= */
+/* ================= HOME ROUTE ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN ROUTES ================= */
+/* ================= ADMIN ROUTES (FIXED - NO LOOP) ================= */
 app.get("/admin-login", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -49,7 +49,7 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= EMAIL FUNCTION (FIXED + SAFE) ================= */
+/* ================= EMAIL FUNCTION (SAFE + WORKING) ================= */
 async function sendConfirmationEmail(booking) {
   try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -61,17 +61,11 @@ async function sendConfirmationEmail(booking) {
       service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS // Gmail App Password
+        pass: process.env.EMAIL_PASS
       }
     });
 
     const invoiceUrl = booking.invoiceUrl || "Not available";
-
-    console.log("📧 EMAIL DEBUG:", {
-      user: process.env.EMAIL_USER,
-      passExists: !!process.env.EMAIL_PASS,
-      invoiceUrl
-    });
 
     const info = await transporter.sendMail({
       from: `"DMV Cleaning Services" <${process.env.EMAIL_USER}>`,
@@ -99,10 +93,10 @@ async function sendConfirmationEmail(booking) {
       `
     });
 
-    console.log("📧 EMAIL SENT SUCCESSFULLY:", info.messageId);
+    console.log("📧 EMAIL SENT:", info.messageId);
 
   } catch (err) {
-    console.error("❌ EMAIL ERROR:", err);
+    console.error("❌ EMAIL ERROR:", err.message);
   }
 }
 
@@ -127,11 +121,9 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= ADMIN LOGIN (FINAL FIXED) ================= */
+/* ================= ADMIN LOGIN ================= */
 app.post("/admin-login", (req, res) => {
   try {
-    console.log("LOGIN REQUEST:", req.body);
-
     const { username, password } = req.body || {};
 
     if (username === "admin" && password === "1234") {
@@ -150,7 +142,7 @@ app.post("/admin-login", (req, res) => {
     console.error("LOGIN ERROR:", err);
     return res.status(500).json({
       success: false,
-      error: "Server crashed"
+      error: "Server error"
     });
   }
 });
@@ -194,12 +186,11 @@ app.post("/api/book", async (req, res) => {
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
 
-    // SAFE EMAIL (DO NOT BREAK SERVER)
     sendConfirmationEmail({
       ...booking._doc,
       invoiceUrl
     }).catch(err => {
-      console.log("EMAIL FAILED:", err.message);
+      console.log("EMAIL FAILED (IGNORED):", err.message);
     });
 
     res.json({
@@ -279,10 +270,10 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK (MUST BE LAST) ================= */
+/* ================= FALLBACK (FIXED - NO LOOP) ================= */
 app.use((req, res) => {
   if (req.path.startsWith("/admin")) {
-    return res.status(404).send("Admin page not found");
+    return res.sendFile(path.join(__dirname, "public/admin/login.html"));
   }
 
   res.sendFile(path.join(__dirname, "public/index.html"));
