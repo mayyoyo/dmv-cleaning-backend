@@ -35,12 +35,12 @@ app.use(express.urlencoded({ extended: true }));
 /* ================= STATIC FILES ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= HOME ROUTE ================= */
+/* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN ROUTES ================= */
+/* ================= ADMIN PAGES ================= */
 app.get("/admin-login", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -49,7 +49,7 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= EMAIL FUNCTION (RETRY SYSTEM ADDED) ================= */
+/* ================= EMAIL (RETRY SYSTEM) ================= */
 async function sendConfirmationEmail(booking, retryCount = 0) {
   try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -93,22 +93,21 @@ async function sendConfirmationEmail(booking, retryCount = 0) {
       `
     });
 
-    console.log("📧 EMAIL SENT SUCCESSFULLY:", info.messageId);
+    console.log("📧 EMAIL SENT:", info.messageId);
 
   } catch (err) {
     console.error(`❌ EMAIL FAILED (attempt ${retryCount + 1}):`, err.message);
 
-    // ================= RETRY SYSTEM =================
     if (retryCount < 3) {
-      const delay = (retryCount + 1) * 5000; // 5s, 10s, 15s
+      const delay = (retryCount + 1) * 5000;
 
-      console.log(`🔁 Retrying email in ${delay / 1000}s...`);
+      console.log(`🔁 Retrying in ${delay / 1000}s`);
 
       setTimeout(() => {
         sendConfirmationEmail(booking, retryCount + 1);
       }, delay);
     } else {
-      console.log("🚨 EMAIL FAILED AFTER 3 RETRIES:", booking.email);
+      console.log("🚨 FINAL EMAIL FAILURE:", booking.email);
     }
   }
 }
@@ -134,10 +133,12 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= ADMIN LOGIN ================= */
+/* ================= ADMIN LOGIN (FIXED) ================= */
 app.post("/admin-login", (req, res) => {
   try {
     const { username, password } = req.body || {};
+
+    console.log("LOGIN REQUEST:", username, password);
 
     if (username === "admin" && password === "1234") {
       return res.json({
@@ -172,7 +173,7 @@ app.get("/api/public-bookings", async (req, res) => {
   res.json(data);
 });
 
-/* ================= BOOKING (SAFE + RETRY EMAIL USED HERE) ================= */
+/* ================= BOOKING ================= */
 app.post("/api/book", async (req, res) => {
   try {
     const count = await Booking.countDocuments({
@@ -183,7 +184,7 @@ app.post("/api/book", async (req, res) => {
     if (count >= MAX_PER_SLOT) {
       return res.status(400).json({
         success: false,
-        error: "This slot is fully booked"
+        error: "Slot full"
       });
     }
 
@@ -192,19 +193,14 @@ app.post("/api/book", async (req, res) => {
       paymentStatus: "PENDING"
     });
 
-    console.log("BOOKING CREATED:", booking._id);
-
     io.emit("new-booking", booking);
     io.emit("update-slots");
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
 
-    // ================= SAFE EMAIL WITH RETRY =================
     sendConfirmationEmail({
       ...booking._doc,
       invoiceUrl
-    }).catch(err => {
-      console.log("EMAIL FAILED (IGNORED):", err.message);
     });
 
     res.json({
@@ -221,49 +217,6 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= STRIPE ================= */
-app.post("/api/create-checkout-session", async (req, res) => {
-  try {
-
-    if (!stripe) {
-      return res.status(500).json({
-        error: "Stripe not configured"
-      });
-    }
-
-    const { service, total, bookingId, email } = req.body;
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: { name: service },
-            unit_amount: Math.round(total * 100)
-          },
-          quantity: 1
-        }
-      ],
-      customer_email: email,
-      success_url: `${BASE_URL}/success.html?bookingId=${bookingId}`,
-      cancel_url: `${BASE_URL}/booking.html`,
-      metadata: { bookingId }
-    });
-
-    await Booking.findByIdAndUpdate(bookingId, {
-      stripeSessionId: session.id
-    });
-
-    res.json({ url: session.url });
-
-  } catch (err) {
-    console.error("Stripe Error:", err);
-    res.status(500).json({ error: "Stripe error" });
-  }
-});
-
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
@@ -272,9 +225,6 @@ app.get("/api/invoice/:id", async (req, res) => {
   const doc = new PDFDocument();
   res.setHeader("Content-Type", "application/pdf");
   doc.pipe(res);
-
-  doc.fontSize(20).text("Invoice", { align: "center" });
-  doc.moveDown();
 
   doc.text(`Name: ${booking.name}`);
   doc.text(`Service: ${booking.service}`);
@@ -289,11 +239,10 @@ app.use((req, res) => {
   if (req.path.startsWith("/admin")) {
     return res.sendFile(path.join(__dirname, "public/admin/login.html"));
   }
-
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);
