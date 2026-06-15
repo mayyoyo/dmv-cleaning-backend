@@ -1,29 +1,60 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <title>Admin Login</title>
 
-  <!-- ✅ FIXED PATH -->
-  <link rel="stylesheet" href="./css/admin-login.css">
+  <link rel="stylesheet" href="/admin/css/admin-login.css">
 </head>
-
 <body>
 
-  <div class="box">
+  <div class="login-container">
     <h2>Admin Login</h2>
 
-    <input id="username" placeholder="Username">
-    <input id="password" type="password" placeholder="Password">
+```
+<input id="username" type="text" placeholder="Username" />
+<input id="password" type="password" placeholder="Password" />
 
-    <button onclick="login()">Login</button>
+<button onclick="login()">Login</button>
+```
+
   </div>
 
-  <!-- JS -->
-  <script src="/js/admin-login.js"></script>
-  
+  <script>
+    const API = "https://dmv-cleaning-backend.onrender.com";
+
+    async function login() {
+      try {
+        const res = await fetch(API + "/admin-login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value
+          })
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          localStorage.setItem("token", data.token);
+
+          console.log("TOKEN SAVED:", data.token);
+
+          window.location.href = "/admin/dashboard.html";
+        } else {
+          alert("Invalid login");
+        }
+
+      } catch (err) {
+        console.error("LOGIN ERROR:", err);
+        alert("Server error");
+      }
+    }
+  </script>
 
 </body>
 </html>

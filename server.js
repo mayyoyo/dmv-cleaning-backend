@@ -40,7 +40,7 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN PAGES (FIXED) ================= */
+/* ================= ADMIN PAGES ================= */
 app.get("/admin-login", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -49,9 +49,14 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= EMAIL FUNCTION ================= */
+/* ================= EMAIL FUNCTION (FIXED) ================= */
 async function sendConfirmationEmail(booking) {
   try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.log("❌ EMAIL NOT CONFIGURED");
+      return;
+    }
+
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -60,9 +65,15 @@ async function sendConfirmationEmail(booking) {
       }
     });
 
-    const invoiceUrl = booking.invoiceUrl;
+    const invoiceUrl = booking.invoiceUrl || "Not available";
 
-    const mailOptions = {
+    console.log("EMAIL DEBUG:", {
+      user: process.env.EMAIL_USER,
+      passExists: !!process.env.EMAIL_PASS,
+      invoiceUrl
+    });
+
+    const info = await transporter.sendMail({
       from: `"DMV Cleaning Services" <${process.env.EMAIL_USER}>`,
       to: booking.email,
       subject: "🧼 Booking Confirmed - DMV Cleaning Services",
@@ -70,11 +81,11 @@ async function sendConfirmationEmail(booking) {
         <div style="font-family: Arial; padding: 20px;">
           <h2>🧼 Booking Confirmed</h2>
 
-          <p><b>Name:</b> ${booking.name}</p>
-          <p><b>Service:</b> ${booking.service}</p>
-          <p><b>Date:</b> ${booking.date}</p>
-          <p><b>Time:</b> ${booking.timeSlot}</p>
-          <p><b>Total:</b> $${booking.total}</p>
+          <p><b>Name:</b> ${booking.name || ""}</p>
+          <p><b>Service:</b> ${booking.service || ""}</p>
+          <p><b>Date:</b> ${booking.date || ""}</p>
+          <p><b>Time:</b> ${booking.timeSlot || ""}</p>
+          <p><b>Total:</b> $${booking.total || 0}</p>
 
           <hr>
 
@@ -86,10 +97,9 @@ async function sendConfirmationEmail(booking) {
           <p>📞 703-967-0674</p>
         </div>
       `
-    };
+    });
 
-    const info = await transporter.sendMail(mailOptions);
-    console.log("📧 EMAIL SENT:", info.response);
+    console.log("📧 EMAIL SENT SUCCESSFULLY:", info.messageId);
 
   } catch (err) {
     console.error("❌ EMAIL ERROR:", err);
@@ -172,6 +182,8 @@ app.post("/api/book", async (req, res) => {
       paymentStatus: "PENDING"
     });
 
+    console.log("BOOKING CREATED:", booking._id);
+
     io.emit("new-booking", booking);
     io.emit("update-slots");
 
@@ -249,7 +261,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK (FIXED) ================= */
+/* ================= FALLBACK ================= */
 app.use((req, res) => {
   if (req.path.startsWith("/admin")) {
     return res.status(404).send("Admin page not found");
@@ -258,7 +270,7 @@ app.use((req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 async function startServer() {
   try {
     await mongoose.connect(process.env.MONGO_URI);

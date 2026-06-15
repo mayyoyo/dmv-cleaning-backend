@@ -4,72 +4,35 @@
 <head>
   <meta charset="UTF-8">
   <title>Admin Dashboard</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="./css/admin-dashboard.css">
-  <link rel="stylesheet" href="/css/admin-dashboard.css">
+
+  <link rel="stylesheet" href="/admin/css/admin-dashboard.css">
 </head>
 <body>
 
-<header class="navbar">
-  <div class="logo">Admin Dashboard</div>
-  <div class="menu-toggle" onclick="toggleMenu()">☰</div>
-  <nav id="nav">
-    <a href="#" onclick="logout()">Logout</a>
-  </nav>
-</header>
+  <h1>Admin Dashboard</h1>
 
-<div class="container">
-  <h2>Bookings</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Service</th>
-        <th>Date</th>
-        <th>Time</th>
-        <th>Status</th>
-      </tr>
-    </thead>
-    <tbody id="bookingsTable"></tbody>
-  </table>
-</div>
+<button onclick="logout()">Logout</button>
 
-<script>
-if (!localStorage.getItem("adminAuth")) {
-  window.location.href = "login.html";
-}
+  <div id="content">
+    <p>Welcome Admin 👋</p>
+  </div>
 
-function toggleMenu() {
-  document.getElementById("nav").classList.toggle("active");
-}
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const token = localStorage.getItem("token");
 
-function logout() {
-  localStorage.removeItem("adminAuth");
-  window.location.href = "login.html";
-}
+      console.log("TOKEN FOUND:", token);
 
-async function loadBookings() {
-  const res = await fetch("/bookings");
-  const bookings = await res.json();
+      if (!token) {
+        window.location.href = "/admin/login.html";
+      }
+    });
 
-  const table = document.getElementById("bookingsTable");
-  table.innerHTML = "";
-
-  bookings.forEach(b => {
-    table.innerHTML += `
-      <tr>
-        <td>${b.name}</td>
-        <td>${b.service}</td>
-        <td>${b.date}</td>
-        <td>${b.time}</td>
-        <td>${b.status}</td>
-      </tr>
-    `;
-  });
-}
-
-loadBookings();
-</script>
+    function logout() {
+      localStorage.removeItem("token");
+      window.location.href = "/admin/login.html";
+    }
+  </script>
 
 </body>
 </html>
