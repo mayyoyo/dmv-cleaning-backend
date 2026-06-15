@@ -27,7 +27,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= MIDDLEWARE ================= */
+/* ================= MIDDLEWARE (IMPORTANT ORDER) ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -40,7 +40,7 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
-/* ================= ADMIN PAGES ================= */
+/* ================= ADMIN ROUTES ================= */
 app.get("/admin-login", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -49,7 +49,7 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= EMAIL FUNCTION (FIXED) ================= */
+/* ================= EMAIL FUNCTION (FIXED + SAFE) ================= */
 async function sendConfirmationEmail(booking) {
   try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
@@ -61,13 +61,13 @@ async function sendConfirmationEmail(booking) {
       service: "gmail",
       auth: {
         user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS
+        pass: process.env.EMAIL_PASS // Gmail App Password
       }
     });
 
     const invoiceUrl = booking.invoiceUrl || "Not available";
 
-    console.log("EMAIL DEBUG:", {
+    console.log("📧 EMAIL DEBUG:", {
       user: process.env.EMAIL_USER,
       passExists: !!process.env.EMAIL_PASS,
       invoiceUrl
@@ -106,7 +106,7 @@ async function sendConfirmationEmail(booking) {
   }
 }
 
-/* ================= MONGOOSE ================= */
+/* ================= DATABASE ================= */
 mongoose.set("strictQuery", true);
 
 const Booking = mongoose.model(
@@ -127,10 +127,12 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= ADMIN LOGIN ================= */
+/* ================= ADMIN LOGIN (FINAL FIXED) ================= */
 app.post("/admin-login", (req, res) => {
   try {
-    const { username, password } = req.body;
+    console.log("LOGIN REQUEST:", req.body);
+
+    const { username, password } = req.body || {};
 
     if (username === "admin" && password === "1234") {
       return res.json({
@@ -146,7 +148,10 @@ app.post("/admin-login", (req, res) => {
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    res.status(500).json({ success: false });
+    return res.status(500).json({
+      success: false,
+      error: "Server crashed"
+    });
   }
 });
 
@@ -156,7 +161,7 @@ io.on("connection", async (socket) => {
   socket.emit("init-bookings", bookings);
 });
 
-/* ================= PUBLIC BOOKINGS ================= */
+/* ================= BOOKINGS ================= */
 app.get("/api/public-bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
@@ -189,9 +194,12 @@ app.post("/api/book", async (req, res) => {
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
 
-    await sendConfirmationEmail({
+    // SAFE EMAIL (DO NOT BREAK SERVER)
+    sendConfirmationEmail({
       ...booking._doc,
       invoiceUrl
+    }).catch(err => {
+      console.log("EMAIL FAILED:", err.message);
     });
 
     res.json({
@@ -201,13 +209,23 @@ app.post("/api/book", async (req, res) => {
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
-    res.status(500).json({ success: false });
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
 /* ================= STRIPE ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
+
+    if (!stripe) {
+      return res.status(500).json({
+        error: "Stripe not configured"
+      });
+    }
+
     const { service, total, bookingId, email } = req.body;
 
     const session = await stripe.checkout.sessions.create({
@@ -261,7 +279,7 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK ================= */
+/* ================= FALLBACK (MUST BE LAST) ================= */
 app.use((req, res) => {
   if (req.path.startsWith("/admin")) {
     return res.status(404).send("Admin page not found");
