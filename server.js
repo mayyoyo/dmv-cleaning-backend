@@ -14,9 +14,6 @@ const nodemailer = require("nodemailer");
 const BASE_URL =
   process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 
-/* ================= SLOT LIMIT ================= */
-const MAX_PER_SLOT = 3;
-
 /* ================= INIT ================= */
 const app = express();
 const server = http.createServer(app);
@@ -27,7 +24,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= EMAIL ================= */
+/* ================= EMAIL TRANSPORTER ================= */
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,
@@ -39,26 +36,22 @@ const transporter = nodemailer.createTransport({
 });
 
 transporter.verify((err) => {
-  if (err) {
-    console.error("❌ EMAIL CONFIG ERROR:", err);
-  } else {
-    console.log("✅ EMAIL SERVER READY");
-  }
+  if (err) console.error("❌ EMAIL ERROR:", err);
+  else console.log("✅ EMAIL READY");
 });
 
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-/* ================= STATIC ================= */
 app.use(express.static(path.join(__dirname, "public")));
 
-/* ================= ROUTES ================= */
+/* ================= HOME ================= */
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public/index.html"));
 });
 
+/* ================= ADMIN ================= */
 app.get("/admin-login", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/login.html"));
 });
@@ -67,7 +60,26 @@ app.get("/admin/dashboard", (req, res) => {
   res.sendFile(path.join(__dirname, "public/admin/dashboard.html"));
 });
 
-/* ================= EMAIL FUNCTION ================= */
+/* ================= DATABASE ================= */
+const Booking = mongoose.model(
+  "Booking",
+  new mongoose.Schema({
+    name: String,
+    email: String,
+    phone: String,
+    address: String,
+    date: String,
+    timeSlot: String,
+    service: String,
+    total: Number,
+    paymentType: String,
+    paymentStatus: { type: String, default: "PENDING" },
+    stripeSessionId: String,
+    createdAt: { type: Date, default: Date.now }
+  })
+);
+
+/* ================= EMAIL CONFIRMATION (RETRY) ================= */
 async function sendConfirmationEmail(booking, retry = 0) {
   try {
     await transporter.sendMail({
@@ -88,74 +100,66 @@ async function sendConfirmationEmail(booking, retry = 0) {
     console.log("📧 EMAIL SENT");
 
   } catch (err) {
-    console.error("❌ EMAIL ERROR:", err.message);
+    console.error("EMAIL ERROR:", err.message);
 
     if (retry < 3) {
-      setTimeout(() => {
-        sendConfirmationEmail(booking, retry + 1);
-      }, 5000);
+      setTimeout(() => sendConfirmationEmail(booking, retry + 1), 5000);
     }
   }
 }
 
-/* ================= DATABASE ================= */
-mongoose.set("strictQuery", true);
+/* ================= ADMIN LOGIN ================= */
+app.post("/admin-login", (req, res) => {
+  const { username, password } = req.body || {};
 
-const Booking = mongoose.model(
-  "Booking",
-  new mongoose.Schema({
-    name: String,
-    email: String,
-    phone: String,
-    address: String,
-    date: String,
-    timeSlot: String,
-    service: String,
-    total: Number,
-    paymentType: String,
-    paymentStatus: { type: String, default: "PENDING" },
-    stripeSessionId: String,
-    createdAt: { type: Date, default: Date.now }
-  })
-);
+  console.log("LOGIN REQUEST:", req.body);
 
-/* ================= BOOKING ================= */
+  if (username === "admin" && password === "1234") {
+    return res.json({
+      success: true,
+      token: "demo-token"
+    });
+  }
+
+  return res.status(401).json({
+    success: false,
+    error: "Invalid credentials"
+  });
+});
+
+/* ================= SOCKET LIVE ================= */
+io.on("connection", async (socket) => {
+  const bookings = await Booking.find().sort({ createdAt: -1 });
+  socket.emit("init-bookings", bookings);
+});
+
+/* ================= PUBLIC BOOKINGS ================= */
+app.get("/api/public-bookings", async (req, res) => {
+  const data = await Booking.find().sort({ createdAt: -1 });
+  res.json(data);
+});
+
+/* ================= BOOKING API (FIXED bookingId) ================= */
 app.post("/api/book", async (req, res) => {
   try {
-    const count = await Booking.countDocuments({
-      date: req.body.date,
-      timeSlot: req.body.timeSlot
-    });
-
-    if (count >= MAX_PER_SLOT) {
-      return res.status(400).json({
-        success: false,
-        error: "Slot full"
-      });
-    }
-
-    const booking = await Booking.create({
-      ...req.body,
-      paymentStatus: "PENDING"
-    });
-
-    io.emit("new-booking", booking);
+    const booking = await Booking.create(req.body);
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
+
+    io.emit("new-booking", booking);
 
     sendConfirmationEmail({
       ...booking._doc,
       invoiceUrl
     });
 
-    /* ✅ FIXED HERE */
+    /* ✅ FIXED RESPONSE */
     res.json({
       success: true,
       bookingId: booking._id
     });
 
   } catch (err) {
-    console.error("BOOK ERROR:", err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -163,17 +167,10 @@ app.post("/api/book", async (req, res) => {
   }
 });
 
-/* ================= CONTACT ================= */
+/* ================= CONTACT EMAIL ================= */
 app.post("/api/contact", async (req, res) => {
   try {
     const { name, email, message } = req.body;
-
-    if (!name || !email || !message) {
-      return res.status(400).json({
-        success: false,
-        error: "All fields required"
-      });
-    }
 
     await transporter.sendMail({
       from: `"Website Contact" <${process.env.EMAIL_USER}>`,
@@ -187,17 +184,74 @@ app.post("/api/contact", async (req, res) => {
       `
     });
 
-    console.log("📩 CONTACT EMAIL SENT");
-
+    console.log("📩 CONTACT SENT");
     res.json({ success: true });
 
   } catch (err) {
-    console.error("❌ CONTACT ERROR:", err.message);
     res.status(500).json({
       success: false,
       error: "Email failed"
     });
   }
+});
+
+/* ================= STRIPE ================= */
+app.post("/api/create-checkout-session", async (req, res) => {
+  try {
+
+    const { service, total, bookingId, email } = req.body;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: { name: service },
+            unit_amount: total * 100
+          },
+          quantity: 1
+        }
+      ],
+      customer_email: email,
+      success_url: `${BASE_URL}/success.html?bookingId=${bookingId}`,
+      cancel_url: `${BASE_URL}/booking.html`,
+      metadata: { bookingId }
+    });
+
+    await Booking.findByIdAndUpdate(bookingId, {
+      stripeSessionId: session.id
+    });
+
+    res.json({ url: session.url });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ================= STRIPE WEBHOOK ================= */
+app.post("/api/stripe-webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  let event;
+
+  try {
+    event = JSON.parse(req.body);
+  } catch (err) {
+    return res.status(400).send("Webhook Error");
+  }
+
+  if (event.type === "checkout.session.completed") {
+    const session = event.data.object;
+
+    await Booking.findByIdAndUpdate(session.metadata.bookingId, {
+      paymentStatus: "PAID"
+    });
+
+    io.emit("payment-update", session.metadata.bookingId);
+  }
+
+  res.json({ received: true });
 });
 
 /* ================= INVOICE ================= */
@@ -217,30 +271,14 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= FALLBACK ================= */
-app.use((req, res) => {
-  if (req.path.startsWith("/admin")) {
-    return res.sendFile(path.join(__dirname, "public/admin/login.html"));
-  }
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
+/* ================= START SERVER ================= */
+async function start() {
+  await mongoose.connect(process.env.MONGO_URI);
+  console.log("MongoDB Connected");
 
-/* ================= START ================= */
-async function startServer() {
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    console.log("MongoDB Connected ✅");
-
-    const PORT = process.env.PORT || 10000;
-
-    server.listen(PORT, "0.0.0.0", () => {
-      console.log("Server running on", PORT);
-    });
-
-  } catch (err) {
-    console.error("DB ERROR:", err.message);
-    process.exit(1);
-  }
+  server.listen(process.env.PORT || 10000, () => {
+    console.log("Server running");
+  });
 }
 
-startServer();
+start();
