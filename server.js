@@ -27,7 +27,7 @@ const stripe = process.env.STRIPE_SECRET_KEY
   ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
-/* ================= EMAIL (GLOBAL TRANSPORTER) ================= */
+/* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
   port: 465,
@@ -38,8 +38,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-/* VERIFY EMAIL */
-transporter.verify((err, success) => {
+transporter.verify((err) => {
   if (err) {
     console.error("❌ EMAIL CONFIG ERROR:", err);
   } else {
@@ -71,11 +70,6 @@ app.get("/admin/dashboard", (req, res) => {
 /* ================= EMAIL FUNCTION ================= */
 async function sendConfirmationEmail(booking, retry = 0) {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.log("❌ EMAIL NOT CONFIGURED");
-      return;
-    }
-
     await transporter.sendMail({
       from: `"DMV Cleaning Services" <${process.env.EMAIL_USER}>`,
       to: booking.email,
@@ -125,32 +119,6 @@ const Booking = mongoose.model(
   })
 );
 
-/* ================= ADMIN LOGIN ================= */
-app.post("/admin-login", (req, res) => {
-  const { username, password } = req.body || {};
-
-  if (username === "admin" && password === "1234") {
-    return res.json({ success: true, token: "demo-token" });
-  }
-
-  return res.status(401).json({
-    success: false,
-    error: "Invalid credentials"
-  });
-});
-
-/* ================= SOCKET ================= */
-io.on("connection", async (socket) => {
-  const bookings = await Booking.find().sort({ createdAt: -1 });
-  socket.emit("init-bookings", bookings);
-});
-
-/* ================= PUBLIC BOOKINGS ================= */
-app.get("/api/public-bookings", async (req, res) => {
-  const data = await Booking.find().sort({ createdAt: -1 });
-  res.json(data);
-});
-
 /* ================= BOOKING ================= */
 app.post("/api/book", async (req, res) => {
   try {
@@ -180,7 +148,11 @@ app.post("/api/book", async (req, res) => {
       invoiceUrl
     });
 
-    res.json({ success: true });
+    /* ✅ FIXED HERE */
+    res.json({
+      success: true,
+      bookingId: booking._id
+    });
 
   } catch (err) {
     console.error("BOOK ERROR:", err);

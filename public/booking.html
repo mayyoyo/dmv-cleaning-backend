@@ -134,7 +134,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   calendar.render();
 });
 
-/* ================= SERVICE PRICES (UPDATED) ================= */
+/* ================= SERVICE PRICES ================= */
 const servicePrices = {
   "Home Cleaning": 120,
   "Deep Cleaning": 200,
@@ -174,43 +174,50 @@ async function handlePayNow() {
 
   const data = collectFormData();
 
-  const bookingRes = await fetch(API + "/book", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...data,
-      paymentType: "online"
-    })
-  });
+  try {
 
-  const result = await bookingRes.json();
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...data,
+        paymentType: "online"
+      })
+    });
 
-  if (!result.success) {
-    alert(result.error || "Booking failed");
-    return;
-  }
+    const result = await res.json();
 
-  const stripeRes = await fetch(API + "/create-checkout-session", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      service: data.service,
-      total: data.total,
-      bookingId: result.bookingId,
-      email: data.email
-    })
-  });
+    if (!result.success || !result.bookingId) {
+      console.error("BACKEND ERROR:", result);
+      return alert(result.error || "Booking failed");
+    }
 
-  const stripeData = await stripeRes.json();
+    const stripeRes = await fetch(API + "/create-checkout-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service: data.service,
+        total: data.total,
+        bookingId: result.bookingId,
+        email: data.email
+      })
+    });
 
-  if (stripeData.url) {
-    window.location.href = stripeData.url;
-  } else {
-    alert("Stripe error");
+    const stripeData = await stripeRes.json();
+
+    if (stripeData.url) {
+      window.location.href = stripeData.url;
+    } else {
+      alert("Stripe error");
+    }
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Error: " + err.message);
   }
 }
 
-/* ================= PAY LATER ================= */
+/* ================= PAY LATER (FIXED) ================= */
 async function handlePayLater() {
 
   if (!selectedDate) return alert("Please select a date");
@@ -224,29 +231,34 @@ async function handlePayLater() {
 
   const data = collectFormData();
 
-  const res = await fetch(API + "/book", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      ...data,
-      paymentType: "later"
-    })
-  });
+  try {
 
-  const result = await res.json();
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        ...data,
+        paymentType: "later"
+      })
+    });
 
-  if (result.success) {
+    const result = await res.json();
+
+    if (!result.success || !result.bookingId) {
+      console.error("BACKEND ERROR:", result);
+      return alert(result.error || "Booking failed");
+    }
 
     await loadBookings();
     updateTimeSlots();
     calendar.refetchEvents();
 
-    const id = result.bookingId || result._id;
+    window.location.href =
+      `/success.html?bookingId=${result.bookingId}`;
 
-    window.location.href = "/success.html?bookingId=" + id;
-
-  } else {
-    alert(result.error || "Booking failed");
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Error: " + err.message);
   }
 }
 
@@ -275,20 +287,15 @@ async function handlePayLater() {
 
 <p id="selectedDate">No date selected</p>
 
-<!-- ✅ UPDATED SERVICE SELECT -->
 <select id="service" class="input">
   <option value="">Select Service</option>
-
-  <!-- MAIN -->
   <option value="Home Cleaning">Home Cleaning - $120</option>
   <option value="Deep Cleaning">Deep Cleaning - $200</option>
   <option value="Office Cleaning">Office Cleaning - $150</option>
   <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
-
-  <!-- ADD-ONS -->
-  <option value="Inside Fridge Cleaning">Inside Fridge Cleaning (+$25 - $50)</option>
-  <option value="Inside Oven Cleaning">Inside Oven Cleaning (+$30 - $60)</option>
-  <option value="Window Cleaning">Window Cleaning (+$5 - $10 per window)</option>
+  <option value="Inside Fridge Cleaning">Inside Fridge Cleaning</option>
+  <option value="Inside Oven Cleaning">Inside Oven Cleaning</option>
+  <option value="Window Cleaning">Window Cleaning</option>
 </select>
 
 <select id="timeSlot" class="input">

@@ -1,3 +1,8 @@
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+/* make sure this exists somewhere */
+let selectedDate = null;
+
 async function bookNow(paymentType = "pay_later") {
 
   if (!selectedDate) return alert("Select date first");
@@ -10,7 +15,7 @@ async function bookNow(paymentType = "pay_later") {
     date: selectedDate,
     timeSlot: document.getElementById("timeSlot").value,
     service: document.getElementById("service").value,
-    paymentType: paymentType // ✅ FIXED (IMPORTANT)
+    paymentType: paymentType
   };
 
   if (!data.name || !data.email || !data.timeSlot || !data.service) {
@@ -18,7 +23,6 @@ async function bookNow(paymentType = "pay_later") {
   }
 
   try {
-
     const res = await fetch(API + "/book", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,10 +36,11 @@ async function bookNow(paymentType = "pay_later") {
       return alert(result.error || "Booking failed");
     }
 
-    alert("Booking successful ✅");
-
-    window.location.href =
-      "/success.html?bookingId=" + result.bookingId;
+    if (result.success && result.bookingId) {
+      window.location.href = `/success.html?bookingId=${result.bookingId}`;
+    } else {
+      alert("Booking failed: Missing booking ID");
+    }
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
