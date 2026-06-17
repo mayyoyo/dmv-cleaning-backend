@@ -11,269 +11,20 @@
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
-<!-- ✅ External JS (optional if you separate logic) -->
+<!-- ✅ THIS IS REQUIRED -->
 <script defer src="/js/booking.js"></script>
-
-<script defer>
-
-const API = "https://dmv-cleaning-backend.onrender.com/api";
-
-let selectedDate = null;
-let bookings = [];
-let calendar;
-
-const MAX_PER_SLOT = 3;
-
-/* ================= POPUP ================= */
-function showPopup() {
-  document.getElementById("emailPopup").classList.remove("hidden");
-}
-function hidePopup() {
-  document.getElementById("emailPopup").classList.add("hidden");
-}
-
-/* ================= LOAD BOOKINGS ================= */
-async function loadBookings() {
-  try {
-    const res = await fetch(API + "/public-bookings");
-    bookings = await res.json();
-  } catch (err) {
-    console.error(err);
-    bookings = [];
-  }
-}
-
-/* ================= SLOT CHECK ================= */
-function isSlotFull(date, timeSlot) {
-  const count = bookings.filter(b =>
-    b.date === date && b.timeSlot === timeSlot
-  ).length;
-  return count >= MAX_PER_SLOT;
-}
-
-/* ================= UPDATE SLOTS ================= */
-function updateTimeSlots() {
-  const timeSelect = document.getElementById("timeSlot");
-
-  Array.from(timeSelect.options).forEach(option => {
-    if (!selectedDate) return;
-
-    const count = bookings.filter(b =>
-      b.date === selectedDate && b.timeSlot === option.value
-    ).length;
-
-    const remaining = MAX_PER_SLOT - count;
-
-    if (remaining <= 0) {
-      option.disabled = true;
-      option.text = option.value + " (FULL)";
-      option.style.color = "red";
-    } else {
-      option.disabled = false;
-      option.text = `${option.value} (${remaining}/${MAX_PER_SLOT})`;
-      option.style.color = remaining === 1 ? "orange" : "green";
-    }
-  });
-}
-
-/* ================= INIT CALENDAR ================= */
-document.addEventListener("DOMContentLoaded", async function () {
-
-  await loadBookings();
-  updateTimeSlots();
-
-  calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-
-    initialView: "dayGridMonth",
-    height: 500,
-
-    events: function(fetchInfo, successCallback) {
-
-      const grouped = {};
-
-      bookings.forEach(b => {
-        if (!grouped[b.date]) grouped[b.date] = {};
-        if (!grouped[b.date][b.timeSlot]) grouped[b.date][b.timeSlot] = 0;
-        grouped[b.date][b.timeSlot]++;
-      });
-
-      const events = Object.keys(grouped).map(date => {
-
-        let full = 0;
-        let total = Object.keys(grouped[date]).length;
-
-        Object.values(grouped[date]).forEach(count => {
-          if (count >= MAX_PER_SLOT) full++;
-        });
-
-        return {
-          title: `${full}/${total} full`,
-          start: date,
-          color: full === total ? "red" : "green"
-        };
-      });
-
-      successCallback(events);
-    },
-
-    dateClick: function(info) {
-      selectedDate = info.dateStr;
-      document.getElementById("selectedDate").innerText =
-        "Selected Date: " + selectedDate;
-      updateTimeSlots();
-    }
-  });
-
-  calendar.render();
-});
-
-/* ================= PRICES ================= */
-const servicePrices = {
-  "Home Cleaning": 120,
-  "Deep Cleaning": 200,
-  "Office Cleaning": 150,
-  "Move In/Out Cleaning": 180,
-  "Inside Fridge Cleaning": 35,
-  "Inside Oven Cleaning": 45,
-  "Window Cleaning": 10
-};
-
-/* ================= FORM DATA ================= */
-function collectFormData() {
-  return {
-    name: document.getElementById("name").value,
-    phone: document.getElementById("phone").value,
-    email: document.getElementById("email").value,
-    address: document.getElementById("address").value,
-    date: selectedDate,
-    timeSlot: document.getElementById("timeSlot").value,
-    service: document.getElementById("service").value,
-    total: servicePrices[document.getElementById("service").value] || 0
-  };
-}
-
-/* ================= PAY NOW ================= */
-async function handlePayNow() {
-
-  if (!selectedDate) return alert("Select date first");
-
-  const timeSlot = document.getElementById("timeSlot").value;
-
-  if (isSlotFull(selectedDate, timeSlot)) {
-    return alert("❌ Slot is full");
-  }
-
-  const data = collectFormData();
-
-  try {
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...data,
-        paymentType: "online"
-      })
-    });
-
-    const result = await res.json();
-
-    if (!result.success || !result.bookingId) {
-      return alert("Booking failed");
-    }
-
-    const stripeRes = await fetch(API + "/create-checkout-session", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        service: data.service,
-        total: data.total,
-        bookingId: result.bookingId,
-        email: data.email
-      })
-    });
-
-    const stripeData = await stripeRes.json();
-
-    if (stripeData.url) {
-      window.location.href = stripeData.url;
-    } else {
-      alert("Stripe error");
-    }
-
-  } catch (err) {
-    alert(err.message);
-  }
-}
-
-/* ================= PAY LATER (FINAL FIXED) ================= */
-async function handlePayLater() {
-
-  if (!selectedDate) return alert("Select date first");
-
-  const timeSlot = document.getElementById("timeSlot").value;
-
-  if (isSlotFull(selectedDate, timeSlot)) {
-    return alert("❌ Slot is full");
-  }
-
-  const data = collectFormData();
-
-  showPopup();
-
-  try {
-
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...data,
-        paymentType: "later"
-      })
-    });
-
-    const result = await res.json();
-
-    hidePopup();
-
-    if (result.success && result.bookingId) {
-
-      await loadBookings();
-      updateTimeSlots();
-      calendar.refetchEvents();
-
-      window.location.href =
-        `/success.html?bookingId=${result.bookingId}`;
-
-    } else {
-      alert("Booking failed: Missing booking ID");
-    }
-
-  } catch (err) {
-    hidePopup();
-    alert(err.message);
-  }
-}
-
-</script>
 </head>
 
 <body>
 
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
+
   <div class="nav-links">
     <a href="index.html">🏠 Home</a>
     <a href="booking.html">📅 Booking</a>
   </div>
 </header>
-
-<!-- ✅ EMAIL POPUP -->
-<div id="emailPopup" class="popup hidden">
-  <div class="popup-box">
-    <h2>📧 Sending Email...</h2>
-    <p>Please wait</p>
-  </div>
-</div>
 
 <main class="booking-page">
 
@@ -291,9 +42,6 @@ async function handlePayLater() {
   <option value="Deep Cleaning">Deep Cleaning - $200</option>
   <option value="Office Cleaning">Office Cleaning - $150</option>
   <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
-  <option value="Inside Fridge Cleaning">Inside Fridge Cleaning</option>
-  <option value="Inside Oven Cleaning">Inside Oven Cleaning</option>
-  <option value="Window Cleaning">Window Cleaning</option>
 </select>
 
 <select id="timeSlot" class="input">
@@ -309,9 +57,14 @@ async function handlePayLater() {
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<!-- ✅ BUTTONS -->
-<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button>
-<button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
+<!-- ✅ BUTTONS MUST CALL FUNCTION -->
+<button class="btn primary" onclick="bookNow('pay_now')">
+💳 Pay Now
+</button>
+
+<button class="btn" onclick="bookNow('pay_later')">
+📌 Pay Later
+</button>
 
 </section>
 
