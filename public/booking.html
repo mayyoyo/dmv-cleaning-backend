@@ -13,13 +13,14 @@
 
 <script defer>
 
-/* ================= 🔥 IMPORTANT API (TOP OF FILE) ================= */
+/* ================= API ================= */
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-/* ================= GLOBAL ================= */
+/* ================= GLOBALS ================= */
 let selectedDate = null;
 let bookings = [];
 let calendar;
+let isBooking = false; // 🔥 LOCK TO PREVENT DOUBLE CLICK
 
 const MAX_PER_SLOT = 3;
 
@@ -43,7 +44,7 @@ function isSlotFull(date, timeSlot) {
   return count >= MAX_PER_SLOT;
 }
 
-/* ================= UPDATE TIME SLOTS ================= */
+/* ================= UPDATE SLOTS ================= */
 function updateTimeSlots() {
   const timeSelect = document.getElementById("timeSlot");
 
@@ -60,12 +61,10 @@ function updateTimeSlots() {
       option.disabled = true;
       option.text = option.value + " (FULL)";
       option.style.color = "red";
-      option.style.fontWeight = "bold";
     } else {
       option.disabled = false;
       option.text = `${option.value} (${remaining}/${MAX_PER_SLOT})`;
       option.style.color = remaining === 1 ? "orange" : "green";
-      option.style.fontWeight = "normal";
     }
   });
 }
@@ -123,18 +122,7 @@ document.addEventListener("DOMContentLoaded", async function () {
   calendar.render();
 });
 
-/* ================= SERVICE PRICES ================= */
-const servicePrices = {
-  "Home Cleaning": 120,
-  "Deep Cleaning": 200,
-  "Office Cleaning": 150,
-  "Move In/Out Cleaning": 180,
-  "Inside Fridge Cleaning": 35,
-  "Inside Oven Cleaning": 45,
-  "Window Cleaning": 10
-};
-
-/* ================= COLLECT DATA ================= */
+/* ================= FORM DATA ================= */
 function collectFormData() {
   return {
     name: document.getElementById("name").value,
@@ -143,26 +131,33 @@ function collectFormData() {
     address: document.getElementById("address").value,
     date: selectedDate,
     timeSlot: document.getElementById("timeSlot").value,
-    service: document.getElementById("service").value,
-    total: servicePrices[document.getElementById("service").value] || 0
+    service: document.getElementById("service").value
   };
 }
 
-/* ================= BOOK FUNCTION (FIXED + SAFE REDIRECT) ================= */
+/* ================= SAFE BOOK NOW FUNCTION ================= */
 async function bookNow(paymentType = "pay_later") {
 
-  if (!selectedDate) return alert("Select date first");
-
-  const data = collectFormData();
-  data.paymentType = paymentType;
-
-  if (!data.name || !data.email || !data.timeSlot || !data.service) {
-    return alert("Please fill all required fields");
-  }
+  if (isBooking) return; // 🔥 prevent spam click
+  isBooking = true;
 
   try {
 
-    /* 🔥 REQUIRED FETCH FORMAT (YOUR FIX) */
+    if (!selectedDate) {
+      alert("Select date first");
+      isBooking = false;
+      return;
+    }
+
+    const data = collectFormData();
+    data.paymentType = paymentType;
+
+    if (!data.name || !data.email || !data.timeSlot || !data.service) {
+      alert("Please fill all required fields");
+      isBooking = false;
+      return;
+    }
+
     const res = await fetch(API + "/book", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -171,22 +166,22 @@ async function bookNow(paymentType = "pay_later") {
 
     const result = await res.json();
 
-    if (!res.ok) {
+    // ❌ backend error safe check
+    if (!res.ok || !result.success || !result.bookingId) {
       console.error("BACKEND ERROR:", result);
-      return alert(result.error || "Booking failed");
+      alert(result.error || "Booking failed");
+      isBooking = false;
+      return;
     }
 
-    /* ✅ SAFE REDIRECT FIX */
-    if (result.success && result.bookingId) {
-      window.location.href =
-        `/success.html?bookingId=${result.bookingId}`;
-    } else {
-      alert("Booking failed: Missing booking ID");
-    }
+    // ✅ SUCCESS REDIRECT
+    window.location.href =
+      `/success.html?bookingId=${result.bookingId}`;
 
   } catch (err) {
     console.error("BOOK ERROR:", err);
     alert("Error: " + err.message);
+    isBooking = false;
   }
 }
 
@@ -239,7 +234,7 @@ async function bookNow(paymentType = "pay_later") {
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<!-- REQUIRED BUTTONS -->
+<!-- 🔥 REQUIRED BUTTONS -->
 <button class="btn primary" onclick="bookNow('pay_now')">
 💳 Pay Now
 </button>
