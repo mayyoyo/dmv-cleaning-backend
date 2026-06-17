@@ -11,6 +11,9 @@
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
+<!-- ✅ External JS (optional if you separate logic) -->
+<script defer src="/js/booking.js"></script>
+
 <script defer>
 
 const API = "https://dmv-cleaning-backend.onrender.com/api";
@@ -25,7 +28,6 @@ const MAX_PER_SLOT = 3;
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
-
 function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
@@ -36,7 +38,7 @@ async function loadBookings() {
     const res = await fetch(API + "/public-bookings");
     bookings = await res.json();
   } catch (err) {
-    console.error("LOAD ERROR:", err);
+    console.error(err);
     bookings = [];
   }
 }
@@ -46,7 +48,6 @@ function isSlotFull(date, timeSlot) {
   const count = bookings.filter(b =>
     b.date === date && b.timeSlot === timeSlot
   ).length;
-
   return count >= MAX_PER_SLOT;
 }
 
@@ -117,10 +118,8 @@ document.addEventListener("DOMContentLoaded", async function () {
 
     dateClick: function(info) {
       selectedDate = info.dateStr;
-
       document.getElementById("selectedDate").innerText =
         "Selected Date: " + selectedDate;
-
       updateTimeSlots();
     }
   });
@@ -167,7 +166,6 @@ async function handlePayNow() {
   const data = collectFormData();
 
   try {
-
     const res = await fetch(API + "/book", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -207,7 +205,7 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER (FIXED + BOOKING ID SAFE) ================= */
+/* ================= PAY LATER (FINAL FIXED) ================= */
 async function handlePayLater() {
 
   if (!selectedDate) return alert("Select date first");
@@ -237,7 +235,6 @@ async function handlePayLater() {
 
     hidePopup();
 
-    /* 🔥 FIXED BOOKING ID CHECK */
     if (result.success && result.bookingId) {
 
       await loadBookings();
@@ -264,14 +261,13 @@ async function handlePayLater() {
 
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
-
   <div class="nav-links">
     <a href="index.html">🏠 Home</a>
     <a href="booking.html">📅 Booking</a>
   </div>
 </header>
 
-<!-- 🔥 POPUP -->
+<!-- ✅ EMAIL POPUP -->
 <div id="emailPopup" class="popup hidden">
   <div class="popup-box">
     <h2>📧 Sending Email...</h2>
@@ -313,13 +309,9 @@ async function handlePayLater() {
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="handlePayNow()">
-💳 Pay Now
-</button>
-
-<button class="btn" onclick="handlePayLater()">
-📌 Pay Later
-</button>
+<!-- ✅ BUTTONS -->
+<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button>
+<button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
 
