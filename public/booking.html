@@ -11,8 +11,187 @@
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
-<!-- ✅ THIS IS REQUIRED -->
-<script defer src="/js/booking.js"></script>
+<script defer>
+
+/* ================= 🔥 IMPORTANT API (TOP OF FILE) ================= */
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+/* ================= GLOBAL ================= */
+let selectedDate = null;
+let bookings = [];
+let calendar;
+
+const MAX_PER_SLOT = 3;
+
+/* ================= LOAD BOOKINGS ================= */
+async function loadBookings() {
+  try {
+    const res = await fetch(API + "/public-bookings");
+    bookings = await res.json();
+  } catch (err) {
+    console.error("LOAD ERROR:", err);
+    bookings = [];
+  }
+}
+
+/* ================= SLOT CHECK ================= */
+function isSlotFull(date, timeSlot) {
+  const count = bookings.filter(b =>
+    b.date === date && b.timeSlot === timeSlot
+  ).length;
+
+  return count >= MAX_PER_SLOT;
+}
+
+/* ================= UPDATE TIME SLOTS ================= */
+function updateTimeSlots() {
+  const timeSelect = document.getElementById("timeSlot");
+
+  Array.from(timeSelect.options).forEach(option => {
+    if (!selectedDate) return;
+
+    const count = bookings.filter(b =>
+      b.date === selectedDate && b.timeSlot === option.value
+    ).length;
+
+    const remaining = MAX_PER_SLOT - count;
+
+    if (remaining <= 0) {
+      option.disabled = true;
+      option.text = option.value + " (FULL)";
+      option.style.color = "red";
+      option.style.fontWeight = "bold";
+    } else {
+      option.disabled = false;
+      option.text = `${option.value} (${remaining}/${MAX_PER_SLOT})`;
+      option.style.color = remaining === 1 ? "orange" : "green";
+      option.style.fontWeight = "normal";
+    }
+  });
+}
+
+/* ================= INIT CALENDAR ================= */
+document.addEventListener("DOMContentLoaded", async function () {
+
+  await loadBookings();
+  updateTimeSlots();
+
+  calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
+
+    initialView: "dayGridMonth",
+    height: 500,
+
+    events: function(fetchInfo, successCallback) {
+
+      const grouped = {};
+
+      bookings.forEach(b => {
+        if (!grouped[b.date]) grouped[b.date] = {};
+        if (!grouped[b.date][b.timeSlot]) grouped[b.date][b.timeSlot] = 0;
+        grouped[b.date][b.timeSlot]++;
+      });
+
+      const events = Object.keys(grouped).map(date => {
+
+        let full = 0;
+        let total = Object.keys(grouped[date]).length;
+
+        Object.values(grouped[date]).forEach(count => {
+          if (count >= MAX_PER_SLOT) full++;
+        });
+
+        return {
+          title: `${full}/${total} full`,
+          start: date,
+          color: full === total ? "red" : "green"
+        };
+      });
+
+      successCallback(events);
+    },
+
+    dateClick: function(info) {
+      selectedDate = info.dateStr;
+
+      document.getElementById("selectedDate").innerText =
+        "Selected Date: " + selectedDate;
+
+      updateTimeSlots();
+    }
+  });
+
+  calendar.render();
+});
+
+/* ================= SERVICE PRICES ================= */
+const servicePrices = {
+  "Home Cleaning": 120,
+  "Deep Cleaning": 200,
+  "Office Cleaning": 150,
+  "Move In/Out Cleaning": 180,
+  "Inside Fridge Cleaning": 35,
+  "Inside Oven Cleaning": 45,
+  "Window Cleaning": 10
+};
+
+/* ================= COLLECT DATA ================= */
+function collectFormData() {
+  return {
+    name: document.getElementById("name").value,
+    phone: document.getElementById("phone").value,
+    email: document.getElementById("email").value,
+    address: document.getElementById("address").value,
+    date: selectedDate,
+    timeSlot: document.getElementById("timeSlot").value,
+    service: document.getElementById("service").value,
+    total: servicePrices[document.getElementById("service").value] || 0
+  };
+}
+
+/* ================= BOOK FUNCTION (FIXED + SAFE REDIRECT) ================= */
+async function bookNow(paymentType = "pay_later") {
+
+  if (!selectedDate) return alert("Select date first");
+
+  const data = collectFormData();
+  data.paymentType = paymentType;
+
+  if (!data.name || !data.email || !data.timeSlot || !data.service) {
+    return alert("Please fill all required fields");
+  }
+
+  try {
+
+    /* 🔥 REQUIRED FETCH FORMAT (YOUR FIX) */
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      console.error("BACKEND ERROR:", result);
+      return alert(result.error || "Booking failed");
+    }
+
+    /* ✅ SAFE REDIRECT FIX */
+    if (result.success && result.bookingId) {
+      window.location.href =
+        `/success.html?bookingId=${result.bookingId}`;
+    } else {
+      alert("Booking failed: Missing booking ID");
+    }
+
+  } catch (err) {
+    console.error("BOOK ERROR:", err);
+    alert("Error: " + err.message);
+  }
+}
+
+</script>
+
 </head>
 
 <body>
@@ -42,6 +221,9 @@
   <option value="Deep Cleaning">Deep Cleaning - $200</option>
   <option value="Office Cleaning">Office Cleaning - $150</option>
   <option value="Move In/Out Cleaning">Move In/Out Cleaning - $180</option>
+  <option value="Inside Fridge Cleaning">Inside Fridge Cleaning</option>
+  <option value="Inside Oven Cleaning">Inside Oven Cleaning</option>
+  <option value="Window Cleaning">Window Cleaning</option>
 </select>
 
 <select id="timeSlot" class="input">
@@ -57,7 +239,7 @@
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<!-- ✅ BUTTONS MUST CALL FUNCTION -->
+<!-- REQUIRED BUTTONS -->
 <button class="btn primary" onclick="bookNow('pay_now')">
 💳 Pay Now
 </button>
