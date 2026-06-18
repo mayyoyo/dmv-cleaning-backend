@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Booking Success</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Booking Confirmed</title>
+
 <link rel="stylesheet" href="css/success.css">
 </head>
 
@@ -10,91 +12,106 @@
 
 <div class="wrapper">
 
-  <h1>✔ Booking Confirmed</h1>
+  <div class="success-header">
+    <div class="checkmark">✔</div>
+    <h1>Booking Confirmed</h1>
+    <p>Thank you for choosing DMV Cleaning Services</p>
+  </div>
 
   <div class="card">
 
-    <p><b>Booking ID:</b> <span id="id"></span></p>
-    <p><b>Name:</b> <span id="name"></span></p>
-    <p><b>Service:</b> <span id="service"></span></p>
-    <p><b>Date:</b> <span id="date"></span></p>
-    <p><b>Time:</b> <span id="time"></span></p>
-    <p><b>Total:</b> $<span id="total"></span></p>
-    <p><b>Status:</b> <span id="status"></span></p>
+    <div class="top">
+      <h2>🧼 DMV Cleaning Services LLC</h2>
+      <p>📞 703-967-0674</p>
+    </div>
+
+    <div class="details">
+
+      <div class="row">
+        <span>Booking ID</span>
+        <b id="bookingId"></b>
+      </div>
+
+      <div class="row">
+        <span>Status</span>
+        <b id="status" class="status"></b>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row"><span>Name</span><b id="name"></b></div>
+      <div class="row"><span>Email</span><b id="email"></b></div>
+      <div class="row"><span>Phone</span><b id="phone"></b></div>
+
+      <div class="divider"></div>
+
+      <div class="row"><span>Service</span><b id="service"></b></div>
+      <div class="row"><span>Date</span><b id="date"></b></div>
+      <div class="row"><span>Time</span><b id="time"></b></div>
+
+    </div>
+
+    <div class="price-box">
+      <p>Total Due Amount</p>
+      <h2>$<span id="total">0</span></h2>
+    </div>
+
+    <div class="next-steps">
+      <h3>What Happens Next?</h3>
+      <ul>
+        <li>✔ Our team will contact you shortly</li>
+        <li>✔ Please be available at your scheduled time</li>
+        <li>✔ Prepare access to your home</li>
+      </ul>
+    </div>
+
+    <div class="actions">
+      <a href="index.html" class="btn">🏠 Back Home</a>
+      <a href="booking.html" class="btn">📅 Book Again</a>
+      <a href="tel:7039670674" class="btn outline">📞 Call Us</a>
+    </div>
 
   </div>
-
 </div>
 
 <script>
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-/* ================= GET URL VALUES ================= */
-const bookingId = new URLSearchParams(location.search).get("bookingId");
-const sessionId = new URLSearchParams(location.search).get("session_id");
-
-/* ================= ELEMENTS ================= */
-const idEl = document.getElementById("id");
-const nameEl = document.getElementById("name");
-const serviceEl = document.getElementById("service");
-const dateEl = document.getElementById("date");
-const timeEl = document.getElementById("time");
-const totalEl = document.getElementById("total");
-const statusEl = document.getElementById("status");
+/* ================= GET BOOKING ID ================= */
+const params = new URLSearchParams(window.location.search);
+const bookingId = params.get("bookingId");
 
 /* ================= LOAD BOOKING ================= */
 async function loadBooking() {
-
   try {
-
-    /* ================= STRIPE FLOW (IMPORTANT FIX) ================= */
-    if (sessionId) {
-
-      const res = await fetch(API + "/verify-session?session_id=" + sessionId);
-      const result = await res.json();
-
-      const b = result.booking;
-
-      if (!b) {
-        document.body.innerHTML = "NOT FOUND";
-        return;
-      }
-
-      render(b);
-      return;
-    }
-
-    /* ================= NORMAL BOOKING FLOW ================= */
     const res = await fetch(API + "/public-bookings");
-    const data = await res.json();
+    const bookings = await res.json();
 
-    const b = data.find(x =>
-      x._id === bookingId || x.stripeSessionId === bookingId
+    const booking = bookings.find(b =>
+      b._id === bookingId || b.bookingId === bookingId
     );
 
-    if (!b) {
-      document.body.innerHTML = "NOT FOUND";
+    if (!booking) {
+      document.body.innerHTML = "<h2>❌ Booking Not Found</h2>";
       return;
     }
 
-    render(b);
+    document.getElementById("bookingId").innerText = booking._id;
+    document.getElementById("status").innerText = booking.paymentStatus || "Pending";
+
+    document.getElementById("name").innerText = booking.name || "";
+    document.getElementById("email").innerText = booking.email || "";
+    document.getElementById("phone").innerText = booking.phone || "";
+
+    document.getElementById("service").innerText = booking.service || "";
+    document.getElementById("date").innerText = booking.date || "";
+    document.getElementById("time").innerText = booking.timeSlot || "";
+    document.getElementById("total").innerText = booking.total || 0;
 
   } catch (err) {
     console.error(err);
-    document.body.innerHTML = "ERROR LOADING BOOKING";
+    document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
   }
-}
-
-/* ================= RENDER ================= */
-function render(b) {
-
-  idEl.innerText = b._id || "";
-  nameEl.innerText = b.name || "";
-  serviceEl.innerText = b.service || "";
-  dateEl.innerText = b.date || "";
-  timeEl.innerText = b.timeSlot || "";
-  totalEl.innerText = b.total || 0;
-  statusEl.innerText = b.paymentStatus || "pending";
 }
 
 loadBooking();
