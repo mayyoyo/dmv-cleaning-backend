@@ -17,7 +17,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type"]
 }));
 
-/* ================= STRIPE WEBHOOK RAW BODY ================= */
+/* ================= STRIPE RAW WEBHOOK (IMPORTANT) ================= */
 app.use("/api/stripe-webhook", express.raw({ type: "application/json" }));
 
 app.use(express.json());
@@ -56,7 +56,7 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-/* ================= TEST EMAIL (ONLY ONCE) ================= */
+/* ================= TEST EMAIL ================= */
 app.get("/test-email", async (req, res) => {
   try {
     await transporter.sendMail({
@@ -76,6 +76,7 @@ app.get("/test-email", async (req, res) => {
 /* ================= BOOKING API ================= */
 app.post("/api/book", async (req, res) => {
   try {
+
     const count = await Booking.countDocuments({
       date: req.body.date,
       timeSlot: req.body.timeSlot
@@ -148,7 +149,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= STRIPE WEBHOOK + EMAIL CONFIRMATION ================= */
+/* ================= STRIPE WEBHOOK (FINAL FIXED + EMAIL) ================= */
 app.post("/api/stripe-webhook", async (req, res) => {
 
   const sig = req.headers["stripe-signature"];
@@ -165,6 +166,7 @@ app.post("/api/stripe-webhook", async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
+  /* ================= PAYMENT CONFIRMED ================= */
   if (event.type === "checkout.session.completed") {
 
     const session = event.data.object;
@@ -174,28 +176,34 @@ app.post("/api/stripe-webhook", async (req, res) => {
     });
 
     if (booking) {
+
       booking.paymentStatus = "paid";
       await booking.save();
 
       console.log("✅ PAYMENT CONFIRMED");
 
-      /* ================= EMAIL CUSTOMER ================= */
-      await transporter.sendMail({
-        from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
-        to: booking.email,
-        subject: "Payment Confirmed - Booking Receipt",
-        html: `
-          <h2>Payment Successful ✅</h2>
-          <p><b>Name:</b> ${booking.name}</p>
-          <p><b>Service:</b> ${booking.service}</p>
-          <p><b>Date:</b> ${booking.date}</p>
-          <p><b>Time:</b> ${booking.timeSlot}</p>
-          <p><b>Total:</b> $${booking.total}</p>
-          <p>Thank you for your booking!</p>
-        `
-      });
+      /* ================= EMAIL CUSTOMER (YOUR ADDED LOGIC) ================= */
+      try {
+        await transporter.sendMail({
+          from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
+          to: booking.email,
+          subject: "Payment Confirmed - Booking Receipt",
+          html: `
+            <h2>Payment Successful ✅</h2>
+            <p><b>Name:</b> ${booking.name}</p>
+            <p><b>Service:</b> ${booking.service}</p>
+            <p><b>Date:</b> ${booking.date}</p>
+            <p><b>Time:</b> ${booking.timeSlot}</p>
+            <p><b>Total:</b> $${booking.total}</p>
+            <hr/>
+            <p>Thank you for your booking!</p>
+          `
+        });
 
-      console.log("📧 Email sent to customer");
+        console.log("📧 CUSTOMER EMAIL SENT");
+      } catch (emailErr) {
+        console.log("EMAIL ERROR:", emailErr.message);
+      }
     }
   }
 
@@ -205,6 +213,7 @@ app.post("/api/stripe-webhook", async (req, res) => {
 /* ================= VERIFY SESSION ================= */
 app.get("/api/verify-session", async (req, res) => {
   try {
+
     const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
 
     const booking = await Booking.findOne({
@@ -227,13 +236,6 @@ app.get("/api/verify-session", async (req, res) => {
 app.get("/api/admin/bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
-});
-
-app.post("/api/admin/update-status", async (req, res) => {
-  await Booking.findByIdAndUpdate(req.body.id, {
-    paymentStatus: req.body.status
-  });
-  res.json({ success: true });
 });
 
 app.post("/api/admin/delete", async (req, res) => {
