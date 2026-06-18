@@ -4,39 +4,106 @@
 <meta charset="UTF-8">
 <title>Admin Dashboard</title>
 
-<link rel="stylesheet" href="admin.css">
-
+<link rel="stylesheet" href="../css/admin-dashboard.css">
 </head>
 
 <body>
 
-<div class="layout">
+<div class="navbar">
+  <h2>DMV Admin Dashboard</h2>
 
-  <!-- SIDEBAR -->
-  <div class="sidebar">
+  <button onclick="logout()" class="logout-btn">Logout</button>
+</div>
 
-    <h2>Admin</h2>
+<div class="container">
 
-    <button onclick="loadBookings()">📋 Bookings</button>
-    <button onclick="loadRevenue()">💰 Revenue</button>
-    <button onclick="logout()">🚪 Logout</button>
+  <h3>📊 Bookings</h3>
 
-  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Service</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Status</th>
+        <th>Action</th>
+      </tr>
+    </thead>
 
-  <!-- MAIN -->
-  <div class="main">
-
-    <h2>Dashboard</h2>
-
-    <div id="stats"></div>
-
-    <div id="list"></div>
-
-  </div>
+    <tbody id="bookingsTable"></tbody>
+  </table>
 
 </div>
 
-<script src="admin.js"></script>
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+const token = localStorage.getItem("admin-token");
+
+/* ================= LOGIN CHECK ================= */
+if (!token) {
+  window.location.href = "login.html";
+}
+
+/* ================= LOAD BOOKINGS ================= */
+async function loadBookings() {
+  const res = await fetch(API + "/admin/bookings", {
+    headers: {
+      Authorization: token
+    }
+  });
+
+  const data = await res.json();
+
+  const table = document.getElementById("bookingsTable");
+  table.innerHTML = "";
+
+  data.forEach(b => {
+    table.innerHTML += `
+      <tr>
+        <td>${b.name}</td>
+        <td>${b.email}</td>
+        <td>${b.service}</td>
+        <td>${b.date}</td>
+        <td>${b.timeSlot}</td>
+        <td>
+          <span class="status ${b.paymentStatus}">
+            ${b.paymentStatus}
+          </span>
+        </td>
+        <td>
+          <button onclick="deleteBooking('${b._id}')">Delete</button>
+        </td>
+      </tr>
+    `;
+  });
+}
+
+/* ================= DELETE BOOKING ================= */
+async function deleteBooking(id) {
+  await fetch(API + "/admin/delete", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: token
+    },
+    body: JSON.stringify({ id })
+  });
+
+  loadBookings();
+}
+
+/* ================= LOGOUT ================= */
+function logout() {
+  localStorage.removeItem("admin-token");
+
+  window.location.href = "login.html";
+}
+
+/* ================= INIT ================= */
+loadBookings();
+</script>
 
 </body>
 </html>

@@ -1,32 +1,121 @@
 body {
-  font-family: Arial;
+  margin: 0;
+  font-family: Arial, sans-serif;
   background: #0f172a;
-  color: white;
+  color: #e5e7eb;
 }
 
-header {
+/* ================= NAVBAR ================= */
+.navbar {
   display: flex;
   justify-content: space-between;
-  padding: 20px;
+  align-items: center;
+  padding: 15px 20px;
   background: #111827;
+  border-bottom: 1px solid #1f2937;
 }
 
+.navbar h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+/* ================= LOGOUT BUTTON ================= */
+.logout-btn {
+  background: #ef4444;
+  border: none;
+  padding: 8px 14px;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.logout-btn:hover {
+  background: #dc2626;
+}
+
+/* ================= CONTAINER ================= */
+.container {
+  padding: 20px;
+}
+
+/* ================= TABLE ================= */
 table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 20px;
+  background: #111827;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 th, td {
-  border: 1px solid #334155;
-  padding: 10px;
+  padding: 12px;
+  text-align: center;
+  border-bottom: 1px solid #1f2937;
 }
 
-.controls {
-  padding: 10px;
+th {
+  background: #1f2937;
+  color: #fff;
 }
 
-button {
+/* ================= STATUS COLORS ================= */
+.status {
   padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+/* Paid = green */
+.status.paid {
+  background: #22c55e;
+  color: white;
+}
+
+/* Pending = yellow */
+.status.pending {
+  background: #f59e0b;
+  color: black;
+}
+
+/* Failed = red */
+.status.failed {
+  background: #ef4444;
+  color: white;
+}
+
+/* ================= ACTION BUTTON ================= */
+button {
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
   cursor: pointer;
+  background: #3b82f6;
+  color: white;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #2563eb;
+}
+
+/* ================= MOBILE ================= */
+@media (max-width: 768px) {
+
+  table {
+    font-size: 12px;
+  }
+
+  th, td {
+    padding: 8px;
+  }
+
+  .navbar {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
 }

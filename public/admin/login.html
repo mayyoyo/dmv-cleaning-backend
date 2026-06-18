@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Admin Login</title>
-<link rel="stylesheet" href="admin.css">
+<link rel="stylesheet" href="../css/admin-login.css">
 </head>
 
 <body>
@@ -42,6 +42,8 @@ async function login() {
 
   if (data.success) {
     localStorage.setItem("admin-token", data.token);
+
+    // ✅ GO TO DASHBOARD
     window.location.href = "dashboard.html";
   } else {
     document.getElementById("error").innerText = "Invalid credentials";
