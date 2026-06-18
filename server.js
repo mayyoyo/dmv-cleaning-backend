@@ -1,33 +1,31 @@
 require("dotenv").config();
 
 const express = require("express");
-const mongoose = require("mongoose");
-const path = require("path");
 const cors = require("cors");
-const http = require("http");
-const { Server } = require("socket.io");
-const PDFDocument = require("pdfkit");
+const mongoose = require("mongoose");
 const nodemailer = require("nodemailer");
+const PDFDocument = require("pdfkit");
+const path = require("path");
 
-/* ================= APP ================= */
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*" } });
+
+/* ================= CORS (FIXED - IMPORTANT) ================= */
+app.use(cors({
+  origin: "*"
+}));
+
+app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
 /* ================= BASE ================= */
-const BASE_URL =
-  process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
-
+const BASE_URL = process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 const MAX_PER_SLOT = 3;
 
-/* ================= DEBUG EMAIL ================= */
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log(
-  "EMAIL_PASS:",
-  process.env.EMAIL_PASS ? "Loaded ✅" : "Missing ❌"
-);
+/* ================= DEBUG ================= */
+console.log("EMAIL:", process.env.EMAIL_USER);
+console.log("EMAIL PASS:", process.env.EMAIL_PASS ? "OK" : "MISSING");
 
-/* ================= EMAIL TRANSPORT ================= */
+/* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -36,83 +34,46 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-/* ================= EMAIL VERIFY ================= */
 transporter.verify((err) => {
-  if (err) console.error("❌ EMAIL ERROR:", err.message);
-  else console.log("✅ EMAIL READY");
+  if (err) console.log("EMAIL ERROR", err);
+  else console.log("EMAIL READY");
 });
 
-/* ================= RETRY FUNCTION (FIXED SYNTAX) ================= */
-async function sendEmailWithRetry(mailOptions, retries = 3) {
+/* ================= DB ================= */
+mongoose.set("strictQuery", true);
+
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log(err));
+
+const Booking = mongoose.model("Booking", {
+  name: String,
+  email: String,
+  phone: String,
+  address: String,
+  date: String,
+  timeSlot: String,
+  service: String,
+  total: Number,
+  paymentType: String,
+  paymentStatus: { type: String, default: "pending" },
+  createdAt: { type: Date, default: Date.now }
+});
+
+/* ================= EMAIL FUNCTION ================= */
+async function sendEmail(mailOptions) {
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("Email sent:", info.response);
-    return true;
-
-  } catch (error) {
-    console.error("Email error:", error.message);
-
-    if (retries > 0) {
-      console.log(`Retrying... (${retries})`);
-      await new Promise((res) => setTimeout(res, 3000));
-      return sendEmailWithRetry(mailOptions, retries - 1);
-    } else {
-      console.error("Failed after retries");
-      return false;
-    }
+    await transporter.sendMail(mailOptions);
+    console.log("Email sent");
+  } catch (err) {
+    console.log("Email error", err.message);
   }
 }
 
-/* ================= MIDDLEWARE ================= */
-app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, "public")));
-
-/* ================= MONGOOSE ================= */
-mongoose.set("strictQuery", true);
-
-const Booking = mongoose.model(
-  "Booking",
-  new mongoose.Schema({
-    name: String,
-    email: String,
-    phone: String,
-    address: String,
-    date: String,
-    timeSlot: String,
-    service: String,
-    total: Number,
-    paymentType: String,
-    paymentStatus: { type: String, default: "PENDING" },
-    createdAt: { type: Date, default: Date.now }
-  })
-);
-
-/* ================= HOME ================= */
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public/index.html"));
-});
-
-/* ================= TEST EMAIL ================= */
-app.get("/test-email", async (req, res) => {
-  try {
-    await sendEmailWithRetry({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
-      subject: "Test Email ✅",
-      text: "Email system working!"
-    });
-
-    res.send("✅ Email sent");
-  } catch (err) {
-    res.send("❌ Email failed");
-  }
-});
-
-/* ================= 🔥 FIXED BOOKING ROUTE ================= */
+/* ================= BOOK API (FIXED SAFE + EMAIL + SLOT CHECK) ================= */
 app.post("/api/book", async (req, res) => {
   try {
+
     const count = await Booking.countDocuments({
       date: req.body.date,
       timeSlot: req.body.timeSlot
@@ -129,8 +90,8 @@ app.post("/api/book", async (req, res) => {
 
     const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
 
-    const mailOptions = {
-      from: `"DMV Cleaning Services" <${process.env.EMAIL_USER}>`,
+    await sendEmail({
+      from: process.env.EMAIL_USER,
       to: booking.email,
       subject: "🧼 Booking Confirmed",
       html: `
@@ -139,50 +100,52 @@ app.post("/api/book", async (req, res) => {
         <p><b>Service:</b> ${booking.service}</p>
         <p><b>Date:</b> ${booking.date}</p>
         <p><b>Time:</b> ${booking.timeSlot}</p>
-        <p><b>Total:</b> $${booking.total}</p>
+        <p><b>Total:</b> $${booking.total || 0}</p>
         <p><a href="${invoiceUrl}">Download Invoice</a></p>
       `
-    };
+    });
 
-    await sendEmailWithRetry(mailOptions);
-
-    /* ✅ THIS FIXES YOUR ERROR (bookingId undefined) */
     return res.json({
       success: true,
       bookingId: booking._id
     });
 
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({
+    console.log(err);
+    res.status(500).json({
       success: false,
       error: err.message
     });
   }
 });
 
-/* ================= CONTACT EMAIL ================= */
-app.post("/api/contact", async (req, res) => {
+/* ================= PUBLIC BOOKINGS ================= */
+app.get("/api/public-bookings", async (req, res) => {
   try {
-    const { name, email, message } = req.body;
-
-    await sendEmailWithRetry({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
-      subject: "📩 Contact Message",
-      html: `
-        <h3>New Message</h3>
-        <p>${name}</p>
-        <p>${email}</p>
-        <p>${message}</p>
-      `
-    });
-
-    res.json({ success: true });
-
+    const data = await Booking.find();
+    res.json(data);
   } catch (err) {
-    res.status(500).json({ success: false });
+    res.status(500).json([]);
   }
+});
+
+/* ================= ADMIN ENDPOINTS ================= */
+app.get("/api/admin/bookings", async (req, res) => {
+  const data = await Booking.find().sort({ createdAt: -1 });
+  res.json(data);
+});
+
+app.post("/api/admin/update-status", async (req, res) => {
+  await Booking.findByIdAndUpdate(req.body.id, {
+    paymentStatus: req.body.status
+  });
+
+  res.json({ success: true });
+});
+
+app.post("/api/admin/delete", async (req, res) => {
+  await Booking.findByIdAndDelete(req.body.id);
+  res.json({ success: true });
 });
 
 /* ================= INVOICE ================= */
@@ -200,7 +163,8 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.text(`Name: ${booking.name}`);
   doc.text(`Service: ${booking.service}`);
   doc.text(`Date: ${booking.date}`);
-  doc.text(`Total: $${booking.total}`);
+  doc.text(`Time: ${booking.timeSlot}`);
+  doc.text(`Total: $${booking.total || 0}`);
 
   doc.end();
 });
@@ -208,12 +172,6 @@ app.get("/api/invoice/:id", async (req, res) => {
 /* ================= START SERVER ================= */
 const PORT = process.env.PORT || 10000;
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log("🔥 Server running on", PORT);
 });
-
-/* ================= MONGO CONNECT ================= */
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected ✅"))
-  .catch((err) => console.error("DB ERROR:", err.message));

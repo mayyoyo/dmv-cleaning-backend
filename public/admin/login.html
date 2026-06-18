@@ -1,60 +1,54 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Admin Login</title>
-
-  <link rel="stylesheet" href="/admin/css/admin-login.css">
+<meta charset="UTF-8">
+<title>Admin Login</title>
+<link rel="stylesheet" href="../css/admin.css">
 </head>
+
 <body>
 
-  <div class="login-container">
-    <h2>Admin Login</h2>
+<div class="layout">
+  <div class="main">
 
+    <div class="card">
+      <h2>🔐 Admin Login</h2>
 
-<input id="username" type="text" placeholder="Username" />
-<input id="password" type="password" placeholder="Password" />
+      <input id="username" placeholder="Username" />
+      <input id="password" type="password" placeholder="Password" />
 
-<button onclick="login()">Login</button>
+      <button onclick="login()">Login</button>
 
+      <div id="msg"></div>
+    </div>
 
   </div>
+</div>
 
-  <script>
-    const API = "https://dmv-cleaning-backend.onrender.com";
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com/api";
 
-    async function login() {
-      try {
-        const res = await fetch(API + "/admin-login", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify({
-            username: document.getElementById("username").value,
-            password: document.getElementById("password").value
-          })
-        });
+async function login() {
 
-        const data = await res.json();
+  const res = await fetch(API + "/admin/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username: username.value,
+      password: password.value
+    })
+  });
 
-        if (data.success) {
-          localStorage.setItem("token", data.token);
+  const data = await res.json();
 
-          console.log("TOKEN SAVED:", data.token);
-
-          window.location.href = "/admin/dashboard.html";
-        } else {
-          alert("Invalid login");
-        }
-
-      } catch (err) {
-        console.error("LOGIN ERROR:", err);
-        alert("Server error");
-      }
-    }
-  </script>
+  if (data.success) {
+    localStorage.setItem("admin", data.token);
+    window.location.href = "dashboard.html";
+  } else {
+    msg.innerHTML = "❌ Wrong login";
+  }
+}
+</script>
 
 </body>
 </html>

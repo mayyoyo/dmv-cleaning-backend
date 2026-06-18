@@ -1,38 +1,127 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Admin Dashboard</title>
-
-  <link rel="stylesheet" href="/admin/css/admin-dashboard.css">
+<meta charset="UTF-8">
+<title>Admin Dashboard</title>
+<link rel="stylesheet" href="../css/admin.css">
 </head>
+
 <body>
 
-  <h1>Admin Dashboard</h1>
+<div class="layout">
 
-<button onclick="logout()">Logout</button>
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <h3>📊 Admin</h3>
 
-  <div id="content">
-    <p>Welcome Admin 👋</p>
-  </div>
+  <button onclick="load()">🔄 Refresh</button>
+  <button onclick="filterToday()">📅 Today</button>
+  <button onclick="logout()">🚪 Logout</button>
+</div>
 
-  <script>
-    document.addEventListener("DOMContentLoaded", () => {
-      const token = localStorage.getItem("token");
+<!-- MAIN -->
+<div class="main">
 
-      console.log("TOKEN FOUND:", token);
+  <h2>Bookings</h2>
 
-      if (!token) {
-        window.location.href = "/admin/login.html";
-      }
-    });
+  <div id="spinner" class="spinner hidden"></div>
 
-    function logout() {
-      localStorage.removeItem("token");
-      window.location.href = "/admin/login.html";
-    }
-  </script>
+  <div id="list"></div>
+
+</div>
+
+</div>
+
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+function showLoader() {
+  spinner.classList.remove("hidden");
+}
+
+function hideLoader() {
+  spinner.classList.add("hidden");
+}
+
+/* ================= LOAD BOOKINGS ================= */
+async function load() {
+
+  showLoader();
+
+  const res = await fetch(API + "/admin/bookings");
+  const data = await res.json();
+
+  render(data);
+
+  hideLoader();
+}
+
+/* ================= RENDER ================= */
+function render(data) {
+
+  list.innerHTML = data.map(b => `
+    <div class="card">
+      <h3>${b.name}</h3>
+      <p>📧 ${b.email}</p>
+      <p>📞 ${b.phone}</p>
+      <p>🧼 ${b.service}</p>
+      <p>📅 ${b.date} | ⏰ ${b.timeSlot}</p>
+      <p>💰 $${b.total || 0}</p>
+      <p>Status: ${b.paymentStatus}</p>
+
+      <button onclick="updateStatus('${b._id}','DONE')">✔ Done</button>
+      <button onclick="updateStatus('${b._id}','PENDING')">⏳ Pending</button>
+      <button onclick="deleteBooking('${b._id}')">🗑 Delete</button>
+    </div>
+  `).join("");
+}
+
+/* ================= UPDATE STATUS ================= */
+async function updateStatus(id, status) {
+
+  await fetch(API + "/admin/update-status", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id, status })
+  });
+
+  load();
+}
+
+/* ================= DELETE ================= */
+async function deleteBooking(id) {
+
+  await fetch(API + "/admin/delete", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ id })
+  });
+
+  load();
+}
+
+/* ================= FILTER TODAY ================= */
+async function filterToday() {
+
+  const res = await fetch(API + "/admin/bookings");
+  const data = await res.json();
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const filtered = data.filter(b => b.date === today);
+
+  render(filtered);
+}
+
+/* ================= LOGOUT ================= */
+function logout() {
+  localStorage.removeItem("admin");
+  window.location.href = "login.html";
+}
+
+/* ================= INIT ================= */
+load();
+</script>
 
 </body>
 </html>

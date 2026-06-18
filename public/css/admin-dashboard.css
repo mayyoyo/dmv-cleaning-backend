@@ -1,70 +1,32 @@
 body {
-margin: 0;
-font-family: Arial, sans-serif;
-background: #f4f6f9;
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
 }
 
-.navbar {
-display: flex;
-justify-content: space-between;
-align-items: center;
-background: #1e2a38;
-color: #fff;
-padding: 15px;
-}
-
-.navbar nav {
-display: flex;
-gap: 15px;
-}
-
-.navbar nav a {
-color: white;
-text-decoration: none;
-}
-
-.menu-toggle {
-display: none;
-font-size: 24px;
-cursor: pointer;
-}
-
-.container {
-padding: 20px;
+header {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px;
+  background: #111827;
 }
 
 table {
-width: 100%;
-background: white;
-border-collapse: collapse;
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
 }
 
 th, td {
-padding: 12px;
-border-bottom: 1px solid #ddd;
-text-align: left;
+  border: 1px solid #334155;
+  padding: 10px;
 }
 
-@media (max-width: 768px) {
-.menu-toggle {
-display: block;
+.controls {
+  padding: 10px;
 }
 
-.navbar nav {
-display: none;
-flex-direction: column;
-background: #1e2a38;
-position: absolute;
-top: 60px;
-right: 0;
-width: 200px;
-}
-
-.navbar nav.active {
-display: flex;
-}
-
-table {
-font-size: 12px;
-}
+button {
+  padding: 5px 10px;
+  cursor: pointer;
 }
