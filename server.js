@@ -17,7 +17,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type"]
 }));
 
-/* ================= STRIPE RAW WEBHOOK (IMPORTANT) ================= */
+/* ================= STRIPE RAW WEBHOOK ================= */
 app.use("/api/stripe-webhook", express.raw({ type: "application/json" }));
 
 app.use(express.json());
@@ -26,6 +26,10 @@ app.use(express.static(path.join(__dirname, "public")));
 /* ================= BASE ================= */
 const BASE_URL = process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 const MAX_PER_SLOT = 3;
+
+/* ================= ADMIN CREDENTIALS (ADDED) ================= */
+const ADMIN_USER = process.env.ADMIN_USER || "admin";
+const ADMIN_PASS = process.env.ADMIN_PASS || "admin123";
 
 /* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URI)
@@ -72,6 +76,34 @@ app.get("/test-email", async (req, res) => {
     res.status(500).send("EMAIL FAILED: " + err.message);
   }
 });
+
+/* ================= ADMIN LOGIN (ADDED) ================= */
+app.post("/api/admin/login", (req, res) => {
+  const { username, password } = req.body;
+
+  if (username === ADMIN_USER && password === ADMIN_PASS) {
+    return res.json({
+      success: true,
+      token: "admin-token-123"
+    });
+  }
+
+  res.status(401).json({
+    success: false,
+    error: "Invalid credentials"
+  });
+});
+
+/* ================= ADMIN MIDDLEWARE (ADDED) ================= */
+function adminAuth(req, res, next) {
+  const token = req.headers.authorization;
+
+  if (token === "admin-token-123") {
+    next();
+  } else {
+    res.status(403).json({ error: "Unauthorized" });
+  }
+}
 
 /* ================= BOOKING API ================= */
 app.post("/api/book", async (req, res) => {
@@ -149,7 +181,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= STRIPE WEBHOOK (FINAL FIXED + EMAIL) ================= */
+/* ================= STRIPE WEBHOOK ================= */
 app.post("/api/stripe-webhook", async (req, res) => {
 
   const sig = req.headers["stripe-signature"];
@@ -166,7 +198,6 @@ app.post("/api/stripe-webhook", async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  /* ================= PAYMENT CONFIRMED ================= */
   if (event.type === "checkout.session.completed") {
 
     const session = event.data.object;
@@ -182,7 +213,7 @@ app.post("/api/stripe-webhook", async (req, res) => {
 
       console.log("✅ PAYMENT CONFIRMED");
 
-      /* ================= EMAIL CUSTOMER (YOUR ADDED LOGIC) ================= */
+      /* ================= EMAIL CUSTOMER ================= */
       try {
         await transporter.sendMail({
           from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
@@ -210,6 +241,17 @@ app.post("/api/stripe-webhook", async (req, res) => {
   res.json({ received: true });
 });
 
+/* ================= ADMIN ROUTES (PROTECTED) ================= */
+app.get("/api/admin/bookings", adminAuth, async (req, res) => {
+  const data = await Booking.find().sort({ createdAt: -1 });
+  res.json(data);
+});
+
+app.post("/api/admin/delete", adminAuth, async (req, res) => {
+  await Booking.findByIdAndDelete(req.body.id);
+  res.json({ success: true });
+});
+
 /* ================= VERIFY SESSION ================= */
 app.get("/api/verify-session", async (req, res) => {
   try {
@@ -230,17 +272,6 @@ app.get("/api/verify-session", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-/* ================= ADMIN ================= */
-app.get("/api/admin/bookings", async (req, res) => {
-  const data = await Booking.find().sort({ createdAt: -1 });
-  res.json(data);
-});
-
-app.post("/api/admin/delete", async (req, res) => {
-  await Booking.findByIdAndDelete(req.body.id);
-  res.json({ success: true });
 });
 
 /* ================= INVOICE PDF ================= */
