@@ -8,27 +8,43 @@
 
 <body>
 
-<div class="login-box">
+<div class="login-container">
 
-  <h2>Admin Login</h2>
+  <div class="login-box">
 
-  <input id="user" placeholder="Username">
-  <input id="pass" type="password" placeholder="Password">
+    <h2>Admin Login</h2>
 
-  <button onclick="login()">Login</button>
+    <input id="user" placeholder="Username">
+    <input id="pass" type="password" placeholder="Password">
+
+    <button onclick="login()">Login</button>
+
+    <p id="error" class="error"></p>
+
+  </div>
 
 </div>
 
 <script>
-function login() {
-  const user = document.getElementById("user").value;
-  const pass = document.getElementById("pass").value;
+const API = "https://dmv-cleaning-backend.onrender.com";
 
-  if (user === "admin" && pass === "1234") {
-    localStorage.setItem("admin", "true");
+async function login() {
+  const username = document.getElementById("user").value;
+  const password = document.getElementById("pass").value;
+
+  const res = await fetch(API + "/api/admin/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password })
+  });
+
+  const data = await res.json();
+
+  if (data.success) {
+    localStorage.setItem("admin-token", data.token);
     window.location.href = "dashboard.html";
   } else {
-    alert("Wrong login");
+    document.getElementById("error").innerText = "Invalid credentials";
   }
 }
 </script>
