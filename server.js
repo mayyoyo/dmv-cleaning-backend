@@ -27,7 +27,7 @@ app.use(express.static(path.join(__dirname, "public")));
 const BASE_URL = process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 const MAX_PER_SLOT = 3;
 
-/* ================= ADMIN CREDENTIALS (ADDED) ================= */
+/* ================= ADMIN CREDENTIALS ================= */
 const ADMIN_USER = process.env.ADMIN_USER || "admin";
 const ADMIN_PASS = process.env.ADMIN_PASS || "admin123";
 
@@ -77,7 +77,7 @@ app.get("/test-email", async (req, res) => {
   }
 });
 
-/* ================= ADMIN LOGIN (ADDED) ================= */
+/* ================= ADMIN LOGIN ================= */
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -94,7 +94,7 @@ app.post("/api/admin/login", (req, res) => {
   });
 });
 
-/* ================= ADMIN MIDDLEWARE (ADDED) ================= */
+/* ================= ADMIN MIDDLEWARE ================= */
 function adminAuth(req, res, next) {
   const token = req.headers.authorization;
 
@@ -151,7 +151,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       mode: "payment",
-
       line_items: [{
         price_data: {
           currency: "usd",
@@ -162,7 +161,6 @@ app.post("/api/create-checkout-session", async (req, res) => {
         },
         quantity: 1
       }],
-
       success_url: `${BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${BASE_URL}/booking.html`
     });
@@ -181,7 +179,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= STRIPE WEBHOOK ================= */
+/* ================= STRIPE WEBHOOK + EMAIL ================= */
 app.post("/api/stripe-webhook", async (req, res) => {
 
   const sig = req.headers["stripe-signature"];
@@ -241,17 +239,6 @@ app.post("/api/stripe-webhook", async (req, res) => {
   res.json({ received: true });
 });
 
-/* ================= ADMIN ROUTES (PROTECTED) ================= */
-app.get("/api/admin/bookings", adminAuth, async (req, res) => {
-  const data = await Booking.find().sort({ createdAt: -1 });
-  res.json(data);
-});
-
-app.post("/api/admin/delete", adminAuth, async (req, res) => {
-  await Booking.findByIdAndDelete(req.body.id);
-  res.json({ success: true });
-});
-
 /* ================= VERIFY SESSION ================= */
 app.get("/api/verify-session", async (req, res) => {
   try {
@@ -272,6 +259,17 @@ app.get("/api/verify-session", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+/* ================= ADMIN ROUTES (PROTECTED) ================= */
+app.get("/api/admin/bookings", adminAuth, async (req, res) => {
+  const data = await Booking.find().sort({ createdAt: -1 });
+  res.json(data);
+});
+
+app.post("/api/admin/delete", adminAuth, async (req, res) => {
+  await Booking.findByIdAndDelete(req.body.id);
+  res.json({ success: true });
 });
 
 /* ================= INVOICE PDF ================= */
