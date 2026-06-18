@@ -17,7 +17,7 @@ app.use(cors({
   allowedHeaders: ["Content-Type"]
 }));
 
-/* ================= STRIPE RAW WEBHOOK ================= */
+/* ================= STRIPE RAW WEBHOOK (IMPORTANT) ================= */
 app.use("/api/stripe-webhook", express.raw({ type: "application/json" }));
 
 app.use(express.json());
@@ -77,7 +77,7 @@ app.get("/test-email", async (req, res) => {
   }
 });
 
-/* ================= ADMIN LOGIN ================= */
+/* ================= ADMIN LOGIN API ================= */
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -108,7 +108,6 @@ function adminAuth(req, res, next) {
 /* ================= BOOKING API ================= */
 app.post("/api/book", async (req, res) => {
   try {
-
     const count = await Booking.countDocuments({
       date: req.body.date,
       timeSlot: req.body.timeSlot
@@ -145,7 +144,6 @@ app.get("/api/public-bookings", async (req, res) => {
 /* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-checkout-session", async (req, res) => {
   try {
-
     const { bookingData } = req.body;
 
     const session = await stripe.checkout.sessions.create({
@@ -179,7 +177,7 @@ app.post("/api/create-checkout-session", async (req, res) => {
   }
 });
 
-/* ================= STRIPE WEBHOOK + EMAIL ================= */
+/* ================= STRIPE WEBHOOK + EMAIL CONFIRMATION ================= */
 app.post("/api/stripe-webhook", async (req, res) => {
 
   const sig = req.headers["stripe-signature"];
@@ -242,7 +240,6 @@ app.post("/api/stripe-webhook", async (req, res) => {
 /* ================= VERIFY SESSION ================= */
 app.get("/api/verify-session", async (req, res) => {
   try {
-
     const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
 
     const booking = await Booking.findOne({
