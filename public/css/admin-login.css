@@ -4,6 +4,7 @@ body {
   background: #0f172a;
 }
 
+/* center container */
 .login-container {
   display: flex;
   justify-content: center;
@@ -11,6 +12,7 @@ body {
   height: 100vh;
 }
 
+/* box */
 .login-box {
   background: #1e293b;
   padding: 30px;
@@ -20,11 +22,13 @@ body {
   text-align: center;
 }
 
+/* title */
 h2 {
   color: white;
   margin-bottom: 20px;
 }
 
+/* inputs */
 input {
   width: 100%;
   padding: 10px;
@@ -33,6 +37,7 @@ input {
   border: none;
 }
 
+/* button */
 button {
   width: 100%;
   padding: 10px;
@@ -48,6 +53,7 @@ button:hover {
   background: #16a34a;
 }
 
+/* error */
 .error {
   color: #ef4444;
   margin-top: 10px;

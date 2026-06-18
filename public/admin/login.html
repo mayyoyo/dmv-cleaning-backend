@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Admin Login</title>
+
 <link rel="stylesheet" href="../css/admin-login.css">
 </head>
 
@@ -26,13 +27,13 @@
 </div>
 
 <script>
-const API = "https://dmv-cleaning-backend.onrender.com";
+const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 async function login() {
   const username = document.getElementById("user").value;
   const password = document.getElementById("pass").value;
 
-  const res = await fetch(API + "/api/admin/login", {
+  const res = await fetch(API + "/admin/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, password })
@@ -42,8 +43,6 @@ async function login() {
 
   if (data.success) {
     localStorage.setItem("admin-token", data.token);
-
-    // ✅ GO TO DASHBOARD
     window.location.href = "dashboard.html";
   } else {
     document.getElementById("error").innerText = "Invalid credentials";
