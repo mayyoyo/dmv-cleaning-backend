@@ -1,145 +1,149 @@
 require("dotenv").config();
+
 const express = require("express");
-const mongoose = require("mongoose");
 const cors = require("cors");
+const sqlite3 = require("sqlite3").verbose();
 const nodemailer = require("nodemailer");
 
 const app = express();
 
-app.use(cors());
+/* ================= CORS ================= */
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
+}));
+
 app.use(express.json());
 
-/* ================= DEBUG ================= */
-console.log("EMAIL_USER:", process.env.EMAIL_USER);
-console.log("EMAIL_PASS:", process.env.EMAIL_PASS ? "Loaded ✅" : "Missing ❌");
+/* ================= DB ================= */
+const db = new sqlite3.Database("./bookings.db");
 
-/* ================= GMAIL TRANSPORT ================= */
+db.run(`
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT,
+  email TEXT,
+  phone TEXT,
+  service TEXT,
+  price REAL,
+  date TEXT,
+  timeSlot TEXT
+)
+`);
+
+/* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
-/* ================= VERIFY EMAIL ================= */
-transporter.verify((error) => {
-  if (error) {
-    console.log("❌ EMAIL ERROR:", error);
-  } else {
-    console.log("✅ EMAIL READY");
+    pass: process.env.EMAIL_PASS
   }
 });
 
-/* ================= RETRY FUNCTION (FIXED) ================= */
-async function sendEmailWithRetry(mailOptions, retries = 3) {
+async function sendEmail(mailOptions) {
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log("📧 Email sent:", info.response);
-    return true;
-
-  } catch (error) {
-    console.log("❌ Email error:", error.message);
-
-    if (retries > 0) {
-      console.log(`🔁 Retrying... (${retries})`);
-      await new Promise(res => setTimeout(res, 3000));
-      return sendEmailWithRetry(mailOptions, retries - 1);
-    }
-
-    console.log("🚨 Failed after retries");
-    return false;
+    await transporter.sendMail(mailOptions);
+    console.log("📧 Email sent");
+  } catch (err) {
+    console.error("❌ Email error:", err.message);
   }
 }
 
-/* ================= BOOKING ROUTE ================= */
-app.post("/book", async (req, res) => {
-  try {
-    const { name, email, phone, service, date, timeSlot } = req.body;
+/* ================= BOOK API ================= */
+app.post("/api/book", (req, res) => {
 
-    if (!email) {
-      return res.status(400).json({ success: false, error: "Email required" });
-    }
+  const {
+    name,
+    email,
+    phone,
+    service,
+    price,
+    date,
+    timeSlot
+  } = req.body;
 
-    /* ================= CLIENT EMAIL ================= */
-    const clientEmail = {
-      from: `"DMV Cleaning Services" <${process.env.EMAIL_USER}>`,
-      to: email,
-      subject: "🧼 Booking Confirmation",
-      html: `
-        <div style="font-family:Arial;padding:20px">
-          <h2 style="color:green;">Booking Confirmed ✅</h2>
-
-          <p>Hello <b>${name}</b>,</p>
-
-          <p>Your booking has been successfully received.</p>
-
-          <h3>📋 Details:</h3>
-          <ul>
-            <li><b>Service:</b> ${service}</li>
-            <li><b>Date:</b> ${date}</li>
-            <li><b>Time:</b> ${timeSlot}</li>
-            <li><b>Phone:</b> ${phone}</li>
-          </ul>
-
-          <p>We will contact you shortly.</p>
-
-          <hr/>
-          <p><b>DMV Cleaning Services</b></p>
-        </div>
-      `
-    };
-
-    /* ================= ADMIN EMAIL ================= */
-    const adminEmail = {
-      from: `"Booking System" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_USER,
-      subject: "🔥 New Booking Received",
-      html: `
-        <h2>New Booking</h2>
-        <p><b>Name:</b> ${name}</p>
-        <p><b>Email:</b> ${email}</p>
-        <p><b>Phone:</b> ${phone}</p>
-        <p><b>Service:</b> ${service}</p>
-        <p><b>Date:</b> ${date}</p>
-        <p><b>Time:</b> ${timeSlot}</p>
-      `
-    };
-
-    /* ================= SEND EMAILS ================= */
-    await sendEmailWithRetry(clientEmail);
-    await sendEmailWithRetry(adminEmail);
-
-    return res.json({
-      success: true,
-      bookingId: Date.now().toString() // temporary ID (works if no DB yet)
-    });
-
-  } catch (err) {
-    console.error("SERVER ERROR:", err);
-    return res.status(500).json({
-      success: false,
-      error: err.message
-    });
+  if (!name || !email || !service || !date || !timeSlot) {
+    return res.json({ success: false, error: "Missing fields" });
   }
+
+  db.run(
+    `INSERT INTO bookings (name, email, phone, service, price, date, timeSlot)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [name, email, phone, service, price, date, timeSlot],
+    async function (err) {
+
+      if (err) {
+        console.error("DB ERROR:", err);
+        return res.json({ success: false });
+      }
+
+      const bookingId = this.lastID;
+      const invoiceUrl =
+        `https://dmv-cleaning-backend.onrender.com/api/invoice/${bookingId}`;
+
+      /* ================= REAL GMAIL HTML EMAIL ================= */
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "🧼 Booking Confirmed - DMV Cleaning Services",
+        html: `
+          <div style="font-family: Arial; background:#f4f4f4; padding:20px">
+
+            <div style="max-width:600px; margin:auto; background:#fff; padding:20px; border-radius:10px;">
+
+              <h2 style="color:#2ecc71; text-align:center;">
+                🧼 Booking Confirmed
+              </h2>
+
+              <p>Hi <b>${name}</b>,</p>
+
+              <p>Your cleaning service has been successfully booked.</p>
+
+              <hr/>
+
+              <h3>📅 Booking Details</h3>
+
+              <p><b>Service:</b> ${service}</p>
+              <p><b>Date:</b> ${date}</p>
+              <p><b>Time:</b> ${timeSlot}</p>
+              <p><b>Phone:</b> ${phone}</p>
+              <p><b>Price:</b> $${price}</p>
+              <p><b>Booking ID:</b> ${bookingId}</p>
+
+              <div style="margin-top:20px; text-align:center;">
+                <a href="${invoiceUrl}"
+                  style="background:#2ecc71; color:#fff; padding:12px 20px;
+                  text-decoration:none; border-radius:5px;">
+                  📄 Download Invoice
+                </a>
+              </div>
+
+              <p style="margin-top:20px; font-size:12px; color:#777;">
+                DMV Cleaning Services LLC
+              </p>
+
+            </div>
+          </div>
+        `
+      };
+
+      await sendEmail(mailOptions);
+
+      return res.json({
+        success: true,
+        bookingId
+      });
+    }
+  );
 });
 
-/* ================= TEST EMAIL ================= */
-app.get("/test-email", async (req, res) => {
-  try {
-    await sendEmailWithRetry({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER,
-      subject: "Test Email ✅",
-      text: "Email system is working!"
-    });
-
-    res.send("✅ Email sent");
-
-  } catch (err) {
-    console.error(err);
-    res.send("❌ Failed");
-  }
+/* ================= PUBLIC BOOKINGS ================= */
+app.get("/api/public-bookings", (req, res) => {
+  db.all(`SELECT * FROM bookings`, [], (err, rows) => {
+    if (err) return res.json([]);
+    res.json(rows);
+  });
 });
 
 /* ================= START SERVER ================= */

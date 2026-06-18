@@ -63,13 +63,8 @@
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="handlePayNow()">
-💳 Pay Now
-</button>
-
-<button class="btn" onclick="handlePayLater()">
-📌 Pay Later
-</button>
+<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button>
+<button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
 
@@ -116,33 +111,30 @@ function isSlotFull(date, timeSlot) {
 
 /* ================= UPDATE SLOTS ================= */
 function updateTimeSlots() {
-  const timeSelect = document.getElementById("timeSlot");
-  if (!timeSelect) return;
+  const select = document.getElementById("timeSlot");
 
-  Array.from(timeSelect.options).forEach(option => {
+  Array.from(select.options).forEach(opt => {
 
     if (!selectedDate) return;
 
     const count = bookings.filter(b =>
-      b.date === selectedDate && b.timeSlot === option.value
+      b.date === selectedDate && b.timeSlot === opt.value
     ).length;
 
     const remaining = MAX_PER_SLOT - count;
 
     if (remaining <= 0) {
-      option.disabled = true;
-      option.text = option.value + " (FULL)";
-      option.style.color = "red";
+      opt.disabled = true;
+      opt.text = opt.value + " (FULL)";
     } else {
-      option.disabled = false;
-      option.text = `${option.value} (${remaining}/${MAX_PER_SLOT})`;
-      option.style.color = "green";
+      opt.disabled = false;
+      opt.text = `${opt.value} (${remaining}/${MAX_PER_SLOT})`;
     }
   });
 }
 
 /* ================= INIT CALENDAR ================= */
-document.addEventListener("DOMContentLoaded", async function () {
+document.addEventListener("DOMContentLoaded", async () => {
 
   await loadBookings();
   updateTimeSlots();
@@ -152,7 +144,7 @@ document.addEventListener("DOMContentLoaded", async function () {
     initialView: "dayGridMonth",
     height: 500,
 
-    events: function(fetchInfo, successCallback) {
+    events(fetchInfo, successCallback) {
 
       const grouped = {};
 
@@ -172,7 +164,7 @@ document.addEventListener("DOMContentLoaded", async function () {
         });
 
         return {
-          title: `${full}/${total} full`,
+          title: `${full}/${total || 1} full`,
           start: date,
           color: full === total ? "red" : "green"
         };
@@ -181,7 +173,7 @@ document.addEventListener("DOMContentLoaded", async function () {
       successCallback(events);
     },
 
-    dateClick: function(info) {
+    dateClick(info) {
       selectedDate = info.dateStr;
 
       document.getElementById("selectedDate").innerText =
@@ -222,41 +214,47 @@ async function handlePayNow() {
       return;
     }
 
-    const timeSlot = document.getElementById("timeSlot").value;
+    const data = collectFormData();
 
-    if (isSlotFull(selectedDate, timeSlot)) {
-      alert("❌ Slot already full");
+    if (isSlotFull(data.date, data.timeSlot)) {
+      alert("❌ Slot full");
       isBooking = false;
       return;
     }
-
-    const data = collectFormData();
 
     const res = await fetch(API + "/book", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...data,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        date: data.date,
+        timeSlot: data.timeSlot,
+        service: data.service,
+        price: data.total,
         paymentType: "online"
       })
     });
 
     const result = await res.json();
 
-    if (!res.ok || !result.success || !result.bookingId) {
-      alert(result.error || "Booking failed");
-      isBooking = false;
-      return;
-    }
+    console.log("SERVER RESPONSE:", result);
 
-    window.location.href =
-      `/success.html?bookingId=${result.bookingId}`;
+    if (result.success) {
+      window.location.href =
+        `/success.html?bookingId=${result.bookingId}`;
+    } else {
+      alert("❌ Booking failed");
+    }
 
   } catch (err) {
     console.error(err);
-    alert("Error: " + err.message);
-    isBooking = false;
+    alert("Server error");
   }
+
+  isBooking = false;
 }
 
 /* ================= PAY LATER ================= */
@@ -273,15 +271,13 @@ async function handlePayLater() {
       return;
     }
 
-    const timeSlot = document.getElementById("timeSlot").value;
+    const data = collectFormData();
 
-    if (isSlotFull(selectedDate, timeSlot)) {
-      alert("❌ Slot already full");
+    if (isSlotFull(data.date, data.timeSlot)) {
+      alert("❌ Slot full");
       isBooking = false;
       return;
     }
-
-    const data = collectFormData();
 
     showPopup();
 
@@ -289,7 +285,14 @@ async function handlePayLater() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...data,
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        address: data.address,
+        date: data.date,
+        timeSlot: data.timeSlot,
+        service: data.service,
+        price: data.total,
         paymentType: "later"
       })
     });
@@ -298,26 +301,29 @@ async function handlePayLater() {
 
     hidePopup();
 
-    if (!res.ok || !result.success || !result.bookingId) {
-      alert(result.error || "Booking failed");
-      isBooking = false;
-      return;
+    console.log("SERVER RESPONSE:", result);
+
+    if (result.success) {
+
+      await loadBookings();
+      updateTimeSlots();
+      calendar.refetchEvents();
+
+      window.location.href =
+        `/success.html?bookingId=${result.bookingId}`;
+
+    } else {
+      alert("❌ Booking failed");
     }
-
-    await loadBookings();
-    updateTimeSlots();
-    calendar.refetchEvents();
-
-    window.location.href =
-      `/success.html?bookingId=${result.bookingId}`;
 
   } catch (err) {
     hidePopup();
-    alert(err.message);
-    isBooking = false;
+    console.error(err);
+    alert("Server error");
   }
-}
 
+  isBooking = false;
+}
 </script>
 
 </body>
