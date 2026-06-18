@@ -3,49 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <title>Admin Login</title>
-<link rel="stylesheet" href="../css/admin.css">
+<link rel="stylesheet" href="admin.css">
 </head>
 
 <body>
 
-<div class="layout">
-  <div class="main">
+<div class="login-box">
 
-    <div class="card">
-      <h2>🔐 Admin Login</h2>
+  <h2>Admin Login</h2>
 
-      <input id="username" placeholder="Username" />
-      <input id="password" type="password" placeholder="Password" />
+  <input id="user" placeholder="Username">
+  <input id="pass" type="password" placeholder="Password">
 
-      <button onclick="login()">Login</button>
+  <button onclick="login()">Login</button>
 
-      <div id="msg"></div>
-    </div>
-
-  </div>
 </div>
 
 <script>
-const API = "https://dmv-cleaning-backend.onrender.com/api";
+function login() {
+  const user = document.getElementById("user").value;
+  const pass = document.getElementById("pass").value;
 
-async function login() {
-
-  const res = await fetch(API + "/admin/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: username.value,
-      password: password.value
-    })
-  });
-
-  const data = await res.json();
-
-  if (data.success) {
-    localStorage.setItem("admin", data.token);
+  if (user === "admin" && pass === "1234") {
+    localStorage.setItem("admin", "true");
     window.location.href = "dashboard.html";
   } else {
-    msg.innerHTML = "❌ Wrong login";
+    alert("Wrong login");
   }
 }
 </script>

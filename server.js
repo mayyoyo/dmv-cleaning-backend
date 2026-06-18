@@ -6,13 +6,19 @@ const mongoose = require("mongoose");
 const nodemailer = require("nodemailer");
 const PDFDocument = require("pdfkit");
 const path = require("path");
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 
 const app = express();
 
-/* ================= CORS (FIXED - IMPORTANT) ================= */
+/* ================= CORS ================= */
 app.use(cors({
-  origin: "*"
+  origin: "*",
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"]
 }));
+
+/* ================= STRIPE WEBHOOK RAW BODY ================= */
+app.use("/api/stripe-webhook", express.raw({ type: "application/json" }));
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -21,27 +27,7 @@ app.use(express.static(path.join(__dirname, "public")));
 const BASE_URL = process.env.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
 const MAX_PER_SLOT = 3;
 
-/* ================= DEBUG ================= */
-console.log("EMAIL:", process.env.EMAIL_USER);
-console.log("EMAIL PASS:", process.env.EMAIL_PASS ? "OK" : "MISSING");
-
-/* ================= EMAIL ================= */
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
-
-transporter.verify((err) => {
-  if (err) console.log("EMAIL ERROR", err);
-  else console.log("EMAIL READY");
-});
-
-/* ================= DB ================= */
-mongoose.set("strictQuery", true);
-
+/* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
   .catch(err => console.log(err));
@@ -57,23 +43,39 @@ const Booking = mongoose.model("Booking", {
   total: Number,
   paymentType: String,
   paymentStatus: { type: String, default: "pending" },
+  stripeSessionId: String,
   createdAt: { type: Date, default: Date.now }
 });
 
-/* ================= EMAIL FUNCTION ================= */
-async function sendEmail(mailOptions) {
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log("Email sent");
-  } catch (err) {
-    console.log("Email error", err.message);
+/* ================= EMAIL ================= */
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
   }
-}
+});
 
-/* ================= BOOK API (FIXED SAFE + EMAIL + SLOT CHECK) ================= */
+/* ================= TEST EMAIL (ONLY ONCE) ================= */
+app.get("/test-email", async (req, res) => {
+  try {
+    await transporter.sendMail({
+      from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
+      to: process.env.EMAIL_USER,
+      subject: "TEST EMAIL",
+      html: "<h2>Email system is working ✅</h2>",
+    });
+
+    res.send("EMAIL SENT SUCCESSFULLY");
+  } catch (err) {
+    console.log(err);
+    res.status(500).send("EMAIL FAILED: " + err.message);
+  }
+});
+
+/* ================= BOOKING API ================= */
 app.post("/api/book", async (req, res) => {
   try {
-
     const count = await Booking.countDocuments({
       date: req.body.date,
       timeSlot: req.body.timeSlot
@@ -88,30 +90,12 @@ app.post("/api/book", async (req, res) => {
 
     const booking = await Booking.create(req.body);
 
-    const invoiceUrl = `${BASE_URL}/api/invoice/${booking._id}`;
-
-    await sendEmail({
-      from: process.env.EMAIL_USER,
-      to: booking.email,
-      subject: "🧼 Booking Confirmed",
-      html: `
-        <h2>Booking Confirmed</h2>
-        <p><b>Name:</b> ${booking.name}</p>
-        <p><b>Service:</b> ${booking.service}</p>
-        <p><b>Date:</b> ${booking.date}</p>
-        <p><b>Time:</b> ${booking.timeSlot}</p>
-        <p><b>Total:</b> $${booking.total || 0}</p>
-        <p><a href="${invoiceUrl}">Download Invoice</a></p>
-      `
-    });
-
-    return res.json({
+    res.json({
       success: true,
       bookingId: booking._id
     });
 
   } catch (err) {
-    console.log(err);
     res.status(500).json({
       success: false,
       error: err.message
@@ -121,15 +105,125 @@ app.post("/api/book", async (req, res) => {
 
 /* ================= PUBLIC BOOKINGS ================= */
 app.get("/api/public-bookings", async (req, res) => {
+  const data = await Booking.find();
+  res.json(data);
+});
+
+/* ================= STRIPE CHECKOUT ================= */
+app.post("/api/create-checkout-session", async (req, res) => {
   try {
-    const data = await Booking.find();
-    res.json(data);
+
+    const { bookingData } = req.body;
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      mode: "payment",
+
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: bookingData.service
+          },
+          unit_amount: bookingData.total * 100
+        },
+        quantity: 1
+      }],
+
+      success_url: `${BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${BASE_URL}/booking.html`
+    });
+
+    await Booking.create({
+      ...bookingData,
+      stripeSessionId: session.id,
+      paymentStatus: "pending"
+    });
+
+    res.json({ url: session.url });
+
   } catch (err) {
-    res.status(500).json([]);
+    console.log(err);
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= ADMIN ENDPOINTS ================= */
+/* ================= STRIPE WEBHOOK + EMAIL CONFIRMATION ================= */
+app.post("/api/stripe-webhook", async (req, res) => {
+
+  const sig = req.headers["stripe-signature"];
+  let event;
+
+  try {
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+  } catch (err) {
+    console.log("Webhook Error:", err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  if (event.type === "checkout.session.completed") {
+
+    const session = event.data.object;
+
+    const booking = await Booking.findOne({
+      stripeSessionId: session.id
+    });
+
+    if (booking) {
+      booking.paymentStatus = "paid";
+      await booking.save();
+
+      console.log("✅ PAYMENT CONFIRMED");
+
+      /* ================= EMAIL CUSTOMER ================= */
+      await transporter.sendMail({
+        from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
+        to: booking.email,
+        subject: "Payment Confirmed - Booking Receipt",
+        html: `
+          <h2>Payment Successful ✅</h2>
+          <p><b>Name:</b> ${booking.name}</p>
+          <p><b>Service:</b> ${booking.service}</p>
+          <p><b>Date:</b> ${booking.date}</p>
+          <p><b>Time:</b> ${booking.timeSlot}</p>
+          <p><b>Total:</b> $${booking.total}</p>
+          <p>Thank you for your booking!</p>
+        `
+      });
+
+      console.log("📧 Email sent to customer");
+    }
+  }
+
+  res.json({ received: true });
+});
+
+/* ================= VERIFY SESSION ================= */
+app.get("/api/verify-session", async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
+
+    const booking = await Booking.findOne({
+      stripeSessionId: session.id
+    });
+
+    if (booking) {
+      booking.paymentStatus = "paid";
+      await booking.save();
+    }
+
+    res.json({ success: true, booking });
+
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ================= ADMIN ================= */
 app.get("/api/admin/bookings", async (req, res) => {
   const data = await Booking.find().sort({ createdAt: -1 });
   res.json(data);
@@ -139,7 +233,6 @@ app.post("/api/admin/update-status", async (req, res) => {
   await Booking.findByIdAndUpdate(req.body.id, {
     paymentStatus: req.body.status
   });
-
   res.json({ success: true });
 });
 
@@ -148,12 +241,14 @@ app.post("/api/admin/delete", async (req, res) => {
   res.json({ success: true });
 });
 
-/* ================= INVOICE ================= */
+/* ================= INVOICE PDF ================= */
 app.get("/api/invoice/:id", async (req, res) => {
+
   const booking = await Booking.findById(req.params.id);
   if (!booking) return res.status(404).send("Not found");
 
   const doc = new PDFDocument();
+
   res.setHeader("Content-Type", "application/pdf");
   doc.pipe(res);
 
@@ -164,7 +259,8 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.text(`Service: ${booking.service}`);
   doc.text(`Date: ${booking.date}`);
   doc.text(`Time: ${booking.timeSlot}`);
-  doc.text(`Total: $${booking.total || 0}`);
+  doc.text(`Total: $${booking.total}`);
+  doc.text(`Status: ${booking.paymentStatus}`);
 
   doc.end();
 });
@@ -173,5 +269,5 @@ app.get("/api/invoice/:id", async (req, res) => {
 const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
-  console.log("🔥 Server running on", PORT);
+  console.log("Server running on port", PORT);
 });

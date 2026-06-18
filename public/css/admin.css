@@ -44,28 +44,17 @@ button {
   border: none;
   border-radius: 5px;
 }
-/*  */
 
-.spinner {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  width: 40px;
-  height: 40px;
-  border: 4px solid #ccc;
-  border-top: 4px solid #2ecc71;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  transform: translate(-50%, -50%);
-  z-index: 9999;
+.login-box {
+  width: 300px;
+  margin: 100px auto;
+  background: #1f2937;
+  padding: 20px;
+  border-radius: 10px;
 }
 
-.hidden {
-  display: none;
-}
-
-@keyframes spin {
-  100% {
-    transform: translate(-50%, -50%) rotate(360deg);
-  }
+input {
+  width: 100%;
+  margin: 10px 0;
+  padding: 10px;
 }
