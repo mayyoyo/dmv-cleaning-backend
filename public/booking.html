@@ -10,6 +10,10 @@
 
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
+
+<!-- ✅ YOUR GLOBAL CONFIG -->
+<script src="config.js"></script>
+
 </head>
 
 <body>
@@ -73,8 +77,6 @@
 
 <script>
 
-const API = "https://dmv-cleaning-backend.onrender.com/api";
-
 let selectedDate = null;
 let bookings = [];
 const MAX_PER_SLOT = 3;
@@ -116,7 +118,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadBookings();
 
   const calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-
     initialView: "dayGridMonth",
     height: 450,
 
@@ -130,7 +131,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   calendar.render();
 });
 
-/* ================= PAY NOW (DEPOSIT) ================= */
+/* ================= PAY NOW (DEPOSIT 25%) ================= */
 async function handlePayNow() {
 
   const service = document.getElementById("service").value;
@@ -167,7 +168,7 @@ async function handlePayLater() {
   const service = document.getElementById("service").value;
 
   if (!service || !selectedDate) {
-    return alert("Fill all required fields");
+    return alert("Fill required fields");
   }
 
   const data = {

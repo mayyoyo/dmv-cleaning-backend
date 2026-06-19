@@ -6,6 +6,10 @@
 <title>Booking Confirmed</title>
 
 <link rel="stylesheet" href="css/success.css">
+
+<!-- ✅ CONFIG (IONOS SAFE) -->
+<script src="config.js"></script>
+
 </head>
 
 <body>
@@ -81,17 +85,18 @@
 
 <script>
 
-const API = "https://dmv-cleaning-backend.onrender.com/api";
+/* ================= API FROM CONFIG ================= */
+const API = window.API;
 
-/* ================= GET BOOKING ID ================= */
+/* ================= BOOKING ID ================= */
 const params = new URLSearchParams(window.location.search);
-const id = params.get("bookingId");
+const bookingId = params.get("bookingId");
 
-/* ================= INVOICE LINK ================= */
+/* ================= INVOICE BUTTON FIX ================= */
 const downloadBtn = document.getElementById("download");
 
-if (id) {
-  downloadBtn.href = `${API}/invoice/${id}`;
+if (bookingId && API) {
+  downloadBtn.href = `${API}/invoice/${bookingId}`;
 }
 
 /* ================= LOAD BOOKING ================= */
@@ -100,7 +105,7 @@ async function loadBooking() {
     const res = await fetch(API + "/bookings");
     const bookings = await res.json();
 
-    const booking = bookings.find(b => String(b.id) === String(id));
+    const booking = bookings.find(b => String(b.id) === String(bookingId));
 
     if (!booking) {
       document.body.innerHTML = "<h2>❌ Booking Not Found</h2>";
@@ -120,7 +125,7 @@ async function loadBooking() {
     document.getElementById("total").innerText = booking.price || 0;
 
   } catch (err) {
-    console.error(err);
+    console.error("Load booking error:", err);
     document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
   }
 }
