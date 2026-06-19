@@ -8,7 +8,6 @@ const PDFDocument = require("pdfkit");
 const app = express();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-/* ================= MIDDLEWARE ================= */
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
@@ -22,11 +21,11 @@ app.get("/api/test", (req, res) => {
   res.json({ ok: true, message: "API working" });
 });
 
-/* ================= SIMPLE MEMORY STORAGE ================= */
+/* ================= MEMORY DB ================= */
 let bookings = [];
 let idCounter = 1;
 
-/* ================= PRICE FUNCTION ================= */
+/* ================= PRICE ================= */
 function getServicePrice(service) {
   if (!service) return 120;
 
@@ -38,7 +37,7 @@ function getServicePrice(service) {
   return 120;
 }
 
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= STRIPE ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email } = req.body;
@@ -76,13 +75,11 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= BOOK ================= */
+/* ================= BOOKING ================= */
 app.post("/api/book", (req, res) => {
-  const data = req.body;
-
   const booking = {
     id: idCounter++,
-    ...data
+    ...req.body
   };
 
   bookings.push(booking);
@@ -90,7 +87,7 @@ app.post("/api/book", (req, res) => {
   res.json({ success: true, bookingId: booking.id });
 });
 
-/* ================= ADMIN BOOKINGS ================= */
+/* ================= ADMIN ================= */
 app.get("/api/admin/bookings", (req, res) => {
   res.json(bookings);
 });
@@ -128,7 +125,7 @@ app.get("/api/invoice/:id", (req, res) => {
   doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
   doc.moveDown();
 
-  doc.fontSize(12).text(`Name: ${booking.name}`);
+  doc.text(`Name: ${booking.name}`);
   doc.text(`Service: ${booking.service}`);
   doc.text(`Price: $${booking.price}`);
   doc.text(`Deposit: $${booking.deposit}`);
@@ -137,7 +134,7 @@ app.get("/api/invoice/:id", (req, res) => {
   doc.end();
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
