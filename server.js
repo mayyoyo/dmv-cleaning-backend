@@ -24,7 +24,7 @@ app.get("/api/test", (req, res) => {
 });
 
 /* ================= SAFE DATABASE (RENDER FINAL FIX) ================= */
-/* ⚠️ NO FILES — prevents Render crashes */
+/* ⚠️ NO FILE SYSTEM — prevents Render crash */
 const db = new sqlite3.Database(":memory:", (err) => {
   if (err) {
     console.error("❌ SQLITE ERROR:", err.message);
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS bookings (
 )
 `);
 
-/* ================= PRICE FUNCTION (NO STRING PARSING FIX READY) ================= */
+/* ================= PRICE FUNCTION ================= */
 function getServicePrice(service) {
   if (!service) return 120;
 
@@ -192,4 +192,13 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🔥 Server running on port", PORT);
+});
+
+/* ================= GLOBAL ERROR HANDLERS ================= */
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT ERROR:", err);
+});
+
+process.on("unhandledRejection", (err) => {
+  console.error("PROMISE ERROR:", err);
 });
