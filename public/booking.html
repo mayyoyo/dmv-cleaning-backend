@@ -11,7 +11,6 @@
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
-<!-- ✅ GLOBAL CONFIG -->
 <script src="config.js"></script>
 
 </head>
@@ -20,7 +19,6 @@
 
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
-
   <div class="nav-links">
     <a href="index.html">🏠 Home</a>
     <a href="booking.html">📅 Booking</a>
@@ -45,28 +43,14 @@
 
 <p id="selectedDate">No date selected</p>
 
-<!-- ✅ UPDATED SERVICE DROPDOWN -->
 <select id="service" class="input">
   <option value="">Select Service</option>
-
-  <option value="Home Cleaning">
-    🏠 Home Cleaning - Starting at $120
-  </option>
-
-  <option value="Office Cleaning">
-    🏢 Office Cleaning - Starting at $150
-  </option>
-
-  <option value="Deep Cleaning">
-    🧽 Deep Cleaning - Starting at $200
-  </option>
-
-  <option value="Move In/Out Cleaning">
-    🚚 Move In/Out Cleaning - Starting at $250
-  </option>
+  <option value="Home Cleaning - $120">🏠 Home Cleaning - Starting at $120</option>
+  <option value="Office Cleaning - $150">🏢 Office Cleaning - Starting at $150</option>
+  <option value="Deep Cleaning - $200">🧽 Deep Cleaning - Starting at $200</option>
+  <option value="Move In/Out Cleaning - $250">🚚 Move In/Out Cleaning - Starting at $250</option>
 </select>
 
-<!-- TIME -->
 <select id="timeSlot" class="input">
   <option value="08:00-10:00">08:00-10:00</option>
   <option value="10:00-12:00">10:00-12:00</option>
@@ -84,7 +68,6 @@
 <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
-
 </main>
 
 <script>
@@ -95,15 +78,13 @@ const API = window.API;
 let selectedDate = null;
 let bookings = [];
 
-/* ================= PRICE FUNCTION ================= */
+/* ================= PRICE ================= */
 function getServicePrice(service) {
   if (!service) return 120;
-
-  if (service === "Home Cleaning") return 120;
-  if (service === "Office Cleaning") return 150;
-  if (service === "Deep Cleaning") return 200;
-  if (service === "Move In/Out Cleaning") return 250;
-
+  if (service.includes("$120")) return 120;
+  if (service.includes("$150")) return 150;
+  if (service.includes("$200")) return 200;
+  if (service.includes("$250")) return 250;
   return 120;
 }
 
@@ -111,7 +92,6 @@ function getServicePrice(service) {
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
-
 function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
@@ -122,6 +102,7 @@ async function loadBookings() {
     const res = await fetch(API + "/bookings");
     bookings = await res.json();
   } catch (err) {
+    console.log("No bookings loaded");
     bookings = [];
   }
 }
@@ -148,72 +129,91 @@ document.addEventListener("DOMContentLoaded", async () => {
 /* ================= PAY NOW ================= */
 async function handlePayNow() {
 
-  const service = document.getElementById("service").value;
-  const email = document.getElementById("email").value;
+  try {
+    const service = document.getElementById("service").value;
+    const email = document.getElementById("email").value;
 
-  if (!service || !email || !selectedDate) {
-    return alert("Please select service, email, and date");
-  }
+    if (!service || !email || !selectedDate) {
+      return alert("Please select service, email, and date");
+    }
 
-  const price = getServicePrice(service);
+    const price = getServicePrice(service);
 
-  showPopup();
+    showPopup();
 
-  const res = await fetch(API + "/create-deposit-checkout", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ service, price, email })
-  });
+    const res = await fetch(API + "/create-deposit-checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ service, price, email })
+    });
 
-  const data = await res.json();
+    const data = await res.json();
 
-  hidePopup();
+    hidePopup();
 
-  if (data.url) {
-    window.location.href = data.url;
-  } else {
-    alert("Stripe error");
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert("Stripe session failed");
+      console.log(data);
+    }
+
+  } catch (err) {
+    hidePopup();
+    console.error(err);
+    alert("Payment error");
   }
 }
 
 /* ================= PAY LATER ================= */
 async function handlePayLater() {
 
-  const service = document.getElementById("service").value;
+  try {
+    const service = document.getElementById("service").value;
 
-  if (!service || !selectedDate) {
-    return alert("Fill required fields");
-  }
+    if (!service || !selectedDate) {
+      return alert("Fill required fields");
+    }
 
-  const data = {
-    name: document.getElementById("name").value,
-    phone: document.getElementById("phone").value,
-    email: document.getElementById("email").value,
-    address: document.getElementById("address").value,
-    service,
-    date: selectedDate,
-    timeSlot: document.getElementById("timeSlot").value,
-    price: getServicePrice(service),
-    deposit: Math.round(getServicePrice(service) * 0.25),
-    paymentType: "later"
-  };
+    const price = getServicePrice(service);
 
-  showPopup();
+    const data = {
+      name: document.getElementById("name").value,
+      phone: document.getElementById("phone").value,
+      email: document.getElementById("email").value,
+      address: document.getElementById("address").value,
+      service,
+      date: selectedDate,
+      timeSlot: document.getElementById("timeSlot").value,
+      price,
+      deposit: Math.round(price * 0.25),
+      paymentType: "later"
+    };
 
-  const res = await fetch(API + "/book", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
+    showPopup();
 
-  const result = await res.json();
+    const res = await fetch(API + "/book", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
 
-  hidePopup();
+    const result = await res.json();
 
-  if (result.success) {
-    window.location.href = `/success.html?bookingId=${result.bookingId}`;
-  } else {
-    alert("Booking failed");
+    hidePopup();
+
+    if (result.success) {
+      // ✅ FIXED (absolute backend URL)
+      window.location.href = `${API.replace("/api","")}/success.html?bookingId=${result.bookingId}`;
+    } else {
+      alert("Booking failed");
+      console.log(result);
+    }
+
+  } catch (err) {
+    hidePopup();
+    console.error(err);
+    alert("Booking error");
   }
 }
 
