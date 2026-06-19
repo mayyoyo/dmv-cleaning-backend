@@ -8,6 +8,7 @@ const PDFDocument = require("pdfkit");
 const app = express();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
+/* ================= MIDDLEWARE ================= */
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
@@ -25,7 +26,7 @@ app.get("/api/test", (req, res) => {
 let bookings = [];
 let idCounter = 1;
 
-/* ================= PRICE ================= */
+/* ================= PRICE FUNCTION ================= */
 function getServicePrice(service) {
   if (!service) return 120;
 
@@ -37,13 +38,15 @@ function getServicePrice(service) {
   return 120;
 }
 
-/* ================= STRIPE ================= */
+/* ================= STRIPE CHECKOUT (FIXED + SAFE) ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
-    const { service, email } = req.body;
+    const { service, email, price } = req.body;
 
-    const price = getServicePrice(service);
-    const deposit = Math.round(price * 0.25 * 100);
+    console.log("REQUEST:", req.body);
+
+    const finalPrice = price || getServicePrice(service);
+    const deposit = Math.round(finalPrice * 0.25 * 100);
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
@@ -63,14 +66,16 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      success_url: `${process.env.BASE_URL}/success.html`,
-      cancel_url: `${process.env.BASE_URL}/booking.html`
+      success_url: "https://yourdomain.com/success.html",
+      cancel_url: "https://yourdomain.com/booking.html"
     });
+
+    console.log("STRIPE URL:", session.url);
 
     res.json({ url: session.url });
 
   } catch (err) {
-    console.error(err);
+    console.error("STRIPE ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -134,7 +139,7 @@ app.get("/api/invoice/:id", (req, res) => {
   doc.end();
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
