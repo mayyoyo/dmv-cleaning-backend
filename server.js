@@ -5,7 +5,6 @@ const cors = require("cors");
 const sqlite3 = require("sqlite3").verbose();
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
-const path = require("path");
 
 const app = express();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -14,18 +13,25 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* ================= ROOT TEST ROUTE ================= */
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("SERVER IS LIVE");
 });
 
-/* ================= API TEST ROUTE ================= */
+/* ================= API TEST ================= */
 app.get("/api/test", (req, res) => {
   res.json({ ok: true, message: "API working" });
 });
 
-/* ================= DATABASE (RENDER SAFE) ================= */
-const db = new sqlite3.Database("/tmp/bookings.db");
+/* ================= SAFE DATABASE (RENDER FINAL FIX) ================= */
+/* ⚠️ NO FILES — prevents Render crashes */
+const db = new sqlite3.Database(":memory:", (err) => {
+  if (err) {
+    console.error("❌ SQLITE ERROR:", err.message);
+  } else {
+    console.log("✅ In-memory SQLite connected (Render safe)");
+  }
+});
 
 /* ================= TABLE ================= */
 db.run(`
@@ -47,13 +53,15 @@ CREATE TABLE IF NOT EXISTS bookings (
 )
 `);
 
-/* ================= PRICE FUNCTION ================= */
+/* ================= PRICE FUNCTION (NO STRING PARSING FIX READY) ================= */
 function getServicePrice(service) {
   if (!service) return 120;
+
   if (service.includes("120")) return 120;
   if (service.includes("150")) return 150;
   if (service.includes("200")) return 200;
   if (service.includes("250")) return 250;
+
   return 120;
 }
 
