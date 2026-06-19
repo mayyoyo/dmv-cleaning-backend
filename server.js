@@ -14,7 +14,12 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* ================= TEST ROUTE ================= */
+/* ================= ROOT TEST ROUTE ================= */
+app.get("/", (req, res) => {
+  res.send("SERVER IS LIVE");
+});
+
+/* ================= API TEST ROUTE ================= */
 app.get("/api/test", (req, res) => {
   res.json({ ok: true, message: "API working" });
 });
