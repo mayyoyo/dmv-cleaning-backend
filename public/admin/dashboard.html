@@ -2,40 +2,188 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Admin Dashboard</title>
 
-<link rel="stylesheet" href="./admin-login.css">
-<script defer src="./admin-dashboard.js"></script>
+<link rel="stylesheet" href="./admin-dashboard.css">
 </head>
 
 <body>
 
-<div class="container">
+<header class="topbar">
+  <h1>📊 Admin Dashboard</h1>
+  <button onclick="logout()">Logout</button>
+</header>
 
-  <h2>📊 Live Bookings Dashboard</h2>
+<main class="container">
 
-  <!-- 💰 REVENUE BOX -->
-  <div id="revenue" style="margin-bottom:15px; font-size:18px; font-weight:bold;"></div>
+  <!-- 🔥 REVENUE STATS -->
+  <section id="stats" class="stats-box">
+    Loading revenue...
+  </section>
 
-  <button class="refresh-btn" onclick="loadBookings()">🔄 Refresh</button>
+  <!-- 📊 CHART -->
+  <section class="chart-box">
+    <canvas id="chart"></canvas>
+  </section>
 
-  <table>
-    <thead>
-      <tr>
-        <th>Name</th>
-        <th>Email</th>
-        <th>Service</th>
-        <th>Date</th>
-        <th>Time</th>
-        <th>Price</th>
-        <th>Actions</th> <!-- ✅ ADDED -->
-      </tr>
-    </thead>
+  <!-- 📅 BOOKINGS TABLE -->
+  <section class="table-box">
 
-    <tbody id="data"></tbody>
-  </table>
+    <h2>📅 All Bookings</h2>
 
-</div>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Service</th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Price</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+
+      <tbody id="bookingsTable"></tbody>
+    </table>
+
+  </section>
+
+</main>
+
+<!-- 📊 CHART JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+/* ================= LOGIN CHECK ================= */
+if (localStorage.getItem("admin") !== "true") {
+  window.location.href = "admin-login.html";
+}
+
+/* ================= LOAD REVENUE + CHART ================= */
+let chartInstance = null;
+
+async function loadRevenue() {
+  try {
+    const res = await fetch(API + "/admin/revenue");
+    const data = await res.json();
+
+    document.getElementById("stats").innerHTML = `
+      <div class="stat">
+        <h3>$${data.totalRevenue}</h3>
+        <p>Total Revenue</p>
+      </div>
+
+      <div class="stat">
+        <h3>$${data.depositCollected}</h3>
+        <p>Deposits</p>
+      </div>
+
+      <div class="stat">
+        <h3>$${data.remainingDue}</h3>
+        <p>Remaining</p>
+      </div>
+    `;
+
+    // destroy old chart (important for realtime update)
+    if (chartInstance) chartInstance.destroy();
+
+    chartInstance = new Chart(document.getElementById("chart"), {
+      type: "bar",
+      data: {
+        labels: ["Total", "Deposits", "Remaining"],
+        datasets: [{
+          data: [
+            data.totalRevenue,
+            data.depositCollected,
+            data.remainingDue
+          ]
+        }]
+      }
+    });
+
+  } catch (err) {
+    console.error(err);
+    document.getElementById("stats").innerHTML = "Error loading stats";
+  }
+}
+
+/* ================= LOAD BOOKINGS ================= */
+async function loadBookings() {
+  try {
+    const res = await fetch(API + "/admin/bookings");
+    const bookings = await res.json();
+
+    const table = document.getElementById("bookingsTable");
+    table.innerHTML = "";
+
+    bookings.forEach(b => {
+      table.innerHTML += `
+        <tr>
+          <td>${b.id}</td>
+          <td>${b.name}</td>
+          <td>${b.service}</td>
+          <td>${b.date}</td>
+          <td>${b.timeSlot}</td>
+          <td>$${b.price}</td>
+          <td>${b.paymentStatus || "pending"}</td>
+
+          <td>
+            <button onclick="completeBooking(${b.id})">✔ Complete</button>
+            <button onclick="deleteBooking(${b.id})">🗑 Delete</button>
+            <a href="${API}/invoice/${b.id}" target="_blank">📄 PDF</a>
+          </td>
+        </tr>
+      `;
+    });
+
+  } catch (err) {
+    console.error(err);
+  }
+}
+
+/* ================= COMPLETE BOOKING ================= */
+async function completeBooking(id) {
+  await fetch(API + "/admin/bookings/" + id + "/complete", {
+    method: "PUT"
+  });
+
+  loadBookings();
+  loadRevenue();
+}
+
+/* ================= DELETE BOOKING ================= */
+async function deleteBooking(id) {
+  await fetch(API + "/admin/bookings/" + id, {
+    method: "DELETE"
+  });
+
+  loadBookings();
+  loadRevenue();
+}
+
+/* ================= LOGOUT ================= */
+function logout() {
+  localStorage.removeItem("admin");
+  window.location.href = "admin-login.html";
+}
+
+/* ================= INIT ================= */
+loadRevenue();
+loadBookings();
+
+/* 🔥 REAL-TIME REFRESH */
+setInterval(() => {
+  loadRevenue();
+  loadBookings();
+}, 8000);
+
+</script>
 
 </body>
 </html>

@@ -34,7 +34,7 @@
 
       <div class="row">
         <span>Status</span>
-        <b id="status" class="status"></b>
+        <b id="status"></b>
       </div>
 
       <div class="divider"></div>
@@ -56,6 +56,11 @@
       <h2>$<span id="total">0</span></h2>
     </div>
 
+    <!-- 📄 INVOICE BUTTON -->
+    <div style="margin:15px 0; text-align:center;">
+      <a id="download" class="btn">📄 Download Invoice</a>
+    </div>
+
     <div class="next-steps">
       <h3>What Happens Next?</h3>
       <ul>
@@ -75,28 +80,34 @@
 </div>
 
 <script>
+
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 /* ================= GET BOOKING ID ================= */
 const params = new URLSearchParams(window.location.search);
-const bookingId = params.get("bookingId");
+const id = params.get("bookingId");
+
+/* ================= INVOICE LINK ================= */
+const downloadBtn = document.getElementById("download");
+
+if (id) {
+  downloadBtn.href = `${API}/invoice/${id}`;
+}
 
 /* ================= LOAD BOOKING ================= */
 async function loadBooking() {
   try {
-    const res = await fetch(API + "/public-bookings");
+    const res = await fetch(API + "/bookings");
     const bookings = await res.json();
 
-    const booking = bookings.find(b =>
-      b._id === bookingId || b.bookingId === bookingId
-    );
+    const booking = bookings.find(b => String(b.id) === String(id));
 
     if (!booking) {
       document.body.innerHTML = "<h2>❌ Booking Not Found</h2>";
       return;
     }
 
-    document.getElementById("bookingId").innerText = booking._id;
+    document.getElementById("bookingId").innerText = booking.id;
     document.getElementById("status").innerText = booking.paymentStatus || "Pending";
 
     document.getElementById("name").innerText = booking.name || "";
@@ -106,7 +117,7 @@ async function loadBooking() {
     document.getElementById("service").innerText = booking.service || "";
     document.getElementById("date").innerText = booking.date || "";
     document.getElementById("time").innerText = booking.timeSlot || "";
-    document.getElementById("total").innerText = booking.total || 0;
+    document.getElementById("total").innerText = booking.price || 0;
 
   } catch (err) {
     console.error(err);
@@ -115,6 +126,7 @@ async function loadBooking() {
 }
 
 loadBooking();
+
 </script>
 
 </body>

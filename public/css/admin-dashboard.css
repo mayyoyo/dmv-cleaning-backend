@@ -2,11 +2,11 @@ body {
   margin: 0;
   font-family: Arial, sans-serif;
   background: #0f172a;
-  color: #e5e7eb;
+  color: white;
 }
 
-/* ================= NAVBAR ================= */
-.navbar {
+/* TOP BAR */
+.topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -15,107 +15,86 @@ body {
   border-bottom: 1px solid #1f2937;
 }
 
-.navbar h2 {
+.topbar h2 {
   margin: 0;
   font-size: 18px;
 }
 
-/* ================= LOGOUT BUTTON ================= */
-.logout-btn {
-  background: #ef4444;
+/* TOP BUTTONS */
+.top-actions button {
+  margin-left: 10px;
+  padding: 8px 12px;
   border: none;
-  padding: 8px 14px;
-  color: white;
-  border-radius: 6px;
   cursor: pointer;
+  border-radius: 6px;
+  background: #1f2937;
+  color: white;
   transition: 0.2s;
 }
 
-.logout-btn:hover {
-  background: #dc2626;
+.top-actions button:hover {
+  background: #374151;
 }
 
-/* ================= CONTAINER ================= */
+.logout {
+  background: #ef4444 !important;
+}
+
+/* MAIN CONTAINER */
 .container {
   padding: 20px;
 }
 
-/* ================= TABLE ================= */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 20px;
-  background: #111827;
+/* BOOKING CARD */
+.card {
+  background: #1e293b;
+  padding: 15px;
   border-radius: 10px;
-  overflow: hidden;
+  margin-bottom: 15px;
+  border-left: 4px solid #22c55e;
+  transition: 0.2s;
 }
 
-th, td {
-  padding: 12px;
-  text-align: center;
-  border-bottom: 1px solid #1f2937;
+.card:hover {
+  transform: scale(1.01);
 }
 
-th {
-  background: #1f2937;
-  color: #fff;
+/* ROW */
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin: 6px 0;
+  font-size: 14px;
 }
 
-/* ================= STATUS COLORS ================= */
-.status {
-  padding: 5px 10px;
+/* ACTION BUTTONS */
+.actions {
+  margin-top: 12px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actions button {
+  padding: 6px 10px;
+  border: none;
+  cursor: pointer;
   border-radius: 6px;
-  font-size: 12px;
-  text-transform: capitalize;
+  font-size: 13px;
 }
 
-/* Paid = green */
-.status.paid {
+/* BUTTON COLORS */
+.actions button:nth-child(1) {
+  background: #3b82f6;
+  color: white;
+}
+
+.actions button:nth-child(2) {
   background: #22c55e;
   color: white;
 }
 
-/* Pending = yellow */
-.status.pending {
-  background: #f59e0b;
-  color: black;
-}
-
-/* Failed = red */
-.status.failed {
+.actions button:nth-child(3) {
   background: #ef4444;
   color: white;
-}
-
-/* ================= ACTION BUTTON ================= */
-button {
-  padding: 6px 10px;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  background: #3b82f6;
-  color: white;
-  transition: 0.2s;
-}
-
-button:hover {
-  background: #2563eb;
-}
-
-/* ================= MOBILE ================= */
-@media (max-width: 768px) {
-
-  table {
-    font-size: 12px;
-  }
-
-  th, td {
-    padding: 8px;
-  }
-
-  .navbar {
-    flex-direction: column;
-    gap: 10px;
-    text-align: center;
-  }
 }

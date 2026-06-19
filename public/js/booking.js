@@ -3,14 +3,26 @@ const API = "https://dmv-cleaning-backend.onrender.com/api";
 /* required global */
 let selectedDate = null;
 
-/* ================= LOAD BOOKINGS (NEW FIX - SLOT BLOCKING UI) ================= */
+/* ================= SERVICE PRICE FUNCTION ================= */
+function getServicePrice(service) {
+  if (!service) return 120;
+
+  if (service.includes("120")) return 120;
+  if (service.includes("150")) return 150;
+  if (service.includes("200")) return 200;
+  if (service.includes("250")) return 250;
+
+  return 120;
+}
+
+/* ================= LOAD BOOKINGS ================= */
 async function loadBookings() {
   try {
     const res = await fetch(API + "/public-bookings");
     const bookings = await res.json();
 
     document.querySelectorAll(".slot").forEach(slot => {
-      const date = document.getElementById("date").value;
+      const date = document.getElementById("date")?.value || selectedDate;
 
       const isBooked = bookings.some(b =>
         b.date === date && b.timeSlot === slot.dataset.time
@@ -37,6 +49,8 @@ async function bookNow(paymentType = "pay_later") {
 
   if (!selectedDate) return alert("Select date first");
 
+  const service = document.getElementById("service").value;
+
   const data = {
     name: document.getElementById("name").value,
     email: document.getElementById("email").value,
@@ -44,7 +58,8 @@ async function bookNow(paymentType = "pay_later") {
     address: document.getElementById("address").value,
     date: selectedDate,
     timeSlot: document.getElementById("timeSlot").value,
-    service: document.getElementById("service").value,
+    service: service,
+    price: getServicePrice(service),   // 🔥 IMPORTANT FIX
     paymentType: paymentType
   };
 
