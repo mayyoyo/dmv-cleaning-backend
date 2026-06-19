@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const sqlite3 = require("sqlite3").verbose();
-const nodemailer = require("nodemailer");
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
 const path = require("path");
@@ -15,15 +14,13 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* ================= ✅ TEST ROUTE (IMPORTANT) ================= */
+/* ================= TEST ROUTE ================= */
 app.get("/api/test", (req, res) => {
   res.json({ ok: true, message: "API working" });
 });
 
-/* ================= DATABASE (RENDER SAFE PATH) ================= */
-const db = new sqlite3.Database(
-  path.join(__dirname, "bookings.db")
-);
+/* ================= DATABASE (RENDER SAFE) ================= */
+const db = new sqlite3.Database("/tmp/bookings.db");
 
 /* ================= TABLE ================= */
 db.run(`
@@ -55,7 +52,7 @@ function getServicePrice(service) {
   return 120;
 }
 
-/* ================= STRIPE DEPOSIT CHECKOUT ================= */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email } = req.body;
@@ -67,11 +64,6 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       payment_method_types: ["card"],
       mode: "payment",
       customer_email: email,
-      customer_creation: "always",
-
-      payment_intent_data: {
-        setup_future_usage: "off_session"
-      },
 
       line_items: [
         {
@@ -90,50 +82,34 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       cancel_url: `${process.env.BASE_URL}/booking.html`
     });
 
-    res.json({ url: session.url, deposit });
+    res.json({ url: session.url });
 
   } catch (err) {
     console.error(err);
-    res.json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= SAVE BOOKING ================= */
+/* ================= BOOKING ================= */
 app.post("/api/book", (req, res) => {
-  const {
-    name,
-    email,
-    phone,
-    address,
-    service,
-    date,
-    timeSlot,
-    paymentType,
-    price,
-    deposit,
-    stripeCustomerId,
-    paymentMethodId
-  } = req.body;
+  const data = req.body;
 
   db.run(
     `INSERT INTO bookings (
       name,email,phone,address,service,
-      price,deposit,date,timeSlot,
-      paymentType,stripeCustomerId,paymentMethodId
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      price,deposit,date,timeSlot,paymentType
+    ) VALUES (?,?,?,?,?,?,?,?,?,?)`,
     [
-      name,
-      email,
-      phone,
-      address,
-      service,
-      price,
-      deposit,
-      date,
-      timeSlot,
-      paymentType,
-      stripeCustomerId || null,
-      paymentMethodId || null
+      data.name,
+      data.email,
+      data.phone,
+      data.address,
+      data.service,
+      data.price,
+      data.deposit,
+      data.date,
+      data.timeSlot,
+      data.paymentType
     ],
     function (err) {
       if (err) {
@@ -141,90 +117,38 @@ app.post("/api/book", (req, res) => {
         return res.json({ success: false });
       }
 
-      res.json({
-        success: true,
-        bookingId: this.lastID
-      });
+      res.json({ success: true, bookingId: this.lastID });
     }
   );
-});
-
-/* ================= AUTO CHARGE REMAINING ================= */
-app.post("/api/charge-remaining/:id", (req, res) => {
-  db.get(
-    "SELECT * FROM bookings WHERE id=?",
-    [req.params.id],
-    async (err, row) => {
-      if (!row) return res.json({ success: false });
-
-      try {
-        const remaining = row.price - row.deposit;
-
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: Math.round(remaining * 100),
-          currency: "usd",
-          customer: row.stripeCustomerId,
-          payment_method: row.paymentMethodId,
-          off_session: true,
-          confirm: true
-        });
-
-        db.run(
-          "UPDATE bookings SET paymentStatus='completed' WHERE id=?",
-          [req.params.id]
-        );
-
-        res.json({ success: true, paymentIntent });
-
-      } catch (err) {
-        res.json({ success: false, error: err.message });
-      }
-    }
-  );
-});
-
-/* ================= ADMIN REVENUE ================= */
-app.get("/api/admin/revenue", (req, res) => {
-  db.all("SELECT * FROM bookings", [], (err, rows) => {
-    let total = 0, deposit = 0, remaining = 0;
-
-    rows.forEach(b => {
-      total += b.price || 0;
-      deposit += b.deposit || 0;
-      remaining += (b.price - b.deposit) || 0;
-    });
-
-    res.json({
-      totalRevenue: total,
-      depositCollected: deposit,
-      remainingDue: remaining
-    });
-  });
 });
 
 /* ================= ADMIN BOOKINGS ================= */
 app.get("/api/admin/bookings", (req, res) => {
   db.all("SELECT * FROM bookings ORDER BY id DESC", [], (err, rows) => {
-    res.json(rows);
+    res.json(rows || []);
   });
 });
 
-/* ================= DELETE BOOKING ================= */
-app.delete("/api/admin/bookings/:id", (req, res) => {
-  db.run("DELETE FROM bookings WHERE id=?", [req.params.id]);
-  res.json({ success: true });
+/* ================= REVENUE ================= */
+app.get("/api/admin/revenue", (req, res) => {
+  db.all("SELECT * FROM bookings", [], (err, rows) => {
+    let total = 0;
+    let deposit = 0;
+
+    rows.forEach(b => {
+      total += b.price || 0;
+      deposit += b.deposit || 0;
+    });
+
+    res.json({
+      totalRevenue: total,
+      depositCollected: deposit,
+      remainingDue: total - deposit
+    });
+  });
 });
 
-/* ================= COMPLETE BOOKING ================= */
-app.put("/api/admin/bookings/:id/complete", (req, res) => {
-  db.run(
-    "UPDATE bookings SET paymentStatus='completed' WHERE id=?",
-    [req.params.id]
-  );
-  res.json({ success: true });
-});
-
-/* ================= INVOICE PDF ================= */
+/* ================= INVOICE ================= */
 app.get("/api/invoice/:id", (req, res) => {
   db.get("SELECT * FROM bookings WHERE id=?", [req.params.id], (err, row) => {
     if (!row) return res.send("Not found");
@@ -253,6 +177,6 @@ app.get("/api/invoice/:id", (req, res) => {
 /* ================= START SERVER ================= */
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log("🔥 Server running on", PORT);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("🔥 Server running on port", PORT);
 });
