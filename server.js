@@ -2,7 +2,6 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const sqlite3 = require("sqlite3").verbose();
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
 
@@ -23,35 +22,9 @@ app.get("/api/test", (req, res) => {
   res.json({ ok: true, message: "API working" });
 });
 
-/* ================= SAFE DATABASE (RENDER FINAL FIX) ================= */
-/* ⚠️ NO FILE SYSTEM — prevents Render crash */
-const db = new sqlite3.Database(":memory:", (err) => {
-  if (err) {
-    console.error("❌ SQLITE ERROR:", err.message);
-  } else {
-    console.log("✅ In-memory SQLite connected (Render safe)");
-  }
-});
-
-/* ================= TABLE ================= */
-db.run(`
-CREATE TABLE IF NOT EXISTS bookings (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT,
-  email TEXT,
-  phone TEXT,
-  address TEXT,
-  service TEXT,
-  price REAL,
-  deposit REAL,
-  date TEXT,
-  timeSlot TEXT,
-  paymentType TEXT,
-  stripeCustomerId TEXT,
-  paymentMethodId TEXT,
-  paymentStatus TEXT DEFAULT 'pending'
-)
-`);
+/* ================= SIMPLE MEMORY STORAGE ================= */
+let bookings = [];
+let idCounter = 1;
 
 /* ================= PRICE FUNCTION ================= */
 function getServicePrice(service) {
@@ -91,7 +64,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      success_url: `${process.env.BASE_URL}/success.html?bookingId=TEMP`,
+      success_url: `${process.env.BASE_URL}/success.html`,
       cancel_url: `${process.env.BASE_URL}/booking.html`
     });
 
@@ -103,88 +76,65 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= BOOKING ================= */
+/* ================= BOOK ================= */
 app.post("/api/book", (req, res) => {
   const data = req.body;
 
-  db.run(
-    `INSERT INTO bookings (
-      name,email,phone,address,service,
-      price,deposit,date,timeSlot,paymentType
-    ) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-    [
-      data.name,
-      data.email,
-      data.phone,
-      data.address,
-      data.service,
-      data.price,
-      data.deposit,
-      data.date,
-      data.timeSlot,
-      data.paymentType
-    ],
-    function (err) {
-      if (err) {
-        console.error(err);
-        return res.json({ success: false });
-      }
+  const booking = {
+    id: idCounter++,
+    ...data
+  };
 
-      res.json({ success: true, bookingId: this.lastID });
-    }
-  );
+  bookings.push(booking);
+
+  res.json({ success: true, bookingId: booking.id });
 });
 
 /* ================= ADMIN BOOKINGS ================= */
 app.get("/api/admin/bookings", (req, res) => {
-  db.all("SELECT * FROM bookings ORDER BY id DESC", [], (err, rows) => {
-    res.json(rows || []);
-  });
+  res.json(bookings);
 });
 
 /* ================= REVENUE ================= */
 app.get("/api/admin/revenue", (req, res) => {
-  db.all("SELECT * FROM bookings", [], (err, rows) => {
-    let total = 0;
-    let deposit = 0;
+  let total = 0;
+  let deposit = 0;
 
-    rows.forEach(b => {
-      total += b.price || 0;
-      deposit += b.deposit || 0;
-    });
+  bookings.forEach(b => {
+    total += b.price || 0;
+    deposit += b.deposit || 0;
+  });
 
-    res.json({
-      totalRevenue: total,
-      depositCollected: deposit,
-      remainingDue: total - deposit
-    });
+  res.json({
+    totalRevenue: total,
+    depositCollected: deposit,
+    remainingDue: total - deposit
   });
 });
 
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", (req, res) => {
-  db.get("SELECT * FROM bookings WHERE id=?", [req.params.id], (err, row) => {
-    if (!row) return res.send("Not found");
+  const booking = bookings.find(b => b.id == req.params.id);
 
-    const doc = new PDFDocument();
+  if (!booking) return res.send("Not found");
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", "attachment; filename=invoice.pdf");
+  const doc = new PDFDocument();
 
-    doc.pipe(res);
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", "attachment; filename=invoice.pdf");
 
-    doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
-    doc.moveDown();
+  doc.pipe(res);
 
-    doc.fontSize(12).text(`Name: ${row.name}`);
-    doc.text(`Service: ${row.service}`);
-    doc.text(`Price: $${row.price}`);
-    doc.text(`Deposit: $${row.deposit}`);
-    doc.text(`Remaining: $${row.price - row.deposit}`);
-    doc.text(`Status: ${row.paymentStatus}`);
+  doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
+  doc.moveDown();
 
-    doc.end();
-  });
+  doc.fontSize(12).text(`Name: ${booking.name}`);
+  doc.text(`Service: ${booking.service}`);
+  doc.text(`Price: $${booking.price}`);
+  doc.text(`Deposit: $${booking.deposit}`);
+  doc.text(`Remaining: $${booking.price - booking.deposit}`);
+
+  doc.end();
 });
 
 /* ================= START SERVER ================= */
@@ -192,13 +142,4 @@ const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
   console.log("🔥 Server running on port", PORT);
-});
-
-/* ================= GLOBAL ERROR HANDLERS ================= */
-process.on("uncaughtException", (err) => {
-  console.error("UNCAUGHT ERROR:", err);
-});
-
-process.on("unhandledRejection", (err) => {
-  console.error("PROMISE ERROR:", err);
 });
