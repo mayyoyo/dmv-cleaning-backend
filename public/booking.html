@@ -73,7 +73,6 @@
 
 <script>
 
-/* ✅ FIXED API ENDPOINT */
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 /* ================= STATE ================= */
@@ -115,13 +114,14 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* ================= PAY NOW ================= */
+/* ================= PAY NOW (FIXED) ================= */
 async function handlePayNow() {
 
   console.log("PAY BUTTON CLICKED");
 
   const service = document.getElementById("service").value;
   const email = document.getElementById("email").value;
+  const timeSlot = document.getElementById("timeSlot").value;
 
   if (!service || !email || !selectedDate) {
     alert("Please select service, email, and date");
@@ -133,13 +133,15 @@ async function handlePayNow() {
   showPopup();
 
   try {
-    const res = await fetch(API + "/create-deposit-checkout", {
+    const res = await fetch(`${API}/create-deposit-checkout`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         service,
+        price,
         email,
-        price
+        date: selectedDate,
+        timeSlot
       })
     });
 
@@ -147,17 +149,18 @@ async function handlePayNow() {
 
     hidePopup();
 
+    console.log("STRIPE RESPONSE:", data);
+
     if (data.url) {
       window.location.href = data.url;
     } else {
       alert("Stripe failed");
-      console.log(data);
     }
 
   } catch (err) {
     hidePopup();
     console.error(err);
-    alert("Network error");
+    alert("Network error - backend not reachable");
   }
 }
 
@@ -171,8 +174,6 @@ async function handlePayLater() {
     return;
   }
 
-  const price = getServicePrice(service);
-
   const data = {
     name: document.getElementById("name").value,
     phone: document.getElementById("phone").value,
@@ -181,14 +182,14 @@ async function handlePayLater() {
     service,
     date: selectedDate,
     timeSlot: document.getElementById("timeSlot").value,
-    price,
-    deposit: Math.round(price * 0.25),
+    price: getServicePrice(service),
+    deposit: Math.round(getServicePrice(service) * 0.25),
     paymentType: "later"
   };
 
   showPopup();
 
-  const res = await fetch(API + "/book", {
+  const res = await fetch(`${API}/book`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)
