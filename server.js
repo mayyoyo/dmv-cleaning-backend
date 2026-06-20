@@ -17,7 +17,7 @@ app.get("/", (req, res) => {
   res.send("SERVER IS LIVE");
 });
 
-/* ================= API TEST ================= */
+/* ================= TEST ================= */
 app.get("/api/test", (req, res) => {
   res.json({ ok: true, message: "API working" });
 });
@@ -30,20 +30,27 @@ let idCounter = 1;
 function getServicePrice(service) {
   if (!service) return 120;
 
-  if (service.includes("120")) return 120;
-  if (service.includes("150")) return 150;
-  if (service.includes("200")) return 200;
-  if (service.includes("250")) return 250;
+  if (service.includes("$120")) return 120;
+  if (service.includes("$150")) return 150;
+  if (service.includes("$200")) return 200;
+  if (service.includes("$250")) return 250;
 
   return 120;
 }
 
-/* ================= STRIPE CHECKOUT (FIXED + SAFE) ================= */
+/* ================= STRIPE CHECKOUT (FIXED FINAL VERSION) ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price } = req.body;
 
-    console.log("REQUEST:", req.body);
+    console.log("REQUEST RECEIVED:", req.body);
+
+    // 🔴 VALIDATION (IMPORTANT)
+    if (!service || !email) {
+      return res.status(400).json({
+        error: "Missing service or email"
+      });
+    }
 
     const finalPrice = price || getServicePrice(service);
     const deposit = Math.round(finalPrice * 0.25 * 100);
@@ -66,16 +73,16 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      success_url: "https://yourdomain.com/success.html",
-      cancel_url: "https://yourdomain.com/booking.html"
+      success_url: "https://mydmvcleaningservice.com/success.html",
+      cancel_url: "https://mydmvcleaningservice.com/booking.html"
     });
 
-    console.log("STRIPE URL:", session.url);
+    console.log("STRIPE SUCCESS URL:", session.url);
 
     res.json({ url: session.url });
 
   } catch (err) {
-    console.error("STRIPE ERROR:", err);
+    console.error("STRIPE ERROR:", err.message);
     res.status(500).json({ error: err.message });
   }
 });

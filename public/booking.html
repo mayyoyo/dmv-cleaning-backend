@@ -7,10 +7,10 @@
 <title>Book Cleaning Service</title>
 
 <link rel="stylesheet" href="./css/booking.css">
-
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
+<script src="config.js"></script>
 </head>
 
 <body>
@@ -38,10 +38,8 @@
 <h2>📅 Book Cleaning Service</h2>
 
 <div id="calendar"></div>
-
 <p id="selectedDate">No date selected</p>
 
-<!-- SERVICE -->
 <select id="service" class="input">
   <option value="">Select Service</option>
   <option value="Home Cleaning - $120">🏠 Home Cleaning - Starting at $120</option>
@@ -50,7 +48,6 @@
   <option value="Move In/Out Cleaning - $250">🚚 Move In/Out Cleaning - Starting at $250</option>
 </select>
 
-<!-- TIME -->
 <select id="timeSlot" class="input">
   <option value="08:00-10:00">08:00-10:00</option>
   <option value="10:00-12:00">10:00-12:00</option>
@@ -68,26 +65,20 @@
 <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
-
 </main>
 
 <script>
 
-/* ================= API ================= */
-const API = "https://dmv-cleaning-backend.onrender.com/api";
-
-/* ================= STATE ================= */
+const API = window.API;
 let selectedDate = null;
 
 /* ================= PRICE ================= */
 function getServicePrice(service) {
   if (!service) return 120;
-
   if (service.includes("$120")) return 120;
   if (service.includes("$150")) return 150;
   if (service.includes("$200")) return 200;
   if (service.includes("$250")) return 250;
-
   return 120;
 }
 
@@ -95,7 +86,6 @@ function getServicePrice(service) {
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
-
 function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
@@ -103,16 +93,18 @@ function hidePopup() {
 /* ================= CALENDAR ================= */
 document.addEventListener("DOMContentLoaded", () => {
 
-  const calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-    initialView: "dayGridMonth",
-    height: 450,
-
-    dateClick(info) {
-      selectedDate = info.dateStr;
-      document.getElementById("selectedDate").innerText =
-        "Selected: " + selectedDate;
+  const calendar = new FullCalendar.Calendar(
+    document.getElementById("calendar"),
+    {
+      initialView: "dayGridMonth",
+      height: 450,
+      dateClick(info) {
+        selectedDate = info.dateStr;
+        document.getElementById("selectedDate").innerText =
+          "Selected: " + selectedDate;
+      }
     }
-  });
+  );
 
   calendar.render();
 });
@@ -120,11 +112,13 @@ document.addEventListener("DOMContentLoaded", () => {
 /* ================= PAY NOW (FIXED) ================= */
 async function handlePayNow() {
 
+  console.log("PAY BUTTON CLICKED");
+
   const service = document.getElementById("service").value;
   const email = document.getElementById("email").value;
 
   if (!service || !email || !selectedDate) {
-    alert("Missing fields");
+    alert("Please select service, email, and date");
     return;
   }
 
@@ -133,27 +127,40 @@ async function handlePayNow() {
   showPopup();
 
   try {
-    const res = await fetch(`${API}/create-deposit-checkout`, {
+    const res = await fetch(API + "/create-deposit-checkout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ service, price, email })
+      body: JSON.stringify({
+        service,
+        email,
+        price
+      })
     });
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("SERVER ERROR:", text);
+      alert("Backend error: " + text);
+      hidePopup();
+      return;
+    }
 
     const data = await res.json();
 
     hidePopup();
 
+    console.log("STRIPE RESPONSE:", data);
+
     if (data.url) {
       window.location.href = data.url;
     } else {
-      alert("Stripe failed");
-      console.log(data);
+      alert("Stripe failed - no URL returned");
     }
 
   } catch (err) {
     hidePopup();
-    console.error(err);
-    alert("Network error");
+    console.error("NETWORK ERROR:", err);
+    alert("Server not responding");
   }
 }
 
@@ -163,7 +170,8 @@ async function handlePayLater() {
   const service = document.getElementById("service").value;
 
   if (!service || !selectedDate) {
-    return alert("Fill required fields");
+    alert("Fill required fields");
+    return;
   }
 
   const price = getServicePrice(service);
@@ -183,27 +191,22 @@ async function handlePayLater() {
 
   showPopup();
 
-  try {
-    const res = await fetch(`${API}/book`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
+  const res = await fetch(API + "/book", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
 
-    const result = await res.json();
+  const result = await res.json();
 
-    hidePopup();
+  hidePopup();
 
-    if (result.success) {
-      window.location.href = `/success.html?bookingId=${result.bookingId}`;
-    } else {
-      alert("Booking failed");
-    }
-
-  } catch (err) {
-    hidePopup();
-    console.error(err);
-    alert("Network error");
+  if (result.success) {
+    window.location.href =
+      "https://mydmvcleaningservice.com/success.html?bookingId=" +
+      result.bookingId;
+  } else {
+    alert("Booking failed");
   }
 }
 
