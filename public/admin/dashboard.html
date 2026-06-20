@@ -2,195 +2,50 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
 <title>Admin Dashboard</title>
-
-<link rel="stylesheet" href="./admin-dashboard.css">
-
-<!-- Chart.js -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-<!-- ✅ CONFIG FILE (IONOS FIX) -->
-<script src="config.js"></script>
-
+<link rel="stylesheet" href="admin-dashboard.css">
 </head>
 
 <body>
 
 <header class="topbar">
-  <h1>📊 Admin Dashboard</h1>
+  <h2>🧼 DMV Cleaning Admin</h2>
   <button onclick="logout()">Logout</button>
 </header>
 
-<main class="container">
+<section class="stats">
+  <div class="card">
+    <h3>Total Bookings</h3>
+    <p id="totalBookings">0</p>
+  </div>
 
-  <!-- REVENUE STATS -->
-  <section id="stats" class="stats-box">
-    Loading revenue...
-  </section>
+  <div class="card">
+    <h3>Revenue</h3>
+    <p id="revenue">$0</p>
+  </div>
+</section>
 
-  <!-- CHART -->
-  <section class="chart-box">
-    <canvas id="chart"></canvas>
-  </section>
+<section class="table-section">
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Service</th>
+        <th>Date</th>
+        <th>Time</th>
+        <th>Status</th>
+        <th>Price</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
 
-  <!-- BOOKINGS TABLE -->
-  <section class="table-box">
+    <tbody id="data"></tbody>
+  </table>
+</section>
 
-    <h2>📅 All Bookings</h2>
-
-    <table>
-      <thead>
-        <tr>
-          <th>ID</th>
-          <th>Name</th>
-          <th>Service</th>
-          <th>Date</th>
-          <th>Time</th>
-          <th>Price</th>
-          <th>Status</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-
-      <tbody id="bookingsTable"></tbody>
-    </table>
-
-  </section>
-
-</main>
-
-<script>
-
-/* ================= USE CONFIG ================= */
-const API = window.API;
-
-/* ================= LOGIN CHECK ================= */
-if (localStorage.getItem("admin") !== "true") {
-  window.location.href = "admin-login.html";
-}
-
-/* ================= CHART INSTANCE ================= */
-let chartInstance = null;
-
-/* ================= LOAD REVENUE ================= */
-async function loadRevenue() {
-  try {
-    const res = await fetch(API + "/admin/revenue");
-    const data = await res.json();
-
-    document.getElementById("stats").innerHTML = `
-      <div class="stat">
-        <h3>$${data.totalRevenue}</h3>
-        <p>Total Revenue</p>
-      </div>
-
-      <div class="stat">
-        <h3>$${data.depositCollected}</h3>
-        <p>Deposits</p>
-      </div>
-
-      <div class="stat">
-        <h3>$${data.remainingDue}</h3>
-        <p>Remaining</p>
-      </div>
-    `;
-
-    // destroy old chart before redraw (IMPORTANT)
-    if (chartInstance) chartInstance.destroy();
-
-    chartInstance = new Chart(document.getElementById("chart"), {
-      type: "bar",
-      data: {
-        labels: ["Total", "Deposits", "Remaining"],
-        datasets: [{
-          data: [
-            data.totalRevenue,
-            data.depositCollected,
-            data.remainingDue
-          ]
-        }]
-      }
-    });
-
-  } catch (err) {
-    console.error("Revenue error:", err);
-    document.getElementById("stats").innerHTML = "Error loading stats";
-  }
-}
-
-/* ================= LOAD BOOKINGS ================= */
-async function loadBookings() {
-  try {
-    const res = await fetch(API + "/admin/bookings");
-    const bookings = await res.json();
-
-    const table = document.getElementById("bookingsTable");
-    table.innerHTML = "";
-
-    bookings.forEach(b => {
-      table.innerHTML += `
-        <tr>
-          <td>${b.id}</td>
-          <td>${b.name}</td>
-          <td>${b.service}</td>
-          <td>${b.date}</td>
-          <td>${b.timeSlot}</td>
-          <td>$${b.price}</td>
-          <td>${b.paymentStatus || "pending"}</td>
-
-          <td>
-            <button onclick="completeBooking(${b.id})">✔ Complete</button>
-            <button onclick="deleteBooking(${b.id})">🗑 Delete</button>
-            <a href="${API}/invoice/${b.id}" target="_blank">📄 PDF</a>
-          </td>
-        </tr>
-      `;
-    });
-
-  } catch (err) {
-    console.error("Booking error:", err);
-  }
-}
-
-/* ================= COMPLETE BOOKING ================= */
-async function completeBooking(id) {
-  await fetch(API + "/admin/bookings/" + id + "/complete", {
-    method: "PUT"
-  });
-
-  loadBookings();
-  loadRevenue();
-}
-
-/* ================= DELETE BOOKING ================= */
-async function deleteBooking(id) {
-  await fetch(API + "/admin/bookings/" + id, {
-    method: "DELETE"
-  });
-
-  loadBookings();
-  loadRevenue();
-}
-
-/* ================= LOGOUT ================= */
-function logout() {
-  localStorage.removeItem("admin");
-  window.location.href = "admin-login.html";
-}
-
-/* ================= INIT ================= */
-loadRevenue();
-loadBookings();
-
-/* ================= REAL-TIME REFRESH ================= */
-setInterval(() => {
-  loadRevenue();
-  loadBookings();
-}, 8000);
-
-</script>
+<script src="dashboard.js"></script>
 
 </body>
 </html>

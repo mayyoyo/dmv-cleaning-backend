@@ -1,43 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+<meta charset="UTF-8">
 <title>Admin Login</title>
 
-<link rel="stylesheet" href="css/admin-login.css">
+<link rel="stylesheet" href="./admin-login.css">
 </head>
 
 <body>
 
-<div class="box">
-  <h2>Admin Login</h2>
+<div class="login-container">
 
-  <input id="user" placeholder="Username">
-  <input id="pass" type="password" placeholder="Password">
+  <div class="login-box">
 
-  <button onclick="login()">Login</button>
+    <h2>🔐 Admin Login</h2>
+
+    <input id="username" placeholder="Username" type="text">
+    <input id="password" placeholder="Password" type="password">
+
+    <button onclick="login()">Login</button>
+
+    <p id="error"></p>
+
+  </div>
+
 </div>
 
 <script>
-const API = "https://dmv-cleaning-backend.onrender.com/api";
+function login() {
+  const user = document.getElementById("username").value;
+  const pass = document.getElementById("password").value;
 
-async function login() {
-
-  const user = document.getElementById("user").value;
-  const pass = document.getElementById("pass").value;
-
-  const res = await fetch(API + "/admin-login", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({ user, pass })
-  });
-
-  const data = await res.json();
-
-  if (data.success) {
-    localStorage.setItem("admin", "true");
-    window.location.href = "admin.html";
+  // SIMPLE FRONTEND LOGIN (you can upgrade later)
+  if (user === "admin" && pass === "admin123") {
+    localStorage.setItem("adminAuth", "true");
+    window.location.href = "dashboard.html";
   } else {
-    alert("Wrong login");
+    document.getElementById("error").innerText = "Invalid login";
   }
 }
 </script>

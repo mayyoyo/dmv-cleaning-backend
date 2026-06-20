@@ -1,100 +1,62 @@
 body {
+  font-family: Arial;
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #0f172a;
-  color: white;
+  background: #f4f6f8;
 }
 
-/* TOP BAR */
 .topbar {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 15px 20px;
-  background: #111827;
-  border-bottom: 1px solid #1f2937;
-}
-
-.topbar h2 {
-  margin: 0;
-  font-size: 18px;
-}
-
-/* TOP BUTTONS */
-.top-actions button {
-  margin-left: 10px;
-  padding: 8px 12px;
-  border: none;
-  cursor: pointer;
-  border-radius: 6px;
-  background: #1f2937;
+  padding: 15px;
+  background: #007bff;
   color: white;
-  transition: 0.2s;
 }
 
-.top-actions button:hover {
-  background: #374151;
-}
-
-.logout {
-  background: #ef4444 !important;
-}
-
-/* MAIN CONTAINER */
-.container {
+.stats {
+  display: flex;
+  gap: 15px;
   padding: 20px;
 }
 
-/* BOOKING CARD */
 .card {
-  background: #1e293b;
-  padding: 15px;
+  background: white;
+  padding: 20px;
   border-radius: 10px;
-  margin-bottom: 15px;
-  border-left: 4px solid #22c55e;
-  transition: 0.2s;
+  flex: 1;
+  text-align: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.card:hover {
-  transform: scale(1.01);
+.table-section {
+  padding: 20px;
 }
 
-/* ROW */
-.row {
-  display: flex;
-  justify-content: space-between;
-  margin: 6px 0;
-  font-size: 14px;
+table {
+  width: 100%;
+  background: white;
+  border-collapse: collapse;
 }
 
-/* ACTION BUTTONS */
-.actions {
-  margin-top: 12px;
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+th, td {
+  padding: 10px;
+  border-bottom: 1px solid #ddd;
+  text-align: center;
 }
 
-.actions button {
-  padding: 6px 10px;
-  border: none;
+button {
+  padding: 5px 10px;
+  margin: 2px;
   cursor: pointer;
-  border-radius: 6px;
-  font-size: 13px;
 }
 
-/* BUTTON COLORS */
-.actions button:nth-child(1) {
-  background: #3b82f6;
+.btn-complete {
+  background: green;
   color: white;
+  border: none;
 }
 
-.actions button:nth-child(2) {
-  background: #22c55e;
+.btn-charge {
+  background: orange;
   color: white;
-}
-
-.actions button:nth-child(3) {
-  background: #ef4444;
-  color: white;
+  border: none;
 }
