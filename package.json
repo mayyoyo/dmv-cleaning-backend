@@ -18,7 +18,7 @@
     "json2csv": "^6.0.0-alpha.2",
     "jsonwebtoken": "^9.0.3",
     "node-cron": "^4.2.1",
-    "nodemailer": "^8.0.11",
+    "nodemailer": "^6.9.7",
     "openai": "^6.42.0",
     "pdfkit": "^0.19.1",
     "resend": "^6.12.4",
@@ -31,7 +31,6 @@
     "type": "git",
     "url": "git+https://github.com/mayyoyo/dmv-cleaning-backend.git"
   },
-  "keywords": [],
   "license": "ISC",
   "type": "commonjs"
 }
