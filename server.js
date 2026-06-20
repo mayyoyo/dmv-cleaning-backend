@@ -3,7 +3,9 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const Stripe = require("stripe");
-const PDFDocument = require("pdfkit");
+const nodemailer = require("nodemailer");
+const sqlite3 = require("sqlite3").verbose();
+const { v4: uuidv4 } = require("uuid");
 
 const app = express();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
@@ -12,143 +14,178 @@ const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 app.use(cors({ origin: "*" }));
 app.use(express.json());
 
-/* ================= ROOT ================= */
-app.get("/", (req, res) => {
-  res.send("SERVER IS LIVE");
+/* ================= DATABASE ================= */
+const db = new sqlite3.Database("./database.db");
+
+db.run(`CREATE TABLE IF NOT EXISTS bookings (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  email TEXT,
+  phone TEXT,
+  address TEXT,
+  service TEXT,
+  date TEXT,
+  timeSlot TEXT,
+  price INTEGER,
+  deposit INTEGER,
+  paid INTEGER DEFAULT 0
+)`);
+
+/* ================= EMAIL SETUP ================= */
+const transporter = nodemailer.createTransport({
+service: "gmail",
+auth: {
+user: process.env.EMAIL_USER,
+pass: process.env.EMAIL_PASS
+}
 });
 
-/* ================= TEST ================= */
-app.get("/api/test", (req, res) => {
-  res.json({ ok: true, message: "API working" });
+function sendEmail(to, subject, text) {
+return transporter.sendMail({
+from: process.env.EMAIL_USER,
+to,
+subject,
+text
 });
-
-/* ================= MEMORY DB ================= */
-let bookings = [];
-let idCounter = 1;
-
-/* ================= PRICE FUNCTION ================= */
-function getServicePrice(service) {
-  if (!service) return 120;
-
-  if (service.includes("$120")) return 120;
-  if (service.includes("$150")) return 150;
-  if (service.includes("$200")) return 200;
-  if (service.includes("$250")) return 250;
-
-  return 120;
 }
 
-/* ================= STRIPE CHECKOUT (FIXED FINAL VERSION) ================= */
+/* ================= ROOT ================= */
+app.get("/", (req, res) => res.send("LIVE"));
+
+/* ================= PREVENT DOUBLE BOOKING ================= */
+function checkAvailability(date, timeSlot) {
+return new Promise((resolve) => {
+db.get(
+`SELECT * FROM bookings WHERE date=? AND timeSlot=?`,
+[date, timeSlot],
+(err, row) => {
+resolve(!row);
+}
+);
+});
+}
+
+/* ================= STRIPE ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
-  try {
-    const { service, email, price } = req.body;
+try {
+const { service, email, price, date, timeSlot } = req.body;
 
-    console.log("REQUEST RECEIVED:", req.body);
+```
+const available = await checkAvailability(date, timeSlot);
+if (!available) {
+  return res.status(400).json({ error: "Time slot already booked" });
+}
 
-    // 🔴 VALIDATION (IMPORTANT)
-    if (!service || !email) {
-      return res.status(400).json({
-        error: "Missing service or email"
-      });
-    }
+const deposit = Math.round(price * 0.25 * 100);
 
-    const finalPrice = price || getServicePrice(service);
-    const deposit = Math.round(finalPrice * 0.25 * 100);
+const session = await stripe.checkout.sessions.create({
+  payment_method_types: ["card"],
+  mode: "payment",
+  customer_email: email,
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      mode: "payment",
-      customer_email: email,
+  line_items: [{
+    price_data: {
+      currency: "usd",
+      product_data: { name: `${service} Deposit` },
+      unit_amount: deposit
+    },
+    quantity: 1
+  }],
 
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `${service} Deposit (25%)`
-            },
-            unit_amount: deposit
-          },
-          quantity: 1
-        }
-      ],
-
-      success_url: "https://mydmvcleaningservice.com/success.html",
-      cancel_url: "https://mydmvcleaningservice.com/booking.html"
-    });
-
-    console.log("STRIPE SUCCESS URL:", session.url);
-
-    res.json({ url: session.url });
-
-  } catch (err) {
-    console.error("STRIPE ERROR:", err.message);
-    res.status(500).json({ error: err.message });
-  }
+  success_url: "https://yourdomain.com/success.html?session_id={CHECKOUT_SESSION_ID}",
+  cancel_url: "https://yourdomain.com/booking.html"
 });
 
-/* ================= BOOKING ================= */
-app.post("/api/book", (req, res) => {
-  const booking = {
-    id: idCounter++,
-    ...req.body
-  };
+res.json({ url: session.url });
+```
 
-  bookings.push(booking);
+} catch (err) {
+res.status(500).json({ error: err.message });
+}
+});
 
-  res.json({ success: true, bookingId: booking.id });
+/* ================= SAVE BOOKING ================= */
+app.post("/api/book", async (req, res) => {
+const {
+name, email, phone, address,
+service, date, timeSlot, price
+} = req.body;
+
+const available = await checkAvailability(date, timeSlot);
+if (!available) {
+return res.json({ success: false, message: "Slot taken" });
+}
+
+const id = uuidv4();
+const deposit = Math.round(price * 0.25);
+
+db.run(`     INSERT INTO bookings 
+    (id,name,email,phone,address,service,date,timeSlot,price,deposit,paid)
+    VALUES (?,?,?,?,?,?,?,?,?,?,0)
+  `, [id,name,email,phone,address,service,date,timeSlot,price,deposit]);
+
+/* SEND EMAIL */
+await sendEmail(email,
+"Booking Confirmed",
+`Your booking is confirmed!
+Service: ${service}
+Date: ${date}
+Time: ${timeSlot}
+Deposit: $${deposit}`
+);
+
+res.json({ success: true, bookingId: id });
+});
+
+/* ================= STRIPE SUCCESS (SAVE PAYMENT) ================= */
+app.get("/api/verify-payment", async (req, res) => {
+const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
+
+if (session.payment_status === "paid") {
+
+```
+await sendEmail(
+  session.customer_email,
+  "Payment Received",
+  "Your deposit payment was successful ✅"
+);
+```
+
+}
+
+res.json({ success: true });
 });
 
 /* ================= ADMIN ================= */
 app.get("/api/admin/bookings", (req, res) => {
-  res.json(bookings);
+db.all("SELECT * FROM bookings", [], (err, rows) => {
+res.json(rows);
+});
 });
 
-/* ================= REVENUE ================= */
 app.get("/api/admin/revenue", (req, res) => {
-  let total = 0;
-  let deposit = 0;
+db.all("SELECT * FROM bookings", [], (err, rows) => {
 
-  bookings.forEach(b => {
-    total += b.price || 0;
-    deposit += b.deposit || 0;
-  });
+```
+let total = 0;
+let deposit = 0;
 
-  res.json({
-    totalRevenue: total,
-    depositCollected: deposit,
-    remainingDue: total - deposit
-  });
+rows.forEach(r => {
+  total += r.price;
+  deposit += r.deposit;
 });
 
-/* ================= INVOICE ================= */
-app.get("/api/invoice/:id", (req, res) => {
-  const booking = bookings.find(b => b.id == req.params.id);
+res.json({
+  totalRevenue: total,
+  depositCollected: deposit,
+  remaining: total - deposit
+});
+```
 
-  if (!booking) return res.send("Not found");
-
-  const doc = new PDFDocument();
-
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", "attachment; filename=invoice.pdf");
-
-  doc.pipe(res);
-
-  doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
-  doc.moveDown();
-
-  doc.text(`Name: ${booking.name}`);
-  doc.text(`Service: ${booking.service}`);
-  doc.text(`Price: $${booking.price}`);
-  doc.text(`Deposit: $${booking.deposit}`);
-  doc.text(`Remaining: $${booking.price - booking.deposit}`);
-
-  doc.end();
+});
 });
 
-/* ================= START SERVER ================= */
-const PORT = process.env.PORT || 5000;
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log("🔥 Server running on port", PORT);
+/* ================= START ================= */
+app.listen(5000, "0.0.0.0", () => {
+console.log("🔥 Production Server Running");
 });
