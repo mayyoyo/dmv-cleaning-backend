@@ -66,9 +66,7 @@ app.put("/api/book/:id", (req, res) => {
   res.json({ success: true });
 });
 
-/* =========================================================
-   ✅ FIXED STRIPE CHECKOUT ROUTE (IMPORTANT)
-========================================================= */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot, name, phone } = req.body;
@@ -114,7 +112,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${baseUrl}/success.html`,
       cancel_url: `${baseUrl}/booking.html`
     });
 
@@ -129,6 +127,61 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
     return res.status(500).json({
       success: false,
       error: err.message
+    });
+  }
+});
+
+/* =========================================================
+   ✅ FIXED: PAY LATER BOOKING (THIS WAS MISSING)
+========================================================= */
+app.post("/api/book-pay-later", (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      address,
+      service,
+      date,
+      timeSlot,
+      price
+    } = req.body;
+
+    if (!name || !email || !service || !date || !timeSlot) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields"
+      });
+    }
+
+    const booking = {
+      id: idCounter++,
+      name,
+      email,
+      phone,
+      address,
+      service,
+      date,
+      timeSlot,
+      price,
+      status: "pay_later"
+    };
+
+    bookings.push(booking);
+
+    console.log("PAY LATER BOOKING SAVED:", booking);
+
+    return res.json({
+      success: true,
+      bookingId: booking.id
+    });
+
+  } catch (err) {
+    console.error("PAY LATER ERROR:", err.message);
+
+    return res.status(500).json({
+      success: false,
+      message: err.message
     });
   }
 });
@@ -170,54 +223,6 @@ app.post("/api/webhook", (req, res) => {
   }
 
   res.json({ received: true });
-});
-
-/* ================= COMPLETE JOB ================= */
-app.post("/api/complete-job", async (req, res) => {
-  try {
-    const { bookingId, customerId, remainingAmount } = req.body;
-
-    const booking = bookings.find(b => b.id == bookingId);
-
-    if (!booking) {
-      return res.status(404).json({ error: "Booking not found" });
-    }
-
-    booking.status = "completed";
-
-    const paymentMethods = await stripe.paymentMethods.list({
-      customer: customerId,
-      type: "card"
-    });
-
-    if (!paymentMethods.data.length) {
-      return res.json({
-        success: true,
-        message: "No saved card found"
-      });
-    }
-
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount: remainingAmount * 100,
-      currency: "usd",
-      customer: customerId,
-      payment_method: paymentMethods.data[0].id,
-      off_session: true,
-      confirm: true
-    });
-
-    booking.remainingCharged = true;
-
-    res.json({
-      success: true,
-      message: "Job completed + charged",
-      paymentIntent
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
 });
 
 /* ================= ADMIN ================= */

@@ -41,7 +41,6 @@
 
 <p id="selectedDate">No date selected</p>
 
-<!-- SERVICE SELECT -->
 <select id="service" class="input">
   <option value="">Select Service</option>
   <option value="Home Cleaning - $120">🏠 Home Cleaning - Starting at $120</option>
@@ -116,16 +115,12 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* =========================================================
-   🔥 FIXED HANDLE PAY NOW (YOUR VERSION + IMPROVED)
-========================================================= */
+/* ================= PAY NOW ================= */
 async function handlePayNow() {
 
   const service = document.getElementById("service").value;
   const email = document.getElementById("email").value;
   const timeSlot = document.getElementById("timeSlot").value;
-  const name = document.getElementById("name").value;
-  const phone = document.getElementById("phone").value;
 
   if (!service || !email || !selectedDate || !timeSlot) {
     alert("Please fill all fields");
@@ -145,9 +140,7 @@ async function handlePayNow() {
         price,
         email,
         date: selectedDate,
-        timeSlot,
-        name,
-        phone
+        timeSlot
       })
     });
 
@@ -155,17 +148,10 @@ async function handlePayNow() {
 
     hidePopup();
 
-    console.log("STRIPE RESPONSE:", data);
-
-    if (!res.ok) {
-      alert(data.error || "Server error");
-      return;
-    }
-
     if (data.url) {
       window.location.href = data.url;
     } else {
-      alert("Stripe did not return checkout URL");
+      alert(data.error || "Stripe failed");
     }
 
   } catch (err) {
@@ -175,7 +161,7 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER ================= */
+/* ================= PAY LATER (FIXED REDIRECT) ================= */
 async function handlePayLater() {
 
   const service = document.getElementById("service").value;
@@ -202,27 +188,21 @@ async function handlePayLater() {
 
   showPopup();
 
-  try {
-    const res = await fetch(`${API}/book-pay-later`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
+  const res = await fetch(`${API}/book-pay-later`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
 
-    const result = await res.json();
+  const result = await res.json();
 
-    hidePopup();
+  hidePopup();
 
-    if (result.success) {
-      window.location.href = "/success.html";
-    } else {
-      alert(result.message || "Booking failed");
-    }
-
-  } catch (err) {
-    hidePopup();
-    console.error(err);
-    alert("Backend not reachable");
+  if (result.success) {
+    // ✅ FIXED REDIRECT (THIS IS YOUR REQUEST)
+    window.location.href = `${window.location.origin}/success.html`;
+  } else {
+    alert(result.message || "Booking failed");
   }
 }
 
