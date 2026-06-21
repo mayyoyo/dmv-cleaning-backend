@@ -41,7 +41,7 @@
 
 <p id="selectedDate">No date selected</p>
 
-<!-- SERVICE SELECT (FIXED) -->
+<!-- SERVICE SELECT -->
 <select id="service" class="input">
   <option value="">Select Service</option>
   <option value="Home Cleaning - $120">🏠 Home Cleaning - Starting at $120</option>
@@ -116,12 +116,16 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* ================= PAY NOW (FIXED STRIPE FLOW) ================= */
+/* =========================================================
+   🔥 FIXED HANDLE PAY NOW (YOUR VERSION + IMPROVED)
+========================================================= */
 async function handlePayNow() {
 
   const service = document.getElementById("service").value;
   const email = document.getElementById("email").value;
   const timeSlot = document.getElementById("timeSlot").value;
+  const name = document.getElementById("name").value;
+  const phone = document.getElementById("phone").value;
 
   if (!service || !email || !selectedDate || !timeSlot) {
     alert("Please fill all fields");
@@ -141,7 +145,9 @@ async function handlePayNow() {
         price,
         email,
         date: selectedDate,
-        timeSlot
+        timeSlot,
+        name,
+        phone
       })
     });
 
@@ -149,10 +155,17 @@ async function handlePayNow() {
 
     hidePopup();
 
+    console.log("STRIPE RESPONSE:", data);
+
+    if (!res.ok) {
+      alert(data.error || "Server error");
+      return;
+    }
+
     if (data.url) {
       window.location.href = data.url;
     } else {
-      alert(data.error || "Stripe failed");
+      alert("Stripe did not return checkout URL");
     }
 
   } catch (err) {
@@ -189,20 +202,27 @@ async function handlePayLater() {
 
   showPopup();
 
-  const res = await fetch(`${API}/book-pay-later`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data)
-  });
+  try {
+    const res = await fetch(`${API}/book-pay-later`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data)
+    });
 
-  const result = await res.json();
+    const result = await res.json();
 
-  hidePopup();
+    hidePopup();
 
-  if (result.success) {
-    window.location.href = "/success.html";
-  } else {
-    alert(result.message || "Booking failed");
+    if (result.success) {
+      window.location.href = "/success.html";
+    } else {
+      alert(result.message || "Booking failed");
+    }
+
+  } catch (err) {
+    hidePopup();
+    console.error(err);
+    alert("Backend not reachable");
   }
 }
 

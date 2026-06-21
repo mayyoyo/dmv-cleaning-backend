@@ -66,13 +66,16 @@ app.put("/api/book/:id", (req, res) => {
   res.json({ success: true });
 });
 
-/* ================= STRIPE CHECKOUT (FIXED) ================= */
+/* =========================================================
+   ✅ FIXED STRIPE CHECKOUT ROUTE (IMPORTANT)
+========================================================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot, name, phone } = req.body;
 
     if (!service || !email || !date || !timeSlot) {
       return res.status(400).json({
+        success: false,
         error: "Missing required fields"
       });
     }
@@ -111,7 +114,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      success_url: `${baseUrl}/success.html`,
+      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/booking.html`
     });
 
@@ -124,6 +127,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
     console.error("❌ STRIPE ERROR:", err.message);
 
     return res.status(500).json({
+      success: false,
       error: err.message
     });
   }
@@ -168,7 +172,7 @@ app.post("/api/webhook", (req, res) => {
   res.json({ received: true });
 });
 
-/* ================= COMPLETE JOB + AUTO CHARGE ================= */
+/* ================= COMPLETE JOB ================= */
 app.post("/api/complete-job", async (req, res) => {
   try {
     const { bookingId, customerId, remainingAmount } = req.body;
