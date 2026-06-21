@@ -74,6 +74,7 @@
 
 const API = "https://dmv-cleaning-backend.onrender.com/api";
 
+/* ================= STATE ================= */
 let selectedDate = null;
 
 /* ================= PRICE ================= */
@@ -160,7 +161,7 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER (FIXED REDIRECT) ================= */
+/* ================= PAY LATER ================= */
 async function handlePayLater() {
 
   const service = document.getElementById("service").value;
@@ -193,12 +194,19 @@ async function handlePayLater() {
     body: JSON.stringify(data)
   });
 
-  const result = await res.json();
+  /* ✅ SAFE JSON HANDLING (FIX YOU REQUESTED) */
+  let result;
+  try {
+    result = await res.json();
+  } catch (err) {
+    alert("Server did not return JSON (check backend route)");
+    hidePopup();
+    return;
+  }
 
   hidePopup();
 
   if (result.success) {
-    // ✅ FIX YOU REQUESTED
     window.location.href = `${window.location.origin}/success.html`;
   } else {
     alert(result.message || "Booking failed");
