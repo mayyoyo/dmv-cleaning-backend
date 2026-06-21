@@ -22,6 +22,15 @@ app.get("/", (req, res) => {
   res.send("SERVER IS LIVE");
 });
 
+/* ================= TEST ROUTE ================= */
+app.get("/api/test", (req, res) => {
+  res.json({
+    ok: true,
+    message: "API working",
+    time: new Date().toISOString()
+  });
+});
+
 /* ================= MEMORY DB ================= */
 let bookings = [];
 let idCounter = 1;
