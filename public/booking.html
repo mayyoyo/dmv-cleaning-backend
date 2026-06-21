@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -26,6 +27,7 @@
 </header>
 
 <!-- POPUP -->
+
 <div id="emailPopup" class="popup hidden">
   <div class="popup-box">
     <h2>📧 Processing...</h2>
@@ -52,6 +54,7 @@
 </select>
 
 <select id="timeSlot" class="input">
+  <option value="">Select Time</option>
   <option value="08:00-10:00">08:00-10:00</option>
   <option value="10:00-12:00">10:00-12:00</option>
   <option value="12:00-14:00">12:00-14:00</option>
@@ -64,8 +67,7 @@
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="handlePayNow()">💳 Pay Now (Deposit)</button>
-<button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
+<button class="btn primary" onclick="handlePayNow()">💳 Pay Now (Deposit)</button> <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
 
@@ -114,7 +116,7 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* ================= PAY NOW (FINAL FIX) ================= */
+/* ================= PAY NOW ================= */
 async function handlePayNow() {
 
   const service = document.getElementById("service").value;
