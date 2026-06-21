@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -11,8 +10,6 @@
 
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
-
-<script src="config.js"></script>
 
 </head>
 
@@ -27,7 +24,6 @@
 </header>
 
 <!-- POPUP -->
-
 <div id="emailPopup" class="popup hidden">
   <div class="popup-box">
     <h2>📧 Processing...</h2>
@@ -45,6 +41,7 @@
 
 <p id="selectedDate">No date selected</p>
 
+<!-- SERVICE SELECT (FIXED) -->
 <select id="service" class="input">
   <option value="">Select Service</option>
   <option value="Home Cleaning - $120">🏠 Home Cleaning - Starting at $120</option>
@@ -67,7 +64,8 @@
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="handlePayNow()">💳 Pay Now (Deposit)</button> <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
+<button class="btn primary" onclick="handlePayNow()">💳 Pay Now (Deposit)</button>
+<button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
 
@@ -102,28 +100,28 @@ function hidePopup() {
 /* ================= CALENDAR ================= */
 document.addEventListener("DOMContentLoaded", () => {
 
-  const calendar = new FullCalendar.Calendar(document.getElementById("calendar"), {
-    initialView: "dayGridMonth",
-    height: 450,
-
-    dateClick(info) {
-      selectedDate = info.dateStr;
-      document.getElementById("selectedDate").innerText =
-        "Selected: " + selectedDate;
+  const calendar = new FullCalendar.Calendar(
+    document.getElementById("calendar"),
+    {
+      initialView: "dayGridMonth",
+      height: 450,
+      dateClick(info) {
+        selectedDate = info.dateStr;
+        document.getElementById("selectedDate").innerText =
+          "Selected: " + selectedDate;
+      }
     }
-  });
+  );
 
   calendar.render();
 });
 
-/* ================= PAY NOW ================= */
+/* ================= PAY NOW (FIXED STRIPE FLOW) ================= */
 async function handlePayNow() {
 
   const service = document.getElementById("service").value;
   const email = document.getElementById("email").value;
   const timeSlot = document.getElementById("timeSlot").value;
-
-  console.log("CLICKED:", { service, email, selectedDate, timeSlot });
 
   if (!service || !email || !selectedDate || !timeSlot) {
     alert("Please fill all fields");
@@ -151,18 +149,16 @@ async function handlePayNow() {
 
     hidePopup();
 
-    console.log("STRIPE RESPONSE:", data);
-
     if (data.url) {
       window.location.href = data.url;
     } else {
-      alert("Stripe failed");
+      alert(data.error || "Stripe failed");
     }
 
   } catch (err) {
     hidePopup();
     console.error(err);
-    alert("Network error - backend not reachable");
+    alert("Backend not reachable");
   }
 }
 
@@ -193,7 +189,7 @@ async function handlePayLater() {
 
   showPopup();
 
-  const res = await fetch(`${API}/book`, {
+  const res = await fetch(`${API}/book-pay-later`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data)
@@ -204,9 +200,9 @@ async function handlePayLater() {
   hidePopup();
 
   if (result.success) {
-    window.location.href = "https://mydmvcleaningservice.com/success.html";
+    window.location.href = "/success.html";
   } else {
-    alert("Booking failed");
+    alert(result.message || "Booking failed");
   }
 }
 

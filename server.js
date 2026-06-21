@@ -44,48 +44,18 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-async function sendReceiptEmail(booking) {
-  try {
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: booking.email,
-      subject: "Booking Confirmation - DMV Cleaning",
-      html: `
-        <h2>Booking Confirmed ✅</h2>
-        <p><b>Name:</b> ${booking.name}</p>
-        <p><b>Service:</b> ${booking.service}</p>
-        <p><b>Date:</b> ${booking.date}</p>
-        <p><b>Time:</b> ${booking.timeSlot}</p>
-        <p><b>Status:</b> ${booking.status}</p>
-      `
-    });
-  } catch (err) {
-    console.log("EMAIL ERROR:", err.message);
-  }
-}
-
-/* ================= PRICE ================= */
-function getServicePrice(service) {
-  if (!service) return 120;
-  if (service.includes("$120")) return 120;
-  if (service.includes("$150")) return 150;
-  if (service.includes("$200")) return 200;
-  if (service.includes("$250")) return 250;
-  return 120;
-}
-
 /* ================= PUBLIC BOOKINGS ================= */
 app.get("/api/public-bookings", (req, res) => {
   res.json(bookings);
 });
 
-/* ================= DELETE BOOKING ================= */
+/* ================= DELETE ================= */
 app.delete("/api/book/:id", (req, res) => {
   bookings = bookings.filter(b => b.id != req.params.id);
   res.json({ success: true });
 });
 
-/* ================= UPDATE BOOKING ================= */
+/* ================= UPDATE ================= */
 app.put("/api/book/:id", (req, res) => {
   const i = bookings.findIndex(b => b.id == req.params.id);
 
@@ -96,39 +66,27 @@ app.put("/api/book/:id", (req, res) => {
   res.json({ success: true });
 });
 
-/* ================= SAVE CARD (SETUP INTENT) ================= */
-app.post("/api/create-setup-intent", async (req, res) => {
-  try {
-    const { email } = req.body;
-
-    const customer = await stripe.customers.create({ email });
-
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customer.id,
-      payment_method_types: ["card"]
-    });
-
-    res.json({
-      clientSecret: setupIntent.client_secret,
-      customerId: customer.id
-    });
-
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-/* ================= DEPOSIT CHECKOUT ================= */
+/* ================= STRIPE CHECKOUT (FIXED) ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot, name, phone } = req.body;
 
+    if (!service || !email || !date || !timeSlot) {
+      return res.status(400).json({
+        error: "Missing required fields"
+      });
+    }
+
     const basePrice = price || 120;
     const deposit = Math.round(basePrice * 0.20 * 100);
 
+    const baseUrl =
+      process.env.BASE_URL ||
+      "https://dmv-cleaning-backend.onrender.com";
+
     const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
       mode: "payment",
+      payment_method_types: ["card"],
       customer_email: email,
 
       metadata: {
@@ -153,14 +111,21 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      success_url: `${process.env.BASE_URL}/success.html`,
-      cancel_url: `${process.env.BASE_URL}/booking.html`
+      success_url: `${baseUrl}/success.html`,
+      cancel_url: `${baseUrl}/booking.html`
     });
 
-    res.json({ url: session.url });
+    return res.json({
+      success: true,
+      url: session.url
+    });
 
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("❌ STRIPE ERROR:", err.message);
+
+    return res.status(500).json({
+      error: err.message
+    });
   }
 });
 
@@ -246,20 +211,18 @@ app.post("/api/complete-job", async (req, res) => {
     });
 
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= ADMIN DASHBOARD ================= */
+/* ================= ADMIN ================= */
 app.get("/api/admin/dashboard", (req, res) => {
   const total = bookings.reduce((s, b) => s + (b.price || 0), 0);
-  const deposit = bookings.reduce((s, b) => s + (b.deposit || 0), 0);
 
   res.json({
     totalBookings: bookings.length,
     totalRevenue: total,
-    depositCollected: deposit,
-    remaining: total - deposit,
     bookings
   });
 });
