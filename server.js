@@ -112,7 +112,8 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      success_url: `${baseUrl}/success.html`,
+      // ✅ FIX YOU REQUESTED
+      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/booking.html`
     });
 
@@ -132,7 +133,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
 });
 
 /* =========================================================
-   ✅ FIXED: PAY LATER BOOKING (THIS WAS MISSING)
+   PAY LATER BOOKING
 ========================================================= */
 app.post("/api/book-pay-later", (req, res) => {
   try {
