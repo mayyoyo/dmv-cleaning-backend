@@ -12,6 +12,16 @@
 
 <body>
 
+<script>
+/* ================= PAY LATER FALLBACK FIX ================= */
+const params = new URLSearchParams(window.location.search);
+const sessionId = params.get("session_id");
+
+if (!sessionId) {
+  document.body.innerHTML = "<h2>📌 Pay Later Booking Confirmed</h2>";
+}
+</script>
+
 <div class="wrapper">
 
   <div class="success-header">
@@ -84,37 +94,36 @@
 
 const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
 
-const params = new URLSearchParams(window.location.search);
-const sessionId = params.get("session_id");
+const params2 = new URLSearchParams(window.location.search);
+const sessionId2 = params2.get("session_id");
 
+/* ================= SAFE BOOKING LOADER ================= */
 async function loadBooking() {
   try {
 
-    if (!sessionId) {
+    if (!sessionId2) {
       document.body.innerHTML = "<h2>❌ Missing session ID</h2>";
       return;
     }
 
-    const res = await fetch(`${API}/stripe-session/${sessionId}`);
+    /* ================= OPTIONAL SAFE FETCH FIX ================= */
+    const res = await fetch(`${API}/public-bookings`);
+    const bookings = await res.json();
 
-    const text = await res.text();
+    const booking = bookings.find(
+      b => b.stripeSessionId === sessionId2
+    );
 
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch (err) {
-      console.error("NOT JSON RESPONSE:", text);
-      document.body.innerHTML = "<h2>❌ Server Error (Invalid Response)</h2>";
+    /* ================= PROCESSING STATE ================= */
+    if (!booking) {
+      document.body.innerHTML =
+        "<h2>⏳ Booking is processing. Refresh in 5 seconds.</h2>";
+
+      setTimeout(() => location.reload(), 5000);
       return;
     }
 
-    if (!data.success) {
-      document.body.innerHTML = "<h2>❌ Booking Not Found</h2>";
-      return;
-    }
-
-    const booking = data.booking;
-
+    /* ================= FILL UI ================= */
     document.getElementById("bookingId").innerText = booking.id;
     document.getElementById("status").innerText = booking.status;
 
@@ -132,7 +141,8 @@ async function loadBooking() {
 
   } catch (err) {
     console.error(err);
-    document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
+    document.body.innerHTML =
+      "<h2>⚠ Error loading booking</h2>";
   }
 }
 

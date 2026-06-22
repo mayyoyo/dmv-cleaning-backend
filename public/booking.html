@@ -161,7 +161,7 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER ================= */
+/* ================= PAY LATER (FIXED REDIRECT) ================= */
 async function handlePayLater() {
 
   const service = document.getElementById("service").value;
@@ -198,15 +198,17 @@ async function handlePayLater() {
   try {
     result = await res.json();
   } catch (err) {
-    alert("Server did not return JSON (check backend route)");
     hidePopup();
+    alert("Server did not return JSON");
     return;
   }
 
   hidePopup();
 
+  /* 🔥 FIXED REDIRECT (YOUR REQUEST) */
   if (result.success) {
-    window.location.href = `${window.location.origin}/success.html`;
+    window.location.href =
+      `${window.location.origin}/success.html?session_id=${result.sessionId}`;
   } else {
     alert(result.message || "Booking failed");
   }
@@ -214,16 +216,13 @@ async function handlePayLater() {
 
 </script>
 
-<!-- ================= STRIPE SUCCESS AUTO CHECK (ADDED FIX) ================= -->
+<!-- ================= SUCCESS PAGE AUTO CHECK ================= -->
 <script>
 
 const params = new URLSearchParams(window.location.search);
 const sessionId = params.get("session_id");
 
 const API = "https://dmv-cleaning-backend.onrender.com/api";
-
-console.log("SESSION ID:", sessionId);
-console.log("API:", API);
 
 async function checkBookingAfterStripe() {
 

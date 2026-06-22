@@ -118,10 +118,19 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER ================= */
+/* ================= PAY LATER (FIXED - COPY THIS) ================= */
 app.post("/api/book-pay-later", (req, res) => {
   try {
-    const { name, email, phone, address, service, date, timeSlot, price } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      address,
+      service,
+      date,
+      timeSlot,
+      price
+    } = req.body;
 
     if (!name || !email || !service || !date || !timeSlot) {
       return res.status(400).json({
@@ -132,6 +141,10 @@ app.post("/api/book-pay-later", (req, res) => {
 
     const booking = {
       id: idCounter++,
+
+      // 🔥 FIX: UNIQUE ID (NO CONFLICTS)
+      stripeSessionId: "PAY_LATER_" + Date.now(),
+
       name,
       email,
       phone,
@@ -145,10 +158,20 @@ app.post("/api/book-pay-later", (req, res) => {
 
     bookings.push(booking);
 
-    res.json({ success: true, bookingId: booking.id });
+    console.log("✅ PAY LATER BOOKING SAVED:", booking);
+
+    return res.json({
+      success: true,
+      bookingId: booking.id,
+      sessionId: booking.stripeSessionId
+    });
 
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error(err);
+    return res.status(500).json({
+      success: false,
+      message: err.message
+    });
   }
 });
 
