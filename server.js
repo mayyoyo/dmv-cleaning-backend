@@ -60,7 +60,7 @@ app.put("/api/book/:id", (req, res) => {
   res.json({ success: true });
 });
 
-/* ================= STRIPE CHECKOUT (FINAL FIX) ================= */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot, name, phone } = req.body;
@@ -106,9 +106,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      // ✅ CRITICAL FIX (DO NOT CHANGE)
       success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-
       cancel_url: `${baseUrl}/booking.html`
     });
 
@@ -154,87 +152,119 @@ app.post("/api/book-pay-later", (req, res) => {
   }
 });
 
-/* ================= WEBHOOK ================= */
+/* ================= WEBHOOK (FIXED + SAFE) ================= */
 app.post("/api/webhook", (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      endpointSecret
+    );
   } catch (err) {
+    console.log("❌ WEBHOOK ERROR:", err.message);
     return res.status(400).send(err.message);
   }
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    const booking = {
-      id: idCounter++,
-      email: session.customer_email,
-      service: session.metadata.service,
-      date: session.metadata.date,
-      timeSlot: session.metadata.timeSlot,
-      name: session.metadata.name,
-      phone: session.metadata.phone,
-      price: session.amount_total / 100,
-      status: "deposit_paid"
-    };
+    console.log("🔥 WEBHOOK SESSION RECEIVED:", session.id);
 
-    bookings.push(booking);
-    console.log("PAYMENT SAVED:", booking);
+    if (!session.id) return res.json({ received: true });
+
+    if (!session.metadata) {
+      console.log("⚠️ Missing metadata");
+      return res.json({ received: true });
+    }
+
+    const existing = bookings.find(
+      b => b.stripeSessionId === session.id
+    );
+
+    if (!existing) {
+      const booking = {
+        id: idCounter++,
+        stripeSessionId: session.id,
+        name: session.metadata?.name || "",
+        email: session.customer_email || "",
+        phone: session.metadata?.phone || "",
+        service: session.metadata?.service || "",
+        date: session.metadata?.date || "",
+        timeSlot: session.metadata?.timeSlot || "",
+        price: session.amount_total / 100,
+        status: "deposit_paid"
+      };
+
+      bookings.push(booking);
+
+      console.log("✅ BOOKING CREATED:", booking);
+    } else {
+      console.log("⚠️ DUPLICATE IGNORED:", session.id);
+    }
   }
 
   res.json({ received: true });
 });
 
-/* ================= SESSION FETCH (FINAL FIX) ================= */
+/* ================= SESSION ROUTE ================= */
 app.get("/api/stripe-session/:sessionId", async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
 
-    console.log("SESSION ID RECEIVED:", sessionId);
+    console.log("SESSION CHECK:", sessionId);
 
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    console.log("SESSION OBJECT:", session);
-
-    if (!session || !session.customer_email || !session.metadata) {
+    if (!session) {
       return res.json({
         success: false,
-        message: "Invalid session"
+        message: "Session not found"
       });
     }
 
-    let booking = bookings.find(b => b.stripeSessionId === session.id);
-
-    if (!booking) {
-      booking = {
-        id: idCounter++,
-        stripeSessionId: session.id,
-        name: session.metadata.name || "",
+    return res.json({
+      success: true,
+      booking: {
+        id: session.id,
+        name: session.metadata?.name || "",
         email: session.customer_email,
-        phone: session.metadata.phone || "",
-        service: session.metadata.service || "",
-        date: session.metadata.date || "",
-        timeSlot: session.metadata.timeSlot || "",
+        phone: session.metadata?.phone || "",
+        service: session.metadata?.service || "",
+        date: session.metadata?.date || "",
+        timeSlot: session.metadata?.timeSlot || "",
         price: (session.amount_total || 0) / 100,
         status: "deposit_paid"
-      };
-
-      bookings.push(booking);
-    }
-
-    res.json({ success: true, booking });
+      }
+    });
 
   } catch (err) {
     console.error("SESSION ERROR:", err.message);
-    res.json({ success: false, message: err.message });
+
+    return res.json({
+      success: false,
+      message: err.message
+    });
   }
+});
+
+/* ================= ADMIN ================= */
+app.get("/api/admin/dashboard", (req, res) => {
+  const total = bookings.reduce((s, b) => s + (b.price || 0), 0);
+
+  res.json({
+    totalBookings: bookings.length,
+    totalRevenue: total,
+    bookings
+  });
 });
 
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", (req, res) => {
   const booking = bookings.find(b => b.id == req.params.id);
+
   if (!booking) return res.send("Not found");
 
   const doc = new PDFDocument();
@@ -246,6 +276,7 @@ app.get("/api/invoice/:id", (req, res) => {
 
   doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
   doc.moveDown();
+
   doc.text(`Name: ${booking.name}`);
   doc.text(`Service: ${booking.service}`);
   doc.text(`Price: $${booking.price}`);
@@ -254,7 +285,7 @@ app.get("/api/invoice/:id", (req, res) => {
   doc.end();
 });
 
-/* ================= START ================= */
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {

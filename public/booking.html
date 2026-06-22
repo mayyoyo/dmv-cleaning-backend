@@ -194,7 +194,6 @@ async function handlePayLater() {
     body: JSON.stringify(data)
   });
 
-  /* ✅ SAFE JSON HANDLING (FIX YOU REQUESTED) */
   let result;
   try {
     result = await res.json();
@@ -212,6 +211,71 @@ async function handlePayLater() {
     alert(result.message || "Booking failed");
   }
 }
+
+</script>
+
+<!-- ================= STRIPE SUCCESS AUTO CHECK (ADDED FIX) ================= -->
+<script>
+
+const params = new URLSearchParams(window.location.search);
+const sessionId = params.get("session_id");
+
+const API = "https://dmv-cleaning-backend.onrender.com/api";
+
+console.log("SESSION ID:", sessionId);
+console.log("API:", API);
+
+async function checkBookingAfterStripe() {
+
+  if (!sessionId) return;
+
+  try {
+
+    await new Promise(r => setTimeout(r, 2000));
+
+    const bookingRes = await fetch(`${API}/public-bookings`);
+    const bookings = await bookingRes.json();
+
+    const booking = bookings.find(
+      b => b.stripeSessionId === sessionId
+    );
+
+    if (!booking) {
+      document.body.innerHTML =
+        "<h2>⏳ Booking is processing. Refresh in 5 seconds.</h2>";
+
+      setTimeout(() => location.reload(), 5000);
+      return;
+    }
+
+    const set = (id, val) => {
+      const el = document.getElementById(id);
+      if (el) el.innerText = val || "";
+    };
+
+    set("bookingId", booking.id);
+    set("status", booking.status);
+    set("name", booking.name);
+    set("email", booking.email);
+    set("phone", booking.phone);
+    set("service", booking.service);
+    set("date", booking.date);
+    set("time", booking.timeSlot);
+    set("total", booking.price);
+
+    const download = document.getElementById("download");
+    if (download) {
+      download.href = `${API}/invoice/${booking.id}`;
+    }
+
+  } catch (err) {
+    console.error("BOOKING FETCH ERROR:", err);
+    document.body.innerHTML =
+      "<h2>⚠ Error loading booking. Please refresh.</h2>";
+  }
+}
+
+checkBookingAfterStripe();
 
 </script>
 
