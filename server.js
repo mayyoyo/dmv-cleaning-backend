@@ -112,7 +112,6 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
-      // ✅ FIX YOU REQUESTED
       success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/booking.html`
     });
@@ -132,9 +131,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* =========================================================
-   PAY LATER BOOKING
-========================================================= */
+/* ================= PAY LATER BOOKING ================= */
 app.post("/api/book-pay-later", (req, res) => {
   try {
     const {
@@ -224,6 +221,67 @@ app.post("/api/webhook", (req, res) => {
   }
 
   res.json({ received: true });
+});
+
+/* ================= SESSION ROUTE (YOUR FIXED VERSION) ================= */
+app.get("/api/stripe-session/:sessionId", async (req, res) => {
+  try {
+    const sessionId = req.params.sessionId;
+
+    console.log("SESSION ID RECEIVED:", sessionId);
+
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+    console.log("SESSION OBJECT:", session);
+
+    if (!session) {
+      return res.json({
+        success: false,
+        message: "Stripe session not found"
+      });
+    }
+
+    if (!session.customer_email || !session.metadata) {
+      return res.json({
+        success: false,
+        message: "Missing session data"
+      });
+    }
+
+    let booking = bookings.find(
+      b => b.stripeSessionId === session.id
+    );
+
+    if (!booking) {
+      booking = {
+        id: idCounter++,
+        stripeSessionId: session.id,
+        name: session.metadata?.name || "",
+        email: session.customer_email || "",
+        phone: session.metadata?.phone || "",
+        service: session.metadata?.service || "",
+        date: session.metadata?.date || "",
+        timeSlot: session.metadata?.timeSlot || "",
+        price: (session.amount_total || 0) / 100,
+        status: "deposit_paid"
+      };
+
+      bookings.push(booking);
+    }
+
+    return res.json({
+      success: true,
+      booking
+    });
+
+  } catch (err) {
+    console.error("SESSION ERROR:", err.message);
+
+    return res.json({
+      success: false,
+      message: err.message
+    });
+  }
 });
 
 /* ================= ADMIN ================= */

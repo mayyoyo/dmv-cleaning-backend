@@ -6,8 +6,6 @@
 <title>Booking Confirmed</title>
 
 <link rel="stylesheet" href="css/success.css">
-
-<!-- ✅ CONFIG (IONOS SAFE) -->
 <script src="config.js"></script>
 
 </head>
@@ -60,7 +58,6 @@
       <h2>$<span id="total">0</span></h2>
     </div>
 
-    <!-- 📄 INVOICE BUTTON -->
     <div style="margin:15px 0; text-align:center;">
       <a id="download" class="btn">📄 Download Invoice</a>
     </div>
@@ -85,35 +82,41 @@
 
 <script>
 
-/* ================= API FROM CONFIG ================= */
-const API = window.API;
+const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
 
-/* ================= BOOKING ID ================= */
 const params = new URLSearchParams(window.location.search);
-const bookingId = params.get("bookingId");
+const sessionId = params.get("session_id");
 
-/* ================= INVOICE BUTTON FIX ================= */
-const downloadBtn = document.getElementById("download");
-
-if (bookingId && API) {
-  downloadBtn.href = `${API}/invoice/${bookingId}`;
-}
-
-/* ================= LOAD BOOKING ================= */
 async function loadBooking() {
   try {
-    const res = await fetch(API + "/bookings");
-    const bookings = await res.json();
 
-    const booking = bookings.find(b => String(b.id) === String(bookingId));
+    if (!sessionId) {
+      document.body.innerHTML = "<h2>❌ Missing session ID</h2>";
+      return;
+    }
 
-    if (!booking) {
+    const res = await fetch(`${API}/stripe-session/${sessionId}`);
+
+    const text = await res.text();
+
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      console.error("NOT JSON RESPONSE:", text);
+      document.body.innerHTML = "<h2>❌ Server Error (Invalid Response)</h2>";
+      return;
+    }
+
+    if (!data.success) {
       document.body.innerHTML = "<h2>❌ Booking Not Found</h2>";
       return;
     }
 
+    const booking = data.booking;
+
     document.getElementById("bookingId").innerText = booking.id;
-    document.getElementById("status").innerText = booking.paymentStatus || "Pending";
+    document.getElementById("status").innerText = booking.status;
 
     document.getElementById("name").innerText = booking.name || "";
     document.getElementById("email").innerText = booking.email || "";
@@ -124,8 +127,11 @@ async function loadBooking() {
     document.getElementById("time").innerText = booking.timeSlot || "";
     document.getElementById("total").innerText = booking.price || 0;
 
+    document.getElementById("download").href =
+      `${API}/invoice/${booking.id}`;
+
   } catch (err) {
-    console.error("Load booking error:", err);
+    console.error(err);
     document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
   }
 }
