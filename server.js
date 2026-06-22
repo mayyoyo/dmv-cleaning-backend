@@ -22,7 +22,7 @@ app.get("/", (req, res) => {
   res.send("SERVER IS LIVE");
 });
 
-/* ================= TEST ROUTE ================= */
+/* ================= TEST ================= */
 app.get("/api/test", (req, res) => {
   res.json({
     ok: true,
@@ -44,29 +44,23 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-/* ================= PUBLIC BOOKINGS ================= */
+/* ================= BOOKINGS ================= */
 app.get("/api/public-bookings", (req, res) => {
   res.json(bookings);
 });
 
-/* ================= DELETE ================= */
 app.delete("/api/book/:id", (req, res) => {
   bookings = bookings.filter(b => b.id != req.params.id);
   res.json({ success: true });
 });
 
-/* ================= UPDATE ================= */
 app.put("/api/book/:id", (req, res) => {
   const i = bookings.findIndex(b => b.id == req.params.id);
-
-  if (i !== -1) {
-    bookings[i] = { ...bookings[i], ...req.body };
-  }
-
+  if (i !== -1) bookings[i] = { ...bookings[i], ...req.body };
   res.json({ success: true });
 });
 
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= STRIPE CHECKOUT (FINAL FIX) ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot, name, phone } = req.body;
@@ -112,38 +106,24 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         }
       ],
 
+      // ✅ CRITICAL FIX (DO NOT CHANGE)
       success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+
       cancel_url: `${baseUrl}/booking.html`
     });
 
-    return res.json({
-      success: true,
-      url: session.url
-    });
+    res.json({ success: true, url: session.url });
 
   } catch (err) {
     console.error("❌ STRIPE ERROR:", err.message);
-
-    return res.status(500).json({
-      success: false,
-      error: err.message
-    });
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
-/* ================= PAY LATER BOOKING ================= */
+/* ================= PAY LATER ================= */
 app.post("/api/book-pay-later", (req, res) => {
   try {
-    const {
-      name,
-      email,
-      phone,
-      address,
-      service,
-      date,
-      timeSlot,
-      price
-    } = req.body;
+    const { name, email, phone, address, service, date, timeSlot, price } = req.body;
 
     if (!name || !email || !service || !date || !timeSlot) {
       return res.status(400).json({
@@ -167,35 +147,20 @@ app.post("/api/book-pay-later", (req, res) => {
 
     bookings.push(booking);
 
-    console.log("PAY LATER BOOKING SAVED:", booking);
-
-    return res.json({
-      success: true,
-      bookingId: booking.id
-    });
+    res.json({ success: true, bookingId: booking.id });
 
   } catch (err) {
-    console.error("PAY LATER ERROR:", err.message);
-
-    return res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
 /* ================= WEBHOOK ================= */
 app.post("/api/webhook", (req, res) => {
   const sig = req.headers["stripe-signature"];
-
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      endpointSecret
-    );
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
     return res.status(400).send(err.message);
   }
@@ -216,14 +181,13 @@ app.post("/api/webhook", (req, res) => {
     };
 
     bookings.push(booking);
-
     console.log("PAYMENT SAVED:", booking);
   }
 
   res.json({ received: true });
 });
 
-/* ================= SESSION ROUTE (YOUR FIXED VERSION) ================= */
+/* ================= SESSION FETCH (FINAL FIX) ================= */
 app.get("/api/stripe-session/:sessionId", async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
@@ -234,34 +198,25 @@ app.get("/api/stripe-session/:sessionId", async (req, res) => {
 
     console.log("SESSION OBJECT:", session);
 
-    if (!session) {
+    if (!session || !session.customer_email || !session.metadata) {
       return res.json({
         success: false,
-        message: "Stripe session not found"
+        message: "Invalid session"
       });
     }
 
-    if (!session.customer_email || !session.metadata) {
-      return res.json({
-        success: false,
-        message: "Missing session data"
-      });
-    }
-
-    let booking = bookings.find(
-      b => b.stripeSessionId === session.id
-    );
+    let booking = bookings.find(b => b.stripeSessionId === session.id);
 
     if (!booking) {
       booking = {
         id: idCounter++,
         stripeSessionId: session.id,
-        name: session.metadata?.name || "",
-        email: session.customer_email || "",
-        phone: session.metadata?.phone || "",
-        service: session.metadata?.service || "",
-        date: session.metadata?.date || "",
-        timeSlot: session.metadata?.timeSlot || "",
+        name: session.metadata.name || "",
+        email: session.customer_email,
+        phone: session.metadata.phone || "",
+        service: session.metadata.service || "",
+        date: session.metadata.date || "",
+        timeSlot: session.metadata.timeSlot || "",
         price: (session.amount_total || 0) / 100,
         status: "deposit_paid"
       };
@@ -269,36 +224,17 @@ app.get("/api/stripe-session/:sessionId", async (req, res) => {
       bookings.push(booking);
     }
 
-    return res.json({
-      success: true,
-      booking
-    });
+    res.json({ success: true, booking });
 
   } catch (err) {
     console.error("SESSION ERROR:", err.message);
-
-    return res.json({
-      success: false,
-      message: err.message
-    });
+    res.json({ success: false, message: err.message });
   }
-});
-
-/* ================= ADMIN ================= */
-app.get("/api/admin/dashboard", (req, res) => {
-  const total = bookings.reduce((s, b) => s + (b.price || 0), 0);
-
-  res.json({
-    totalBookings: bookings.length,
-    totalRevenue: total,
-    bookings
-  });
 });
 
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", (req, res) => {
   const booking = bookings.find(b => b.id == req.params.id);
-
   if (!booking) return res.send("Not found");
 
   const doc = new PDFDocument();
@@ -310,8 +246,7 @@ app.get("/api/invoice/:id", (req, res) => {
 
   doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
   doc.moveDown();
-
-  doc.fontSize(12).text(`Name: ${booking.name}`);
+  doc.text(`Name: ${booking.name}`);
   doc.text(`Service: ${booking.service}`);
   doc.text(`Price: $${booking.price}`);
   doc.text(`Status: ${booking.status}`);
@@ -319,7 +254,7 @@ app.get("/api/invoice/:id", (req, res) => {
   doc.end();
 });
 
-/* ================= START SERVER ================= */
+/* ================= START ================= */
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
