@@ -1,97 +1,155 @@
-const API = "https://dmv-cleaning-backend.onrender.com/api";
+const API = window.API;
 
-/* required global */
+// ================= STATE =================
 let selectedDate = null;
+let bookedSlots = [];
 
-/* ================= SERVICE PRICE FUNCTION ================= */
+// ================= PRICE =================
 function getServicePrice(service) {
   if (!service) return 120;
-
-  if (service.includes("120")) return 120;
-  if (service.includes("150")) return 150;
-  if (service.includes("200")) return 200;
-  if (service.includes("250")) return 250;
-
+  if (service.includes("$120")) return 120;
+  if (service.includes("$150")) return 150;
+  if (service.includes("$200")) return 200;
+  if (service.includes("$250")) return 250;
   return 120;
 }
 
-/* ================= LOAD BOOKINGS ================= */
-async function loadBookings() {
+// ================= POPUP =================
+function showPopup() {
+  document.getElementById("emailPopup").classList.remove("hidden");
+}
+
+function hidePopup() {
+  document.getElementById("emailPopup").classList.add("hidden");
+}
+
+// ================= LOAD CALENDAR (PRO BLOCKING) =================
+document.addEventListener("DOMContentLoaded", async () => {
+
   try {
-    const res = await fetch(API + "/public-bookings");
-    const bookings = await res.json();
+    const res = await fetch(`${API}/booked-slots`);
+    bookedSlots = await res.json();
+  } catch (err) {
+    console.error("API error:", err);
+    bookedSlots = [];
+  }
 
-    document.querySelectorAll(".slot").forEach(slot => {
-      const date = document.getElementById("date")?.value || selectedDate;
+  const events = bookedSlots.map(b => ({
+    title: "BOOKED ❌",
+    start: b.date,
+    color: "red",
+    display: "background"
+  }));
 
-      const isBooked = bookings.some(b =>
-        b.date === date && b.timeSlot === slot.dataset.time
-      );
+  const calendar = new FullCalendar.Calendar(
+    document.getElementById("calendar"),
+    {
+      initialView: "dayGridMonth",
+      height: 500,
+      events,
 
-      if (isBooked) {
-        slot.classList.add("booked");
-        slot.disabled = true;
-        slot.innerText = slot.innerText.replace(" (Booked)", "") + " (Booked)";
-      } else {
-        slot.classList.remove("booked");
-        slot.disabled = false;
-        slot.innerText = slot.innerText.replace(" (Booked)", "");
+      dateClick(info) {
+        const blocked = bookedSlots.some(b => b.date === info.dateStr);
+
+        if (blocked) {
+          alert("❌ This date is fully booked");
+          return;
+        }
+
+        selectedDate = info.dateStr;
+        document.getElementById("selectedDate").innerText =
+          "Selected: " + selectedDate;
       }
+    }
+  );
+
+  calendar.render();
+});
+
+// ================= PAY NOW =================
+async function handlePayNow() {
+
+  const service = document.getElementById("service").value;
+  const email = document.getElementById("email").value;
+  const timeSlot = document.getElementById("timeSlot").value;
+
+  if (!service || !email || !selectedDate || !timeSlot) {
+    alert("Please fill all fields");
+    return;
+  }
+
+  const price = getServicePrice(service);
+
+  showPopup();
+
+  try {
+    const res = await fetch(`${API}/create-deposit-checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        service,
+        price,
+        email,
+        date: selectedDate,
+        timeSlot
+      })
     });
 
+    const data = await res.json();
+
+    hidePopup();
+
+    if (data.url) {
+      window.location.href = data.url;
+    } else {
+      alert(data.error || "Stripe failed");
+    }
+
   } catch (err) {
-    console.error("LOAD BOOKINGS ERROR:", err);
+    hidePopup();
+    alert("Backend not reachable");
   }
 }
 
-/* ================= BOOK FUNCTION ================= */
-async function bookNow(paymentType = "pay_later") {
-
-  if (!selectedDate) return alert("Select date first");
+// ================= PAY LATER =================
+async function handlePayLater() {
 
   const service = document.getElementById("service").value;
 
-  const data = {
-    name: document.getElementById("name").value,
-    email: document.getElementById("email").value,
-    phone: document.getElementById("phone").value,
-    address: document.getElementById("address").value,
-    date: selectedDate,
-    timeSlot: document.getElementById("timeSlot").value,
-    service: service,
-    price: getServicePrice(service),   // 🔥 IMPORTANT FIX
-    paymentType: paymentType
-  };
-
-  if (!data.name || !data.email || !data.timeSlot || !data.service) {
-    return alert("Please fill all required fields");
+  if (!service || !selectedDate) {
+    alert("Fill required fields");
+    return;
   }
 
-  try {
+  const price = getServicePrice(service);
 
-    const res = await fetch(API + "/book", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
-    });
+  const data = {
+    name: document.getElementById("name").value,
+    phone: document.getElementById("phone").value,
+    email: document.getElementById("email").value,
+    address: document.getElementById("address").value,
+    service,
+    date: selectedDate,
+    timeSlot: document.getElementById("timeSlot").value,
+    price
+  };
 
-    const result = await res.json();
+  showPopup();
 
-    if (!res.ok) {
-      console.error("BACKEND ERROR:", result);
-      return alert(result.error || "Booking failed");
-    }
+  const res = await fetch(`${API}/book-pay-later`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data)
+  });
 
-    /* ================= SUCCESS REDIRECT ================= */
-    if (result.success && result.bookingId) {
-      window.location.href =
-        `/success.html?bookingId=${result.bookingId}`;
-    } else {
-      alert("Booking failed: Missing booking ID");
-    }
+  const result = await res.json();
 
-  } catch (err) {
-    console.error("BOOK ERROR:", err);
-    alert("Error: " + err.message);
+  hidePopup();
+
+  if (result.success) {
+    window.location.href =
+      `${window.location.origin}/success.html?session_id=${result.bookingId}`;
+  } else {
+    alert(result.message || "Booking failed");
   }
 }
