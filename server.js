@@ -52,7 +52,7 @@ const bookingSchema = new mongoose.Schema({
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
-/* ================= MIDDLEWARE (ORDER IS CORRECT) ================= */
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
@@ -63,20 +63,10 @@ app.get("/", (req, res) => {
   res.sendFile(__dirname + "/public/index.html");
 });
 
-/* ================= ADMIN PAGE ================= */
+/* ================= ADMIN ROUTE ================= */
 app.get("/admin", (req, res) => {
   res.sendFile(__dirname + "/public/admin/dashboard.html");
 });
-
-/* ================= HELPERS ================= */
-function emitUpdate() {
-  Booking.find().then((bookings) => {
-    io.emit("dashboard-update", {
-      totalBookings: bookings.length,
-      bookings
-    });
-  });
-}
 
 /* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
@@ -88,43 +78,46 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendEmail(booking) {
-  try {
-    await transporter.sendMail({
-      from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
-      to: booking.email,
-      subject: "Booking Confirmed ✔",
-      html: `
-        <h2>Thank you for booking!</h2>
-        <p><b>Service:</b> ${booking.service}</p>
-        <p><b>Date:</b> ${booking.date}</p>
-        <p><b>Time:</b> ${booking.timeSlot}</p>
-        <p><b>Total:</b> $${booking.price}</p>
-        <p><b>Status:</b> ${booking.paymentStatus}</p>
-        <hr/>
-        <p>We will contact you shortly.</p>
-      `
-    });
-
-    console.log("📧 Email sent:", booking.email);
-  } catch (err) {
-    console.log("Email error:", err.message);
-  }
+  await transporter.sendMail({
+    from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
+    to: booking.email,
+    subject: "Booking Confirmed ✔",
+    html: `
+      <h2>Thank you for booking!</h2>
+      <p><b>Service:</b> ${booking.service}</p>
+      <p><b>Date:</b> ${booking.date}</p>
+      <p><b>Time:</b> ${booking.timeSlot}</p>
+      <p><b>Total:</b> $${booking.price}</p>
+      <p><b>Status:</b> ${booking.paymentStatus}</p>
+      <hr/>
+      <p>We will contact you shortly.</p>
+    `
+  });
 }
 
-/* ================= BOOKED SLOTS ================= */
+/* ================= HELPERS ================= */
+function emitUpdate() {
+  Booking.find().then((bookings) => {
+    io.emit("dashboard-update", {
+      totalBookings: bookings.length,
+      bookings
+    });
+  });
+}
+
+/* ================= API ROUTES ================= */
 app.get("/api/booked-slots", async (req, res) => {
   const bookings = await Booking.find();
   res.json(bookings);
 });
 
-/* ================= BLOCKED HOURS ================= */
 app.get("/api/blocked-hours", async (req, res) => {
   const { date } = req.query;
   const bookings = await Booking.find({ date });
   res.json(bookings.map(b => b.timeSlot));
 });
 
-/* ================= DEPOSIT CHECKOUT ================= */
+/* ================= STRIPE CHECKOUT ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   const { service, email, price, date, timeSlot, name, phone } = req.body;
 
@@ -209,7 +202,7 @@ app.post("/api/webhook", async (req, res) => {
   res.json({ received: true });
 });
 
-/* ================= ADMIN DASHBOARD API ================= */
+/* ================= ADMIN DASHBOARD ================= */
 app.get("/api/admin/dashboard", async (req, res) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
 
@@ -245,13 +238,15 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= START SERVER ================= */
+/* ================= START SERVER (ONLY ONCE!) ================= */
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
   console.log("🚀 Server running with WebSockets on port", PORT);
 });
 // 
+/* ================= START SERVER ================= */
+
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, () => {
