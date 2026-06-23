@@ -3,7 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const Stripe = require("stripe");
-const PDFDocument = require("pdfkit");
 const nodemailer = require("nodemailer");
 const mongoose = require("mongoose");
 const http = require("http");
@@ -29,7 +28,11 @@ io.on("connection", (socket) => {
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
-app.use("/api/webhook", express.raw({ type: "application/json" }));
+
+/* ================= ROOT FIX (VERY IMPORTANT) ================= */
+app.get("/", (req, res) => {
+  res.send("API IS LIVE");
+});
 
 /* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URI)
@@ -58,7 +61,7 @@ const Booking = mongoose.model("Booking", bookingSchema);
 /* ================= STRIPE ================= */
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-/* ================= EMAIL (FIXED) ================= */
+/* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -79,13 +82,13 @@ async function sendEmail(booking) {
         <div style="font-family: Arial; padding: 20px;">
           <h2>🎉 Booking Confirmed!</h2>
 
-          <p><b>Name:</b> ${booking.name || ""}</p>
-          <p><b>Service:</b> ${booking.service || ""}</p>
-          <p><b>Date:</b> ${booking.date || ""}</p>
-          <p><b>Time:</b> ${booking.timeSlot || ""}</p>
-          <p><b>Address:</b> ${booking.address || ""}</p>
-          <p><b>Phone:</b> ${booking.phone || ""}</p>
-          <p><b>Total:</b> $${booking.price || 0}</p>
+          <p><b>Name:</b> ${booking.name}</p>
+          <p><b>Service:</b> ${booking.service}</p>
+          <p><b>Date:</b> ${booking.date}</p>
+          <p><b>Time:</b> ${booking.timeSlot}</p>
+          <p><b>Address:</b> ${booking.address}</p>
+          <p><b>Phone:</b> ${booking.phone}</p>
+          <p><b>Total:</b> $${booking.price}</p>
 
           <hr/>
           <p>Status: <b>${booking.paymentStatus}</b></p>
@@ -96,6 +99,7 @@ async function sendEmail(booking) {
     });
 
     console.log("📧 Email sent:", booking.email);
+
   } catch (err) {
     console.log("EMAIL ERROR:", err.message);
   }
@@ -111,12 +115,7 @@ function emitUpdate() {
   });
 }
 
-/* ================= ROOT (FIX FOR BACKEND NOT REACHABLE) ================= */
-app.get("/", (req, res) => {
-  res.send("API IS LIVE");
-});
-
-/* ================= PAY NOW (FIXED) ================= */
+/* ================= PAY NOW ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot } = req.body;
@@ -158,7 +157,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER (FULL FIXED VERSION) ================= */
+/* ================= PAY LATER (FINAL FIXED) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -172,6 +171,8 @@ app.post("/api/book-pay-later", async (req, res) => {
       price
     } = req.body;
 
+    console.log("PAY LATER REQUEST:", req.body);
+
     if (!name || !email || !service || !date || !timeSlot) {
       return res.json({
         success: false,
@@ -179,12 +180,14 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
-    // 🔥 FIXED SLOT CHECK (CRITICAL)
+    // ✅ ONLY BLOCK PAID BOOKINGS
     const exists = await Booking.findOne({
       date,
       timeSlot,
       paymentStatus: { $ne: "pay_later" }
     });
+
+    console.log("EXISTS CHECK:", exists);
 
     if (exists) {
       return res.json({
@@ -207,6 +210,8 @@ app.post("/api/book-pay-later", async (req, res) => {
       paymentStatus: "pay_later"
     });
 
+    console.log("BOOKING SAVED:", booking);
+
     await sendEmail(booking);
     emitUpdate();
 
@@ -216,7 +221,7 @@ app.post("/api/book-pay-later", async (req, res) => {
     });
 
   } catch (err) {
-    console.log("PAY LATER ERROR:", err.message);
+    console.log("PAY LATER ERROR:", err);
 
     return res.json({
       success: false,

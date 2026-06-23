@@ -79,7 +79,7 @@
 
 let selectedDate = null;
 
-/* PRICE */
+/* ================= PRICE ================= */
 function getServicePrice(service) {
   if (!service) return 120;
   if (service.includes("$120")) return 120;
@@ -89,16 +89,15 @@ function getServicePrice(service) {
   return 120;
 }
 
-/* POPUP */
+/* ================= POPUP ================= */
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
-
 function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
 
-/* CALENDAR */
+/* ================= CALENDAR ================= */
 document.addEventListener("DOMContentLoaded", () => {
 
   const calendar = new FullCalendar.Calendar(
@@ -120,7 +119,7 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* BLOCK HOURS FIX */
+/* ================= BLOCK HOURS ================= */
 async function loadBlockedHours(date) {
   try {
     const res = await fetch(`${API}/api/blocked-hours?date=${date}`);
@@ -178,8 +177,8 @@ async function handlePayNow() {
 
     hidePopup();
 
-    /* ✅ PAY NOW FIX */
-    if (data.url) {
+    /* ✅ FINAL PAY NOW FIX */
+    if (data.success && data.url) {
       window.location.href = data.url;
     } else {
       alert(data.message || "Stripe failed");
@@ -191,11 +190,10 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER (FIXED REDIRECT) ================= */
+/* ================= PAY LATER ================= */
 async function handlePayLater() {
 
   const service = document.getElementById("service").value;
-
   const name = document.getElementById("name").value;
   const phone = document.getElementById("phone").value;
   const email = document.getElementById("email").value;
@@ -209,31 +207,29 @@ async function handlePayLater() {
 
   const price = getServicePrice(service);
 
-  const data = {
-    name,
-    phone,
-    email,
-    address,
-    service,
-    date: selectedDate,
-    timeSlot,
-    price
-  };
-
   showPopup();
 
   try {
     const res = await fetch(`${API}/api/book-pay-later`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data)
+      body: JSON.stringify({
+        name,
+        phone,
+        email,
+        address,
+        service,
+        date: selectedDate,
+        timeSlot,
+        price
+      })
     });
 
     const result = await res.json();
 
     hidePopup();
 
-    /* ✅ YOUR REQUEST: SIMPLE REDIRECT */
+    /* ✅ FINAL PAY LATER FIX */
     if (result.success) {
       window.location.href = "/success.html";
     } else {
