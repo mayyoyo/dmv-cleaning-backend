@@ -12,7 +12,7 @@
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
-<!-- ✅ FIXED API (ONLY THIS) -->
+<!-- ✅ ONLY THIS API -->
 <script>
   const API = "https://dmv-cleaning-backend.onrender.com";
 </script>
@@ -29,7 +29,6 @@
   </div>
 </header>
 
-<!-- POPUP -->
 <div id="emailPopup" class="popup hidden">
   <div class="popup-box">
     <h2>📧 Processing...</h2>
@@ -78,10 +77,9 @@
 
 <script>
 
-/* ================= STATE ================= */
 let selectedDate = null;
 
-/* ================= PRICE ================= */
+/* PRICE */
 function getServicePrice(service) {
   if (!service) return 120;
   if (service.includes("$120")) return 120;
@@ -91,7 +89,7 @@ function getServicePrice(service) {
   return 120;
 }
 
-/* ================= POPUP ================= */
+/* POPUP */
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
@@ -122,7 +120,8 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* ================= BLOCK HOURS (IMPORTANT FIX) ================= */
+
+/* ================= BLOCK HOURS (FIXED) ================= */
 async function loadBlockedHours(date) {
   try {
     const res = await fetch(`${API}/api/blocked-hours?date=${date}`);
@@ -130,7 +129,9 @@ async function loadBlockedHours(date) {
 
     const select = document.getElementById("timeSlot");
 
-    [...select.options].forEach(opt => {
+    Array.from(select.options).forEach(opt => {
+      if (!opt.value) return;
+
       if (blocked.includes(opt.value)) {
         opt.disabled = true;
         opt.style.color = "red";
@@ -190,12 +191,19 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER ================= */
+
+/* ================= PAY LATER (FIXED) ================= */
 async function handlePayLater() {
 
   const service = document.getElementById("service").value;
 
-  if (!service || !selectedDate) {
+  const name = document.getElementById("name").value;
+  const phone = document.getElementById("phone").value;
+  const email = document.getElementById("email").value;
+  const address = document.getElementById("address").value;
+  const timeSlot = document.getElementById("timeSlot").value;
+
+  if (!service || !selectedDate || !timeSlot) {
     alert("Fill required fields");
     return;
   }
@@ -203,15 +211,14 @@ async function handlePayLater() {
   const price = getServicePrice(service);
 
   const data = {
-    name: document.getElementById("name").value,
-    phone: document.getElementById("phone").value,
-    email: document.getElementById("email").value,
-    address: document.getElementById("address").value,
+    name,
+    phone,
+    email,
+    address,
     service,
     date: selectedDate,
-    timeSlot: document.getElementById("timeSlot").value,
-    price,
-    paymentType: "later"
+    timeSlot,
+    price
   };
 
   showPopup();

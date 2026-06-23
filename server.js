@@ -29,8 +29,6 @@ io.on("connection", (socket) => {
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
-
-/* IMPORTANT: webhook must use raw body */
 app.use("/api/webhook", express.raw({ type: "application/json" }));
 
 /* ================= DATABASE ================= */
@@ -93,7 +91,7 @@ async function sendEmail(booking) {
   }
 }
 
-/* ================= LIVE EMIT ================= */
+/* ================= LIVE UPDATE ================= */
 function emitUpdate() {
   Booking.find().then((bookings) => {
     io.emit("dashboard-update", {
@@ -103,12 +101,12 @@ function emitUpdate() {
   });
 }
 
-/* ================= ROOT ROUTE ================= */
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("API is LIVE");
 });
 
-/* ================= ADMIN ROUTE ================= */
+/* ================= ADMIN ================= */
 app.get("/admin", (req, res) => {
   res.sendFile(__dirname + "/public/admin/dashboard.html");
 });
@@ -125,7 +123,7 @@ app.get("/api/blocked-hours", async (req, res) => {
   res.json(bookings.map(b => b.timeSlot));
 });
 
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= STRIPE ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   const { service, email, price, date, timeSlot, name, phone } = req.body;
 
@@ -169,9 +167,63 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   res.json({ success: true, url: session.url });
 });
 
+/* ================= PAY LATER (FIXED) ================= */
+app.post("/api/book-pay-later", async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      phone,
+      address,
+      service,
+      date,
+      timeSlot,
+      price
+    } = req.body;
+
+    const exists = await Booking.findOne({ date, timeSlot });
+    if (exists) {
+      return res.json({
+        success: false,
+        message: "Slot already booked"
+      });
+    }
+
+    const booking = await Booking.create({
+      name,
+      email,
+      phone,
+      address,
+      service,
+      date,
+      timeSlot,
+      price,
+      deposit: 0,
+      remaining: price,
+      paymentStatus: "pay_later"
+    });
+
+    await sendEmail(booking);
+    emitUpdate();
+
+    return res.json({
+      success: true,
+      sessionId: booking._id
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.json({
+      success: false,
+      message: "Server error"
+    });
+  }
+});
+
 /* ================= WEBHOOK ================= */
 app.post("/api/webhook", async (req, res) => {
   const sig = req.headers["stripe-signature"];
+
   let event;
 
   try {
@@ -210,7 +262,7 @@ app.post("/api/webhook", async (req, res) => {
   res.json({ received: true });
 });
 
-/* ================= ADMIN DASHBOARD ================= */
+/* ================= DASHBOARD ================= */
 app.get("/api/admin/dashboard", async (req, res) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
 
