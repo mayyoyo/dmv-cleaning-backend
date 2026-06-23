@@ -12,7 +12,7 @@
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
-<!-- ✅ ONLY THIS API -->
+<!-- API -->
 <script>
   const API = "https://dmv-cleaning-backend.onrender.com";
 </script>
@@ -98,7 +98,7 @@ function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
 
-/* ================= CALENDAR ================= */
+/* CALENDAR */
 document.addEventListener("DOMContentLoaded", () => {
 
   const calendar = new FullCalendar.Calendar(
@@ -120,7 +120,7 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* ================= BLOCK HOURS FIX ================= */
+/* BLOCK HOURS FIX */
 async function loadBlockedHours(date) {
   try {
     const res = await fetch(`${API}/api/blocked-hours?date=${date}`);
@@ -190,7 +190,7 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER (FIXED) ================= */
+/* ================= PAY LATER (FIXED REDIRECT) ================= */
 async function handlePayLater() {
 
   const service = document.getElementById("service").value;
@@ -201,8 +201,8 @@ async function handlePayLater() {
   const address = document.getElementById("address").value;
   const timeSlot = document.getElementById("timeSlot").value;
 
-  if (!service || !selectedDate || !timeSlot) {
-    alert("Fill required fields");
+  if (!service || !selectedDate || !timeSlot || !name || !email) {
+    alert("Fill all required fields");
     return;
   }
 
@@ -232,9 +232,9 @@ async function handlePayLater() {
 
     hidePopup();
 
+    /* ✅ FIXED REDIRECT (YOUR REQUEST) */
     if (result.success) {
-      window.location.href =
-        `${window.location.origin}/success.html?session_id=${result.sessionId}`;
+      window.location.href = "/success.html";
     } else {
       alert(result.message || "Booking failed");
     }
