@@ -15,7 +15,7 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("🔥 MongoDB Connected"))
   .catch(err => console.log("Mongo Error:", err));
 
-/* ================= MONGODB MODEL ================= */
+/* ================= MODEL ================= */
 const bookingSchema = new mongoose.Schema({
   stripeSessionId: String,
 
@@ -29,13 +29,12 @@ const bookingSchema = new mongoose.Schema({
   timeSlot: String,
 
   price: Number,
-
   deposit: Number,
   remaining: Number,
 
   paymentStatus: {
     type: String,
-    default: "pending" // pending | deposit_paid | fully_paid | pay_later
+    default: "pending"
   },
 
   createdAt: { type: Date, default: Date.now }
@@ -43,12 +42,9 @@ const bookingSchema = new mongoose.Schema({
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
-/* ================= WEBHOOK SECRET ================= */
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
 /* ================= MIDDLEWARE ================= */
 app.use("/api/webhook", express.raw({ type: "application/json" }));
-app.use(cors({ origin: "*" }));
+app.use(cors());
 app.use(express.json());
 
 /* ================= EMAIL ================= */
@@ -60,15 +56,29 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+async function sendEmail(booking) {
+  try {
+    await transporter.sendMail({
+      from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
+      to: booking.email,
+      subject: "Booking Confirmation",
+      html: `
+        <h2>Booking Confirmed</h2>
+        <p><b>Service:</b> ${booking.service}</p>
+        <p><b>Date:</b> ${booking.date}</p>
+        <p><b>Time:</b> ${booking.timeSlot}</p>
+        <p><b>Total:</b> $${booking.price}</p>
+        <p><b>Status:</b> ${booking.paymentStatus}</p>
+      `
+    });
+  } catch (err) {
+    console.log("Email error:", err.message);
+  }
+}
+
 /* ================= ROOT ================= */
 app.get("/", (req, res) => {
-  res.send("SERVER IS LIVE");
-});
-
-/* ================= PUBLIC BOOKINGS ================= */
-app.get("/api/public-bookings", async (req, res) => {
-  const bookings = await Booking.find();
-  res.json(bookings);
+  res.send("SERVER LIVE");
 });
 
 /* ================= BLOCKED SLOTS ================= */
@@ -78,17 +88,24 @@ app.get("/api/blocked-slots", async (req, res) => {
   res.json(booked.map(b => b.timeSlot));
 });
 
-/* ================= STRIPE DEPOSIT (20%) ================= */
+/* ================= BOOKED SLOTS ================= */
+app.get("/api/booked-slots", async (req, res) => {
+  const bookings = await Booking.find();
+  res.json(bookings);
+});
+
+/* ================= DEPOSIT CHECKOUT ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
-    const { service, email, price, date, timeSlot, name, phone } = req.body;
+    const { name, email, phone, service, date, timeSlot, price } = req.body;
 
-    const basePrice = price || 120;
+    const exists = await Booking.findOne({ date, timeSlot });
+    if (exists) {
+      return res.json({ success: false, message: "Slot already booked" });
+    }
 
-    const depositAmount = Math.round(basePrice * 0.20 * 100);
-    const remainingAmount = basePrice - basePrice * 0.20;
-
-    const baseUrl = process.env.BASE_URL;
+    const deposit = price * 0.2;
+    const remaining = price - deposit;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -96,37 +113,36 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       customer_email: email,
 
       metadata: {
+        type: "deposit",
+        name,
+        phone,
         service,
         date,
         timeSlot,
-        name,
-        phone,
-        price: basePrice,
-        deposit: basePrice * 0.20,
-        remaining: remainingAmount
+        price,
+        deposit,
+        remaining
       },
 
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `${service} (20% Deposit)`
-            },
-            unit_amount: depositAmount
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `${service} Deposit`
           },
-          quantity: 1
-        }
-      ],
+          unit_amount: Math.round(deposit * 100)
+        },
+        quantity: 1
+      }],
 
-      success_url: `${baseUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/booking.html`
+      success_url: `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.BASE_URL}/booking.html`
     });
 
     res.json({ success: true, url: session.url });
 
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -155,71 +171,65 @@ app.post("/api/book-pay-later", async (req, res) => {
       paymentStatus: "pay_later"
     });
 
-    res.json({
-      success: true,
-      bookingId: booking._id,
-      sessionId: booking.stripeSessionId
-    });
+    await sendEmail(booking);
+
+    res.json({ success: true, bookingId: booking._id });
 
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= PAY REMAINING BALANCE ================= */
+/* ================= PAY REMAINING ================= */
 app.post("/api/pay-remaining", async (req, res) => {
   try {
     const { bookingId } = req.body;
 
     const booking = await Booking.findById(bookingId);
-
-    if (!booking) {
-      return res.json({ success: false, message: "Not found" });
-    }
-
-    const remainingAmount = Math.round(booking.remaining * 100);
+    if (!booking) return res.json({ success: false });
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
-      payment_method_types: ["card"],
       customer_email: booking.email,
 
       metadata: {
-        type: "remaining_balance",
+        type: "remaining",
         bookingId: booking._id.toString()
       },
 
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: `Remaining Balance - ${booking.service}`
-            },
-            unit_amount: remainingAmount
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: {
+            name: `Remaining Balance - ${booking.service}`
           },
-          quantity: 1
-        }
-      ],
+          unit_amount: Math.round(booking.remaining * 100)
+        },
+        quantity: 1
+      }],
 
-      success_url: `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${process.env.BASE_URL}/success.html`,
       cancel_url: `${process.env.BASE_URL}/success.html`
     });
 
-    res.json({ success: true, url: session.url });
+    res.json({ url: session.url });
 
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 
-/* ================= STRIPE WEBHOOK ================= */
+/* ================= WEBHOOK ================= */
 app.post("/api/webhook", async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
   } catch (err) {
     return res.status(400).send(err.message);
   }
@@ -227,40 +237,47 @@ app.post("/api/webhook", async (req, res) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    /* ================= DEPOSIT PAYMENT ================= */
-    if (!session.metadata?.type) {
+    /* DEPOSIT */
+    if (session.metadata?.type === "deposit") {
+
       const exists = await Booking.findOne({
         stripeSessionId: session.id
       });
 
       if (!exists) {
-        await Booking.create({
+        const booking = await Booking.create({
           stripeSessionId: session.id,
 
-          name: session.metadata?.name || "",
-          email: session.customer_email || "",
-          phone: session.metadata?.phone || "",
-          service: session.metadata?.service || "",
-          date: session.metadata?.date || "",
-          timeSlot: session.metadata?.timeSlot || "",
+          name: session.metadata.name,
+          email: session.customer_email,
+          phone: session.metadata.phone,
 
-          price: session.metadata?.price || 0,
-          deposit: session.metadata?.deposit || 0,
-          remaining: session.metadata?.remaining || 0,
+          service: session.metadata.service,
+          date: session.metadata.date,
+          timeSlot: session.metadata.timeSlot,
+
+          price: Number(session.metadata.price),
+          deposit: Number(session.metadata.deposit),
+          remaining: Number(session.metadata.remaining),
 
           paymentStatus: "deposit_paid"
         });
+
+        await sendEmail(booking);
       }
     }
 
-    /* ================= REMAINING PAYMENT ================= */
-    if (session.metadata?.type === "remaining_balance") {
-      const bookingId = session.metadata.bookingId;
+    /* REMAINING */
+    if (session.metadata?.type === "remaining") {
+      const booking = await Booking.findById(session.metadata.bookingId);
 
-      await Booking.findByIdAndUpdate(bookingId, {
-        paymentStatus: "fully_paid",
-        remaining: 0
-      });
+      if (booking) {
+        booking.remaining = 0;
+        booking.paymentStatus = "fully_paid";
+        await booking.save();
+
+        await sendEmail(booking);
+      }
     }
   }
 
@@ -269,7 +286,7 @@ app.post("/api/webhook", async (req, res) => {
 
 /* ================= ADMIN DASHBOARD ================= */
 app.get("/api/admin/dashboard", async (req, res) => {
-  const bookings = await Booking.find();
+  const bookings = await Booking.find().sort({ createdAt: -1 });
 
   const totalDepositRevenue = bookings.reduce(
     (sum, b) => sum + (b.deposit || 0), 0
@@ -290,14 +307,11 @@ app.get("/api/admin/dashboard", async (req, res) => {
 /* ================= INVOICE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
-
   if (!booking) return res.send("Not found");
 
   const doc = new PDFDocument();
 
   res.setHeader("Content-Type", "application/pdf");
-  res.setHeader("Content-Disposition", "attachment; filename=invoice.pdf");
-
   doc.pipe(res);
 
   doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
@@ -307,8 +321,8 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.text(`Service: ${booking.service}`);
   doc.text(`Date: ${booking.date}`);
   doc.text(`Time: ${booking.timeSlot}`);
-  doc.text(`Total Price: $${booking.price}`);
-  doc.text(`Deposit Paid: $${booking.deposit}`);
+  doc.text(`Total: $${booking.price}`);
+  doc.text(`Deposit: $${booking.deposit}`);
   doc.text(`Remaining: $${booking.remaining}`);
   doc.text(`Status: ${booking.paymentStatus}`);
 
@@ -319,5 +333,5 @@ app.get("/api/invoice/:id", async (req, res) => {
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
-  console.log("🔥 Server running on port", PORT);
+  console.log("🚀 Server running on port", PORT);
 });

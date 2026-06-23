@@ -2,50 +2,62 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Admin Dashboard</title>
+
 <link rel="stylesheet" href="admin-dashboard.css">
+
+<!-- CONFIG FILE -->
+<script src="../config.js"></script>
+
+<script>
+  const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
+</script>
+
 </head>
 
 <body>
 
-<header class="topbar">
-  <h2>🧼 DMV Cleaning Admin</h2>
-  <button onclick="logout()">Logout</button>
+<header class="header">
+  <h1>🚀 DMV Cleaning Admin Dashboard</h1>
+
+  <div class="stats">
+    <div class="card">
+      <h3>Total Bookings</h3>
+      <p id="totalBookings">0</p>
+    </div>
+
+    <div class="card">
+      <h3>Deposit Revenue</h3>
+      <p id="depositRevenue">$0</p>
+    </div>
+
+    <div class="card">
+      <h3>Pending Balance</h3>
+      <p id="pendingBalance">$0</p>
+    </div>
+  </div>
 </header>
 
-<section class="stats">
-  <div class="card">
-    <h3>Total Bookings</h3>
-    <p id="totalBookings">0</p>
-  </div>
-
-  <div class="card">
-    <h3>Revenue</h3>
-    <p id="revenue">$0</p>
-  </div>
-</section>
-
-<section class="table-section">
+<main class="container">
   <table>
     <thead>
       <tr>
-        <th>ID</th>
         <th>Name</th>
-        <th>Email</th>
         <th>Service</th>
         <th>Date</th>
         <th>Time</th>
         <th>Status</th>
         <th>Price</th>
-        <th>Actions</th>
       </tr>
     </thead>
 
-    <tbody id="data"></tbody>
+    <tbody id="tableBody"></tbody>
   </table>
-</section>
+</main>
 
-<script src="dashboard.js"></script>
+<script src="admin-dashboard.js"></script>
 
 </body>
 </html>

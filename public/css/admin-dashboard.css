@@ -1,62 +1,72 @@
 body {
-  font-family: Arial;
   margin: 0;
-  background: #f4f6f8;
+  font-family: Arial, sans-serif;
+  background: #0b1220;
+  color: white;
 }
 
-.topbar {
-  display: flex;
-  justify-content: space-between;
-  padding: 15px;
-  background: #007bff;
-  color: white;
+.header {
+  background: #111827;
+  padding: 20px;
+  text-align: center;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 26px;
 }
 
 .stats {
   display: flex;
+  justify-content: center;
   gap: 15px;
-  padding: 20px;
+  margin-top: 15px;
+  flex-wrap: wrap;
 }
 
 .card {
-  background: white;
-  padding: 20px;
+  background: #1f2937;
+  padding: 15px 20px;
   border-radius: 10px;
-  flex: 1;
+  min-width: 180px;
   text-align: center;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
 }
 
-.table-section {
+.card h3 {
+  margin: 0;
+  font-size: 13px;
+  color: #9ca3af;
+}
+
+.card p {
+  font-size: 22px;
+  margin-top: 8px;
+  font-weight: bold;
+}
+
+.container {
   padding: 20px;
 }
 
 table {
   width: 100%;
-  background: white;
   border-collapse: collapse;
+  background: #111827;
+  border-radius: 10px;
+  overflow: hidden;
 }
 
 th, td {
-  padding: 10px;
-  border-bottom: 1px solid #ddd;
-  text-align: center;
+  padding: 12px;
+  border-bottom: 1px solid #1f2937;
+  text-align: left;
 }
 
-button {
-  padding: 5px 10px;
-  margin: 2px;
-  cursor: pointer;
+th {
+  background: #1f2937;
+  color: #9ca3af;
 }
 
-.btn-complete {
-  background: green;
-  color: white;
-  border: none;
-}
-
-.btn-charge {
-  background: orange;
-  color: white;
-  border: none;
+tr:hover {
+  background: #1f2937;
 }

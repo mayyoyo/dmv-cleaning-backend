@@ -3,39 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Booking Confirmed</title>
 
 <link rel="stylesheet" href="css/success.css">
+
+<!-- IMPORTANT CONFIG ORDER -->
 <script src="config.js"></script>
+
+<script>
+  const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
+  const BASE_URL = window.BASE_URL || "https://dmv-cleaning-backend.onrender.com";
+</script>
 
 </head>
 
 <body>
-
-<script>
-/* ================= PAY LATER FALLBACK FIX ================= */
-const params = new URLSearchParams(window.location.search);
-const sessionId = params.get("session_id");
-
-if (!sessionId) {
-  document.body.innerHTML = "<h2>📌 Pay Later Booking Confirmed</h2>";
-}
-</script>
 
 <div class="wrapper">
 
   <div class="success-header">
     <div class="checkmark">✔</div>
     <h1>Booking Confirmed</h1>
-    <p>Thank you for choosing DMV Cleaning Services</p>
+    <p>DMV Cleaning Services LLC</p>
   </div>
 
   <div class="card">
-
-    <div class="top">
-      <h2>🧼 DMV Cleaning Services LLC</h2>
-      <p>📞 703-967-0674</p>
-    </div>
 
     <div class="details">
 
@@ -64,27 +57,22 @@ if (!sessionId) {
     </div>
 
     <div class="price-box">
-      <p>Total Due Amount</p>
+      <p>Total Due</p>
       <h2>$<span id="total">0</span></h2>
     </div>
 
-    <div style="margin:15px 0; text-align:center;">
-      <a id="download" class="btn">📄 Download Invoice</a>
+    <!-- PAY REMAINING BUTTON -->
+    <div style="text-align:center; margin:15px 0;">
+      <button onclick="payRemaining()" class="btn primary">
+        💰 Pay Remaining Balance
+      </button>
     </div>
 
-    <div class="next-steps">
-      <h3>What Happens Next?</h3>
-      <ul>
-        <li>✔ Our team will contact you shortly</li>
-        <li>✔ Please be available at your scheduled time</li>
-        <li>✔ Prepare access to your home</li>
-      </ul>
-    </div>
-
-    <div class="actions">
-      <a href="index.html" class="btn">🏠 Back Home</a>
-      <a href="booking.html" class="btn">📅 Book Again</a>
-      <a href="tel:7039670674" class="btn outline">📞 Call Us</a>
+    <!-- INVOICE -->
+    <div style="text-align:center;">
+      <a id="download" class="btn" target="_blank">
+        📄 Download Invoice
+      </a>
     </div>
 
   </div>
@@ -92,38 +80,33 @@ if (!sessionId) {
 
 <script>
 
-const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
+const params = new URLSearchParams(window.location.search);
+const sessionId = params.get("session_id");
 
-const params2 = new URLSearchParams(window.location.search);
-const sessionId2 = params2.get("session_id");
-
-/* ================= SAFE BOOKING LOADER ================= */
+/* ================= LOAD BOOKING ================= */
 async function loadBooking() {
   try {
 
-    if (!sessionId2) {
+    if (!sessionId) {
       document.body.innerHTML = "<h2>❌ Missing session ID</h2>";
       return;
     }
 
-    /* ================= OPTIONAL SAFE FETCH FIX ================= */
     const res = await fetch(`${API}/public-bookings`);
     const bookings = await res.json();
 
     const booking = bookings.find(
-      b => b.stripeSessionId === sessionId2
+      b => b.stripeSessionId === sessionId
     );
 
-    /* ================= PROCESSING STATE ================= */
     if (!booking) {
       document.body.innerHTML =
-        "<h2>⏳ Booking is processing. Refresh in 5 seconds.</h2>";
+        "<h2>⏳ Processing booking... refresh in a few seconds</h2>";
 
-      setTimeout(() => location.reload(), 5000);
+      setTimeout(() => location.reload(), 4000);
       return;
     }
 
-    /* ================= FILL UI ================= */
     document.getElementById("bookingId").innerText = booking.id;
     document.getElementById("status").innerText = booking.status;
 
@@ -134,6 +117,7 @@ async function loadBooking() {
     document.getElementById("service").innerText = booking.service || "";
     document.getElementById("date").innerText = booking.date || "";
     document.getElementById("time").innerText = booking.timeSlot || "";
+
     document.getElementById("total").innerText = booking.price || 0;
 
     document.getElementById("download").href =
@@ -143,6 +127,25 @@ async function loadBooking() {
     console.error(err);
     document.body.innerHTML =
       "<h2>⚠ Error loading booking</h2>";
+  }
+}
+
+/* ================= PAY REMAINING (STRIPE) ================= */
+async function payRemaining() {
+  const bookingId = document.getElementById("bookingId").innerText;
+
+  const res = await fetch(`${API}/pay-remaining`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ bookingId })
+  });
+
+  const data = await res.json();
+
+  if (data.url) {
+    window.location.href = data.url;
+  } else {
+    alert(data.message || "Payment failed");
   }
 }
 
