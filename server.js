@@ -11,7 +11,7 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
-/* ================= SOCKET.IO ================= */
+/* ================= SOCKET ================= */
 const io = new Server(server, {
   cors: { origin: "*" }
 });
@@ -29,7 +29,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-/* ================= ROOT (CRITICAL FOR RENDER) ================= */
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("API IS LIVE");
 });
@@ -41,7 +41,6 @@ mongoose.connect(process.env.MONGO_URI)
 
 /* ================= MODEL ================= */
 const bookingSchema = new mongoose.Schema({
-  stripeSessionId: String,
   name: String,
   email: String,
   phone: String,
@@ -109,7 +108,7 @@ function emitUpdate() {
   });
 }
 
-/* ================= BLOCKED HOURS (FIXED) ================= */
+/* ================= BLOCKED HOURS ================= */
 app.get("/api/blocked-hours", async (req, res) => {
   try {
     const { date } = req.query;
@@ -120,8 +119,6 @@ app.get("/api/blocked-hours", async (req, res) => {
 
     const blocked = bookings.map(b => b.timeSlot);
 
-    console.log("BLOCKED HOURS:", blocked);
-
     res.json(blocked);
 
   } catch (err) {
@@ -130,15 +127,16 @@ app.get("/api/blocked-hours", async (req, res) => {
   }
 });
 
-/* ================= PAY NOW (DEPOSIT) ================= */
+/* ================= PAY NOW ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot } = req.body;
 
+    // ❗ ONLY PAID BLOCKS SLOT
     const exists = await Booking.findOne({
       date,
       timeSlot,
-      paymentStatus: { $ne: "pay_later" }
+      paymentStatus: "paid"
     });
 
     if (exists) {
@@ -172,7 +170,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER (FULL FIX + DEBUG) ================= */
+/* ================= PAY LATER ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -186,7 +184,7 @@ app.post("/api/book-pay-later", async (req, res) => {
       price
     } = req.body;
 
-    console.log("🔥 PAY LATER CLICKED:", req.body);
+    console.log("🔥 PAY LATER:", req.body);
 
     if (!service || !timeSlot || !name || !email) {
       return res.json({
@@ -202,13 +200,12 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
-    // ❗ BLOCK EVERYTHING (NO DOUBLE BOOKINGS)
+    // ❗ ONLY PAID BLOCKS SLOT (FIXED LOGIC)
     const exists = await Booking.findOne({
       date,
-      timeSlot
+      timeSlot,
+      paymentStatus: "paid"
     });
-
-    console.log("EXISTS CHECK:", exists);
 
     if (exists) {
       return res.json({
@@ -231,8 +228,6 @@ app.post("/api/book-pay-later", async (req, res) => {
       paymentStatus: "pay_later"
     });
 
-    console.log("BOOKING SAVED:", booking);
-
     await sendEmail(booking);
     emitUpdate();
 
@@ -251,7 +246,7 @@ app.post("/api/book-pay-later", async (req, res) => {
   }
 });
 
-/* ================= ADMIN DASHBOARD ================= */
+/* ================= ADMIN ================= */
 app.get("/api/admin/dashboard", async (req, res) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
 
