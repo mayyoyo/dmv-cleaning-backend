@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -21,10 +22,6 @@
 
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
-  <div class="nav-links">
-    <a href="index.html">🏠 Home</a>
-    <a href="booking.html">📅 Booking</a>
-  </div>
 </header>
 
 <div id="emailPopup" class="popup hidden">
@@ -66,8 +63,7 @@
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button>
-<button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
+<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button> <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
 
@@ -156,12 +152,13 @@ async function handlePayNow() {
     }
 
   } catch (err) {
+    console.error(err);
     hidePopup();
     alert("Backend not reachable");
   }
 }
 
-/* ================= PAY LATER (FIXED FINAL) ================= */
+/* ================= PAY LATER (FINAL FIX) ================= */
 async function handlePayLater() {
 
   console.log("🔥 PAY LATER CLICKED");
@@ -174,6 +171,7 @@ async function handlePayLater() {
   const timeSlot = document.getElementById("timeSlot").value;
 
   const date = selectedDate;
+  const price = getServicePrice(service);
 
   if (!service || !timeSlot || !name || !email) {
     alert("Fill required fields");
@@ -199,23 +197,25 @@ async function handlePayLater() {
         service,
         date,
         timeSlot,
-        price: 100
+        price
       })
     });
 
     const result = await res.json();
 
-    hidePopup();
-
     console.log("RESULT:", result);
 
+    hidePopup();
+
     if (result.success) {
-      window.location.href = `/success.html?id=${result.bookingId || result.sessionId}`;
+      // ✅ SAFE REDIRECT (IMPORTANT FIX)
+      window.location.href = "/success.html";
     } else {
       alert(result.message || "Failed");
     }
 
   } catch (err) {
+    console.error("FETCH ERROR:", err);
     hidePopup();
     alert("Backend not reachable");
   }
