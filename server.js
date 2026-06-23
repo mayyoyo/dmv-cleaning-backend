@@ -29,7 +29,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-/* ================= ROOT FIX (VERY IMPORTANT) ================= */
+/* ================= ROOT FIX (IMPORTANT) ================= */
 app.get("/", (req, res) => {
   res.send("API IS LIVE");
 });
@@ -115,6 +115,27 @@ function emitUpdate() {
   });
 }
 
+/* ================= BLOCKED HOURS (FIXED) ================= */
+app.get("/api/blocked-hours", async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) return res.json([]);
+
+    const bookings = await Booking.find({ date });
+
+    const blocked = bookings.map(b => b.timeSlot);
+
+    console.log("BLOCKED HOURS:", blocked);
+
+    res.json(blocked);
+
+  } catch (err) {
+    console.log("BLOCKED HOURS ERROR:", err.message);
+    res.json([]);
+  }
+});
+
 /* ================= PAY NOW ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
@@ -180,14 +201,12 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
-    // ✅ ONLY BLOCK PAID BOOKINGS
+    // ONLY BLOCK REAL BOOKINGS
     const exists = await Booking.findOne({
       date,
       timeSlot,
       paymentStatus: { $ne: "pay_later" }
     });
-
-    console.log("EXISTS CHECK:", exists);
 
     if (exists) {
       return res.json({
@@ -221,7 +240,7 @@ app.post("/api/book-pay-later", async (req, res) => {
     });
 
   } catch (err) {
-    console.log("PAY LATER ERROR:", err);
+    console.log("PAY LATER ERROR:", err.message);
 
     return res.json({
       success: false,

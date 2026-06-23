@@ -93,6 +93,7 @@ function getServicePrice(service) {
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
+
 function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
@@ -177,7 +178,7 @@ async function handlePayNow() {
 
     hidePopup();
 
-    /* ✅ FINAL PAY NOW FIX */
+    /* FINAL PAY NOW FIX */
     if (data.success && data.url) {
       window.location.href = data.url;
     } else {
@@ -229,7 +230,7 @@ async function handlePayLater() {
 
     hidePopup();
 
-    /* ✅ FINAL PAY LATER FIX */
+    /* FINAL PAY LATER FIX */
     if (result.success) {
       window.location.href = "/success.html";
     } else {
