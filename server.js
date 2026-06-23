@@ -58,7 +58,7 @@ const Booking = mongoose.model("Booking", bookingSchema);
 /* ================= STRIPE ================= */
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-/* ================= EMAIL ================= */
+/* ================= EMAIL (FIXED) ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -111,12 +111,54 @@ function emitUpdate() {
   });
 }
 
-/* ================= ROOT ================= */
+/* ================= ROOT (FIX FOR BACKEND NOT REACHABLE) ================= */
 app.get("/", (req, res) => {
   res.send("API IS LIVE");
 });
 
-/* ================= PAY LATER (FIXED) ================= */
+/* ================= PAY NOW (FIXED) ================= */
+app.post("/api/create-deposit-checkout", async (req, res) => {
+  try {
+    const { service, email, price, date, timeSlot } = req.body;
+
+    const exists = await Booking.findOne({
+      date,
+      timeSlot,
+      paymentStatus: { $ne: "pay_later" }
+    });
+
+    if (exists) {
+      return res.json({ success: false, message: "Slot already booked" });
+    }
+
+    const deposit = price * 0.2;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      customer_email: email,
+      metadata: { service, date, timeSlot, price },
+      line_items: [{
+        price_data: {
+          currency: "usd",
+          product_data: { name: `${service} Deposit` },
+          unit_amount: Math.round(deposit * 100)
+        },
+        quantity: 1
+      }],
+      success_url: `${process.env.BASE_URL}/success.html`,
+      cancel_url: `${process.env.BASE_URL}/booking.html`
+    });
+
+    res.json({ success: true, url: session.url });
+
+  } catch (err) {
+    console.log("PAY NOW ERROR:", err.message);
+    res.json({ success: false, message: "Server error" });
+  }
+});
+
+/* ================= PAY LATER (FULL FIXED VERSION) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -137,7 +179,7 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
-    // ✅ FIXED SLOT CHECK (THIS IS THE IMPORTANT PART)
+    // 🔥 FIXED SLOT CHECK (CRITICAL)
     const exists = await Booking.findOne({
       date,
       timeSlot,
@@ -183,7 +225,19 @@ app.post("/api/book-pay-later", async (req, res) => {
   }
 });
 
-/* ================= START SERVER (ONLY ONCE) ================= */
+/* ================= ADMIN DASHBOARD ================= */
+app.get("/api/admin/dashboard", async (req, res) => {
+  const bookings = await Booking.find().sort({ createdAt: -1 });
+
+  res.json({
+    totalBookings: bookings.length,
+    totalDepositRevenue: bookings.reduce((s, b) => s + (b.deposit || 0), 0),
+    totalPendingBalance: bookings.reduce((s, b) => s + (b.remaining || 0), 0),
+    bookings
+  });
+});
+
+/* ================= START SERVER ================= */
 const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, "0.0.0.0", () => {

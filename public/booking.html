@@ -178,6 +178,7 @@ async function handlePayNow() {
 
     hidePopup();
 
+    /* ✅ PAY NOW FIX */
     if (data.url) {
       window.location.href = data.url;
     } else {
@@ -232,7 +233,7 @@ async function handlePayLater() {
 
     hidePopup();
 
-    /* ✅ FIXED REDIRECT (YOUR REQUEST) */
+    /* ✅ YOUR REQUEST: SIMPLE REDIRECT */
     if (result.success) {
       window.location.href = "/success.html";
     } else {
