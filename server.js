@@ -25,10 +25,15 @@ io.on("connection", (socket) => {
   });
 });
 
-/* ================= STRIPE ================= */
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+/* ================= MIDDLEWARE ================= */
+app.use(cors());
+app.use(express.json());
+app.use(express.static("public"));
 
-/* ================= MONGO ================= */
+/* IMPORTANT: webhook must use raw body */
+app.use("/api/webhook", express.raw({ type: "application/json" }));
+
+/* ================= DATABASE ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("🔥 MongoDB Connected"))
   .catch(err => console.log("Mongo Error:", err));
@@ -52,21 +57,8 @@ const bookingSchema = new mongoose.Schema({
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
-/* ================= MIDDLEWARE ================= */
-app.use(cors());
-app.use(express.json());
-app.use(express.static("public"));
-app.use("/api/webhook", express.raw({ type: "application/json" }));
-
-/* ================= ROOT ROUTE ================= */
-app.get("/", (req, res) => {
-  res.sendFile(__dirname + "/public/index.html");
-});
-
-/* ================= ADMIN ROUTE ================= */
-app.get("/admin", (req, res) => {
-  res.sendFile(__dirname + "/public/admin/dashboard.html");
-});
+/* ================= STRIPE ================= */
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 /* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
@@ -78,24 +70,30 @@ const transporter = nodemailer.createTransport({
 });
 
 async function sendEmail(booking) {
-  await transporter.sendMail({
-    from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
-    to: booking.email,
-    subject: "Booking Confirmed ✔",
-    html: `
-      <h2>Thank you for booking!</h2>
-      <p><b>Service:</b> ${booking.service}</p>
-      <p><b>Date:</b> ${booking.date}</p>
-      <p><b>Time:</b> ${booking.timeSlot}</p>
-      <p><b>Total:</b> $${booking.price}</p>
-      <p><b>Status:</b> ${booking.paymentStatus}</p>
-      <hr/>
-      <p>We will contact you shortly.</p>
-    `
-  });
+  try {
+    await transporter.sendMail({
+      from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
+      to: booking.email,
+      subject: "Booking Confirmed ✔",
+      html: `
+        <h2>Thank you for booking!</h2>
+        <p><b>Service:</b> ${booking.service}</p>
+        <p><b>Date:</b> ${booking.date}</p>
+        <p><b>Time:</b> ${booking.timeSlot}</p>
+        <p><b>Total:</b> $${booking.price}</p>
+        <p><b>Status:</b> ${booking.paymentStatus}</p>
+        <hr/>
+        <p>We will contact you shortly.</p>
+      `
+    });
+
+    console.log("📧 Email sent:", booking.email);
+  } catch (err) {
+    console.log("Email error:", err.message);
+  }
 }
 
-/* ================= HELPERS ================= */
+/* ================= LIVE EMIT ================= */
 function emitUpdate() {
   Booking.find().then((bookings) => {
     io.emit("dashboard-update", {
@@ -105,7 +103,17 @@ function emitUpdate() {
   });
 }
 
-/* ================= API ROUTES ================= */
+/* ================= ROOT ROUTE ================= */
+app.get("/", (req, res) => {
+  res.send("API is LIVE");
+});
+
+/* ================= ADMIN ROUTE ================= */
+app.get("/admin", (req, res) => {
+  res.sendFile(__dirname + "/public/admin/dashboard.html");
+});
+
+/* ================= BOOKINGS ================= */
 app.get("/api/booked-slots", async (req, res) => {
   const bookings = await Booking.find();
   res.json(bookings);
@@ -238,17 +246,9 @@ app.get("/api/invoice/:id", async (req, res) => {
   doc.end();
 });
 
-/* ================= START SERVER (ONLY ONCE!) ================= */
+/* ================= START SERVER (ONLY ONCE) ================= */
 const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
-  console.log("🚀 Server running with WebSockets on port", PORT);
-});
-// 
-/* ================= START SERVER ================= */
-
-const PORT = process.env.PORT || 5000;
-
-server.listen(PORT, () => {
+server.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server running with WebSockets on port", PORT);
 });
