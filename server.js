@@ -25,16 +25,6 @@ io.on("connection", (socket) => {
   });
 });
 
-/* ================= HELPERS ================= */
-function emitUpdate() {
-  Booking.find().then((bookings) => {
-    io.emit("dashboard-update", {
-      totalBookings: bookings.length,
-      bookings
-    });
-  });
-}
-
 /* ================= STRIPE ================= */
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -62,12 +52,33 @@ const bookingSchema = new mongoose.Schema({
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
-/* ================= MIDDLEWARE ================= */
+/* ================= MIDDLEWARE (ORDER IS CORRECT) ================= */
 app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 app.use("/api/webhook", express.raw({ type: "application/json" }));
 
-/* ================= EMAIL SYSTEM ================= */
+/* ================= ROOT ROUTE ================= */
+app.get("/", (req, res) => {
+  res.sendFile(__dirname + "/public/index.html");
+});
+
+/* ================= ADMIN PAGE ================= */
+app.get("/admin", (req, res) => {
+  res.sendFile(__dirname + "/public/admin/dashboard.html");
+});
+
+/* ================= HELPERS ================= */
+function emitUpdate() {
+  Booking.find().then((bookings) => {
+    io.emit("dashboard-update", {
+      totalBookings: bookings.length,
+      bookings
+    });
+  });
+}
+
+/* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -76,7 +87,6 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-/* 🔥 FULL EMAIL FUNCTION */
 async function sendEmail(booking) {
   try {
     await transporter.sendMail({
@@ -85,20 +95,17 @@ async function sendEmail(booking) {
       subject: "Booking Confirmed ✔",
       html: `
         <h2>Thank you for booking!</h2>
-
         <p><b>Service:</b> ${booking.service}</p>
         <p><b>Date:</b> ${booking.date}</p>
         <p><b>Time:</b> ${booking.timeSlot}</p>
         <p><b>Total:</b> $${booking.price}</p>
         <p><b>Status:</b> ${booking.paymentStatus}</p>
-
         <hr/>
         <p>We will contact you shortly.</p>
       `
     });
 
-    console.log("📧 Email sent to:", booking.email);
-
+    console.log("📧 Email sent:", booking.email);
   } catch (err) {
     console.log("Email error:", err.message);
   }
@@ -114,11 +121,10 @@ app.get("/api/booked-slots", async (req, res) => {
 app.get("/api/blocked-hours", async (req, res) => {
   const { date } = req.query;
   const bookings = await Booking.find({ date });
-
   res.json(bookings.map(b => b.timeSlot));
 });
 
-/* ================= CREATE DEPOSIT ================= */
+/* ================= DEPOSIT CHECKOUT ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   const { service, email, price, date, timeSlot, name, phone } = req.body;
 
@@ -134,7 +140,6 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: email,
-
     metadata: {
       type: "deposit",
       service,
@@ -146,7 +151,6 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       deposit,
       remaining
     },
-
     line_items: [{
       price_data: {
         currency: "usd",
@@ -157,7 +161,6 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       },
       quantity: 1
     }],
-
     success_url: `${process.env.BASE_URL}/success.html`,
     cancel_url: `${process.env.BASE_URL}/booking.html`
   });
@@ -168,7 +171,6 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
 /* ================= WEBHOOK ================= */
 app.post("/api/webhook", async (req, res) => {
   const sig = req.headers["stripe-signature"];
-
   let event;
 
   try {
@@ -184,9 +186,7 @@ app.post("/api/webhook", async (req, res) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    /* ================= DEPOSIT ================= */
     if (session.metadata?.type === "deposit") {
-
       const booking = await Booking.create({
         stripeSessionId: session.id,
         name: session.metadata.name,
@@ -202,14 +202,14 @@ app.post("/api/webhook", async (req, res) => {
       });
 
       await sendEmail(booking);
-      emitUpdate(); // 🔥 LIVE UPDATE
+      emitUpdate();
     }
   }
 
   res.json({ received: true });
 });
 
-/* ================= ADMIN DASHBOARD ================= */
+/* ================= ADMIN DASHBOARD API ================= */
 app.get("/api/admin/dashboard", async (req, res) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
 
@@ -227,7 +227,6 @@ app.get("/api/invoice/:id", async (req, res) => {
   if (!booking) return res.send("Not found");
 
   const doc = new PDFDocument();
-
   res.setHeader("Content-Type", "application/pdf");
   doc.pipe(res);
 
