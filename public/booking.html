@@ -91,6 +91,7 @@ function getServicePrice(service) {
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
+
 function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
@@ -108,34 +109,12 @@ document.addEventListener("DOMContentLoaded", () => {
         selectedDate = info.dateStr;
         document.getElementById("selectedDate").innerText =
           "Selected: " + selectedDate;
-
-        loadBlockedHours(info.dateStr);
       }
     }
   );
 
   calendar.render();
 });
-
-/* BLOCK HOURS */
-async function loadBlockedHours(date) {
-  try {
-    const res = await fetch(`${API}/api/blocked-hours?date=${date}`);
-    const blocked = await res.json();
-
-    const select = document.getElementById("timeSlot");
-
-    Array.from(select.options).forEach(opt => {
-      if (!opt.value) return;
-
-      opt.disabled = blocked.includes(opt.value);
-      opt.style.color = blocked.includes(opt.value) ? "red" : "black";
-    });
-
-  } catch (err) {
-    console.error("Blocked hours error", err);
-  }
-}
 
 /* ================= PAY NOW ================= */
 async function handlePayNow() {
@@ -182,7 +161,7 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER (FINAL FIXED + DEBUG) ================= */
+/* ================= PAY LATER (FIXED FINAL) ================= */
 async function handlePayLater() {
 
   console.log("🔥 PAY LATER CLICKED");
@@ -195,10 +174,6 @@ async function handlePayLater() {
   const timeSlot = document.getElementById("timeSlot").value;
 
   const date = selectedDate;
-
-  console.log("📦 DATA:", {
-    service, name, email, timeSlot, date
-  });
 
   if (!service || !timeSlot || !name || !email) {
     alert("Fill required fields");
@@ -230,18 +205,17 @@ async function handlePayLater() {
 
     const result = await res.json();
 
-    console.log("📩 RESPONSE:", result);
-
     hidePopup();
 
+    console.log("RESULT:", result);
+
     if (result.success) {
-      window.location.href = "/success.html";
+      window.location.href = `/success.html?id=${result.bookingId || result.sessionId}`;
     } else {
       alert(result.message || "Failed");
     }
 
   } catch (err) {
-    console.error("❌ ERROR:", err);
     hidePopup();
     alert("Backend not reachable");
   }

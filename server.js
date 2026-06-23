@@ -114,7 +114,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot } = req.body;
 
-    // ❗ ONLY PAID BOOKINGS BLOCK SLOT
+    // ✅ ONLY PAID BOOKINGS BLOCK SLOT
     const exists = await Booking.findOne({
       date,
       timeSlot,
@@ -152,7 +152,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER (FIXED) ================= */
+/* ================= PAY LATER (FINAL FIXED) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -168,7 +168,7 @@ app.post("/api/book-pay-later", async (req, res) => {
 
     console.log("🔥 PAY LATER REQUEST:", req.body);
 
-    // validation
+    // ✅ VALIDATION
     if (!service || !timeSlot || !name || !email) {
       return res.json({
         success: false,
@@ -183,14 +183,14 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
-    // ❗ ONLY BLOCK PAID BOOKINGS (FINAL FIX)
+    // ✅ ONLY BLOCK PAID BOOKINGS (CRITICAL FIX)
     const exists = await Booking.findOne({
       date,
       timeSlot,
       paymentStatus: "paid"
     });
 
-    console.log("EXISTS CHECK:", exists);
+    console.log("CHECK SLOT:", exists);
 
     if (exists) {
       return res.json({
@@ -199,6 +199,7 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
+    // ✅ CREATE BOOKING
     const booking = await Booking.create({
       name,
       email,
@@ -218,9 +219,10 @@ app.post("/api/book-pay-later", async (req, res) => {
     await sendEmail(booking);
     emitUpdate();
 
+    // ✅ IMPORTANT FIX (FRONTEND NEEDS bookingId)
     return res.json({
       success: true,
-      sessionId: booking._id
+      bookingId: booking._id
     });
 
   } catch (err) {
