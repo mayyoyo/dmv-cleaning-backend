@@ -5,9 +5,43 @@ const cors = require("cors");
 const Stripe = require("stripe");
 const PDFDocument = require("pdfkit");
 const nodemailer = require("nodemailer");
+const mongoose = require("mongoose");
 
 const app = express();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
+/* ================= MONGODB ================= */
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("🔥 MongoDB Connected"))
+  .catch(err => console.log("Mongo Error:", err));
+
+/* ================= MONGODB MODEL ================= */
+const bookingSchema = new mongoose.Schema({
+  stripeSessionId: String,
+
+  name: String,
+  email: String,
+  phone: String,
+  address: String,
+
+  service: String,
+  date: String,
+  timeSlot: String,
+
+  price: Number,
+
+  deposit: Number,
+  remaining: Number,
+
+  paymentStatus: {
+    type: String,
+    default: "pending" // pending | deposit_paid | fully_paid | pay_later
+  },
+
+  createdAt: { type: Date, default: Date.now }
+});
+
+const Booking = mongoose.model("Booking", bookingSchema);
 
 /* ================= WEBHOOK SECRET ================= */
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -16,24 +50,6 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 app.use("/api/webhook", express.raw({ type: "application/json" }));
 app.use(cors({ origin: "*" }));
 app.use(express.json());
-
-/* ================= ROOT ================= */
-app.get("/", (req, res) => {
-  res.send("SERVER IS LIVE");
-});
-
-/* ================= TEST ================= */
-app.get("/api/test", (req, res) => {
-  res.json({
-    ok: true,
-    message: "API working",
-    time: new Date().toISOString()
-  });
-});
-
-/* ================= MEMORY DB ================= */
-let bookings = [];
-let idCounter = 1;
 
 /* ================= EMAIL ================= */
 const transporter = nodemailer.createTransport({
@@ -44,40 +60,35 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-/* ================= BOOKINGS ================= */
-app.get("/api/public-bookings", (req, res) => {
+/* ================= ROOT ================= */
+app.get("/", (req, res) => {
+  res.send("SERVER IS LIVE");
+});
+
+/* ================= PUBLIC BOOKINGS ================= */
+app.get("/api/public-bookings", async (req, res) => {
+  const bookings = await Booking.find();
   res.json(bookings);
 });
 
-app.delete("/api/book/:id", (req, res) => {
-  bookings = bookings.filter(b => b.id != req.params.id);
-  res.json({ success: true });
+/* ================= BLOCKED SLOTS ================= */
+app.get("/api/blocked-slots", async (req, res) => {
+  const { date } = req.query;
+  const booked = await Booking.find({ date });
+  res.json(booked.map(b => b.timeSlot));
 });
 
-app.put("/api/book/:id", (req, res) => {
-  const i = bookings.findIndex(b => b.id == req.params.id);
-  if (i !== -1) bookings[i] = { ...bookings[i], ...req.body };
-  res.json({ success: true });
-});
-
-/* ================= STRIPE CHECKOUT ================= */
+/* ================= STRIPE DEPOSIT (20%) ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot, name, phone } = req.body;
 
-    if (!service || !email || !date || !timeSlot) {
-      return res.status(400).json({
-        success: false,
-        error: "Missing required fields"
-      });
-    }
-
     const basePrice = price || 120;
-    const deposit = Math.round(basePrice * 0.20 * 100);
 
-    const baseUrl =
-      process.env.BASE_URL ||
-      "https://dmv-cleaning-backend.onrender.com";
+    const depositAmount = Math.round(basePrice * 0.20 * 100);
+    const remainingAmount = basePrice - basePrice * 0.20;
+
+    const baseUrl = process.env.BASE_URL;
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -88,9 +99,11 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
         service,
         date,
         timeSlot,
-        name: name || "",
-        phone: phone || "",
-        type: "deposit"
+        name,
+        phone,
+        price: basePrice,
+        deposit: basePrice * 0.20,
+        remaining: remainingAmount
       },
 
       line_items: [
@@ -98,9 +111,9 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
           price_data: {
             currency: "usd",
             product_data: {
-              name: `${service} - 20% Deposit`
+              name: `${service} (20% Deposit)`
             },
-            unit_amount: deposit
+            unit_amount: depositAmount
           },
           quantity: 1
         }
@@ -113,38 +126,22 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
     res.json({ success: true, url: session.url });
 
   } catch (err) {
-    console.error("❌ STRIPE ERROR:", err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-/* ================= PAY LATER (FIXED - COPY THIS) ================= */
-app.post("/api/book-pay-later", (req, res) => {
+/* ================= PAY LATER ================= */
+app.post("/api/book-pay-later", async (req, res) => {
   try {
-    const {
-      name,
-      email,
-      phone,
-      address,
-      service,
-      date,
-      timeSlot,
-      price
-    } = req.body;
+    const { name, email, phone, address, service, date, timeSlot, price } = req.body;
 
-    if (!name || !email || !service || !date || !timeSlot) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing required fields"
-      });
+    const exists = await Booking.findOne({ date, timeSlot });
+    if (exists) {
+      return res.json({ success: false, message: "Slot already booked" });
     }
 
-    const booking = {
-      id: idCounter++,
-
-      // 🔥 FIX: UNIQUE ID (NO CONFLICTS)
+    const booking = await Booking.create({
       stripeSessionId: "PAY_LATER_" + Date.now(),
-
       name,
       email,
       phone,
@@ -153,140 +150,146 @@ app.post("/api/book-pay-later", (req, res) => {
       date,
       timeSlot,
       price,
-      status: "pay_later"
-    };
+      deposit: 0,
+      remaining: price,
+      paymentStatus: "pay_later"
+    });
 
-    bookings.push(booking);
-
-    console.log("✅ PAY LATER BOOKING SAVED:", booking);
-
-    return res.json({
+    res.json({
       success: true,
-      bookingId: booking.id,
+      bookingId: booking._id,
       sessionId: booking.stripeSessionId
     });
 
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({
-      success: false,
-      message: err.message
-    });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 
-/* ================= WEBHOOK (FIXED + SAFE) ================= */
-app.post("/api/webhook", (req, res) => {
+/* ================= PAY REMAINING BALANCE ================= */
+app.post("/api/pay-remaining", async (req, res) => {
+  try {
+    const { bookingId } = req.body;
+
+    const booking = await Booking.findById(bookingId);
+
+    if (!booking) {
+      return res.json({ success: false, message: "Not found" });
+    }
+
+    const remainingAmount = Math.round(booking.remaining * 100);
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      customer_email: booking.email,
+
+      metadata: {
+        type: "remaining_balance",
+        bookingId: booking._id.toString()
+      },
+
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: `Remaining Balance - ${booking.service}`
+            },
+            unit_amount: remainingAmount
+          },
+          quantity: 1
+        }
+      ],
+
+      success_url: `${process.env.BASE_URL}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.BASE_URL}/success.html`
+    });
+
+    res.json({ success: true, url: session.url });
+
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+/* ================= STRIPE WEBHOOK ================= */
+app.post("/api/webhook", async (req, res) => {
   const sig = req.headers["stripe-signature"];
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      endpointSecret
-    );
+    event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
   } catch (err) {
-    console.log("❌ WEBHOOK ERROR:", err.message);
     return res.status(400).send(err.message);
   }
 
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
-    console.log("🔥 WEBHOOK SESSION RECEIVED:", session.id);
+    /* ================= DEPOSIT PAYMENT ================= */
+    if (!session.metadata?.type) {
+      const exists = await Booking.findOne({
+        stripeSessionId: session.id
+      });
 
-    if (!session.id) return res.json({ received: true });
+      if (!exists) {
+        await Booking.create({
+          stripeSessionId: session.id,
 
-    if (!session.metadata) {
-      console.log("⚠️ Missing metadata");
-      return res.json({ received: true });
+          name: session.metadata?.name || "",
+          email: session.customer_email || "",
+          phone: session.metadata?.phone || "",
+          service: session.metadata?.service || "",
+          date: session.metadata?.date || "",
+          timeSlot: session.metadata?.timeSlot || "",
+
+          price: session.metadata?.price || 0,
+          deposit: session.metadata?.deposit || 0,
+          remaining: session.metadata?.remaining || 0,
+
+          paymentStatus: "deposit_paid"
+        });
+      }
     }
 
-    const existing = bookings.find(
-      b => b.stripeSessionId === session.id
-    );
+    /* ================= REMAINING PAYMENT ================= */
+    if (session.metadata?.type === "remaining_balance") {
+      const bookingId = session.metadata.bookingId;
 
-    if (!existing) {
-      const booking = {
-        id: idCounter++,
-        stripeSessionId: session.id,
-        name: session.metadata?.name || "",
-        email: session.customer_email || "",
-        phone: session.metadata?.phone || "",
-        service: session.metadata?.service || "",
-        date: session.metadata?.date || "",
-        timeSlot: session.metadata?.timeSlot || "",
-        price: session.amount_total / 100,
-        status: "deposit_paid"
-      };
-
-      bookings.push(booking);
-
-      console.log("✅ BOOKING CREATED:", booking);
-    } else {
-      console.log("⚠️ DUPLICATE IGNORED:", session.id);
+      await Booking.findByIdAndUpdate(bookingId, {
+        paymentStatus: "fully_paid",
+        remaining: 0
+      });
     }
   }
 
   res.json({ received: true });
 });
 
-/* ================= SESSION ROUTE ================= */
-app.get("/api/stripe-session/:sessionId", async (req, res) => {
-  try {
-    const sessionId = req.params.sessionId;
+/* ================= ADMIN DASHBOARD ================= */
+app.get("/api/admin/dashboard", async (req, res) => {
+  const bookings = await Booking.find();
 
-    console.log("SESSION CHECK:", sessionId);
+  const totalDepositRevenue = bookings.reduce(
+    (sum, b) => sum + (b.deposit || 0), 0
+  );
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-
-    if (!session) {
-      return res.json({
-        success: false,
-        message: "Session not found"
-      });
-    }
-
-    return res.json({
-      success: true,
-      booking: {
-        id: session.id,
-        name: session.metadata?.name || "",
-        email: session.customer_email,
-        phone: session.metadata?.phone || "",
-        service: session.metadata?.service || "",
-        date: session.metadata?.date || "",
-        timeSlot: session.metadata?.timeSlot || "",
-        price: (session.amount_total || 0) / 100,
-        status: "deposit_paid"
-      }
-    });
-
-  } catch (err) {
-    console.error("SESSION ERROR:", err.message);
-
-    return res.json({
-      success: false,
-      message: err.message
-    });
-  }
-});
-
-/* ================= ADMIN ================= */
-app.get("/api/admin/dashboard", (req, res) => {
-  const total = bookings.reduce((s, b) => s + (b.price || 0), 0);
+  const totalPendingBalance = bookings.reduce(
+    (sum, b) => sum + (b.remaining || 0), 0
+  );
 
   res.json({
     totalBookings: bookings.length,
-    totalRevenue: total,
+    totalDepositRevenue,
+    totalPendingBalance,
     bookings
   });
 });
 
 /* ================= INVOICE ================= */
-app.get("/api/invoice/:id", (req, res) => {
-  const booking = bookings.find(b => b.id == req.params.id);
+app.get("/api/invoice/:id", async (req, res) => {
+  const booking = await Booking.findById(req.params.id);
 
   if (!booking) return res.send("Not found");
 
@@ -302,8 +305,12 @@ app.get("/api/invoice/:id", (req, res) => {
 
   doc.text(`Name: ${booking.name}`);
   doc.text(`Service: ${booking.service}`);
-  doc.text(`Price: $${booking.price}`);
-  doc.text(`Status: ${booking.status}`);
+  doc.text(`Date: ${booking.date}`);
+  doc.text(`Time: ${booking.timeSlot}`);
+  doc.text(`Total Price: $${booking.price}`);
+  doc.text(`Deposit Paid: $${booking.deposit}`);
+  doc.text(`Remaining: $${booking.remaining}`);
+  doc.text(`Status: ${booking.paymentStatus}`);
 
   doc.end();
 });
@@ -311,6 +318,6 @@ app.get("/api/invoice/:id", (req, res) => {
 /* ================= START SERVER ================= */
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, () => {
   console.log("🔥 Server running on port", PORT);
 });

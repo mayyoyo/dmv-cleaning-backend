@@ -12,18 +12,20 @@ window.onload = () => {
     return;
   }
 
-  loadBookings();
-  setInterval(loadBookings, 5000);
+  loadDashboard();
+  setInterval(loadDashboard, 5000);
 };
 
-/* ================= LOAD BOOKINGS ================= */
-async function loadBookings() {
+/* ================= LOAD DASHBOARD (UPDATED) ================= */
+async function loadDashboard() {
   try {
-    const res = await fetch(`${API}/public-bookings`);
-    bookings = await res.json();
+    const res = await fetch(`${API}/admin/dashboard`);
+    const data = await res.json();
+
+    bookings = data.bookings || [];
 
     renderTable();
-    renderRevenue();
+    renderRevenue(data);
   } catch (err) {
     console.error("Load error:", err);
   }
@@ -38,19 +40,19 @@ function renderTable() {
     const row = document.createElement("tr");
 
     row.innerHTML = `
-      <td>${b.id}</td>
+      <td>${b._id || b.id}</td>
       <td>${b.name || "-"}</td>
       <td>${b.email || "-"}</td>
       <td>${b.service}</td>
       <td>${b.date}</td>
       <td>${b.timeSlot}</td>
-      <td>${b.status || "pending"}</td>
+      <td>${b.paymentStatus || "pending"}</td>
       <td>$${b.price || 0}</td>
       <td>
-        <button class="btn-complete" onclick="completeJob(${b.id})">Complete</button>
-        <button class="btn-charge" onclick="chargeRemaining(${b.id})">Charge</button>
-        <button onclick="deleteBooking(${b.id})">❌</button>
-        <button onclick="editBooking(${b.id})">✏️</button>
+        <button class="btn-complete" onclick="completeJob('${b._id}')">Complete</button>
+        <button class="btn-charge" onclick="chargeRemaining('${b._id}')">Charge</button>
+        <button onclick="deleteBooking('${b._id}')">❌</button>
+        <button onclick="editBooking('${b._id}')">✏️</button>
       </td>
     `;
 
@@ -58,15 +60,27 @@ function renderTable() {
   });
 }
 
-/* ================= REVENUE ================= */
-function renderRevenue() {
-  const total = bookings.reduce((sum, b) => sum + Number(b.price || 0), 0);
+/* ================= REVENUE (UPDATED BALANCE SYSTEM) ================= */
+function renderRevenue(data) {
 
   document.getElementById("revenue").innerText =
-    "$" + total.toFixed(2);
+    "$" + (data.totalDepositRevenue || 0).toFixed(2);
 
   document.getElementById("totalBookings").innerText =
-    bookings.length;
+    data.totalBookings || 0;
+
+  /* NEW BALANCE DISPLAY (if you add these HTML IDs) */
+  const pendingEl = document.getElementById("pendingBalance");
+  if (pendingEl) {
+    pendingEl.innerText =
+      "$" + (data.totalPendingBalance || 0).toFixed(2);
+  }
+
+  const totalRevenueEl = document.getElementById("totalRevenue");
+  if (totalRevenueEl) {
+    totalRevenueEl.innerText =
+      "$" + (data.totalDepositRevenue + data.totalPendingBalance).toFixed(2);
+  }
 }
 
 /* ================= COMPLETE JOB ================= */
@@ -76,17 +90,14 @@ async function completeJob(id) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        bookingId: id,
-        customerId: "",
-        remainingAmount: 0
+        bookingId: id
       })
     });
 
     const data = await res.json();
-
     alert(data.message || "Job completed");
-    loadBookings();
 
+    loadDashboard();
   } catch (err) {
     console.error("Complete error:", err);
   }
@@ -94,7 +105,24 @@ async function completeJob(id) {
 
 /* ================= CHARGE REMAINING ================= */
 async function chargeRemaining(id) {
-  alert("Next step: connect Stripe saved card (SetupIntent) for auto charging remaining balance.");
+  try {
+    const res = await fetch(`${API}/pay-remaining`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookingId: id })
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      window.location.href = data.url;
+    } else {
+      alert(data.message || "Unable to charge");
+    }
+
+  } catch (err) {
+    console.error("Charge error:", err);
+  }
 }
 
 /* ================= DELETE BOOKING ================= */
@@ -106,7 +134,7 @@ async function deleteBooking(id) {
       method: "DELETE"
     });
 
-    loadBookings();
+    loadDashboard();
   } catch (err) {
     console.error("Delete error:", err);
   }
@@ -114,7 +142,7 @@ async function deleteBooking(id) {
 
 /* ================= EDIT BOOKING ================= */
 async function editBooking(id) {
-  const b = bookings.find(x => x.id === id);
+  const b = bookings.find(x => x._id === id);
 
   if (!b) return;
 
@@ -137,7 +165,7 @@ async function editBooking(id) {
       })
     });
 
-    loadBookings();
+    loadDashboard();
   } catch (err) {
     console.error("Edit error:", err);
   }
