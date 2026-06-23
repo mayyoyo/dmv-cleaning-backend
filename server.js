@@ -29,7 +29,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-/* ================= ROOT (CRITICAL) ================= */
+/* ================= ROOT ================= */
 app.get("/", (req, res) => {
   res.send("API IS LIVE");
 });
@@ -114,9 +114,11 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot } = req.body;
 
+    // ❗ ONLY PAID BOOKINGS BLOCK SLOT
     const exists = await Booking.findOne({
       date,
-      timeSlot
+      timeSlot,
+      paymentStatus: "paid"
     });
 
     if (exists) {
@@ -150,7 +152,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER (YOUR FIXED VERSION) ================= */
+/* ================= PAY LATER (FIXED) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -166,7 +168,7 @@ app.post("/api/book-pay-later", async (req, res) => {
 
     console.log("🔥 PAY LATER REQUEST:", req.body);
 
-    // ✅ VALIDATION
+    // validation
     if (!service || !timeSlot || !name || !email) {
       return res.json({
         success: false,
@@ -181,10 +183,11 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
-    // 🔥 FIXED LOGIC (YOUR REQUEST)
+    // ❗ ONLY BLOCK PAID BOOKINGS (FINAL FIX)
     const exists = await Booking.findOne({
       date,
-      timeSlot
+      timeSlot,
+      paymentStatus: "paid"
     });
 
     console.log("EXISTS CHECK:", exists);
@@ -230,7 +233,7 @@ app.post("/api/book-pay-later", async (req, res) => {
   }
 });
 
-/* ================= BLOCKED HOURS (FIXED ROUTE) ================= */
+/* ================= BLOCKED HOURS ================= */
 app.get("/api/blocked-hours", async (req, res) => {
   try {
     const { date } = req.query;
