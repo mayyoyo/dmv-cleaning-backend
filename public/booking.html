@@ -120,8 +120,7 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-
-/* ================= BLOCK HOURS (FIXED) ================= */
+/* ================= BLOCK HOURS FIX ================= */
 async function loadBlockedHours(date) {
   try {
     const res = await fetch(`${API}/api/blocked-hours?date=${date}`);
@@ -190,7 +189,6 @@ async function handlePayNow() {
     alert("Backend not reachable");
   }
 }
-
 
 /* ================= PAY LATER (FIXED) ================= */
 async function handlePayLater() {

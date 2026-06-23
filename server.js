@@ -29,6 +29,8 @@ io.on("connection", (socket) => {
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
+
+/* webhook must use raw body */
 app.use("/api/webhook", express.raw({ type: "application/json" }));
 
 /* ================= DATABASE ================= */
@@ -153,9 +155,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
     line_items: [{
       price_data: {
         currency: "usd",
-        product_data: {
-          name: `${service} Deposit`
-        },
+        product_data: { name: `${service} Deposit` },
         unit_amount: Math.round(deposit * 100)
       },
       quantity: 1
@@ -167,7 +167,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   res.json({ success: true, url: session.url });
 });
 
-/* ================= PAY LATER (FIXED) ================= */
+/* ================= PAY LATER (FIXED - IMPORTANT) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -181,7 +181,9 @@ app.post("/api/book-pay-later", async (req, res) => {
       price
     } = req.body;
 
+    // ONLY block same slot
     const exists = await Booking.findOne({ date, timeSlot });
+
     if (exists) {
       return res.json({
         success: false,
@@ -212,8 +214,8 @@ app.post("/api/book-pay-later", async (req, res) => {
     });
 
   } catch (err) {
-    console.log(err);
-    res.json({
+    console.log("PAY LATER ERROR:", err);
+    return res.json({
       success: false,
       message: "Server error"
     });
