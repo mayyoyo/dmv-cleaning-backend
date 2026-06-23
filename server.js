@@ -29,7 +29,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-/* ================= ROOT FIX (IMPORTANT) ================= */
+/* ================= ROOT (CRITICAL FOR RENDER) ================= */
 app.get("/", (req, res) => {
   res.send("API IS LIVE");
 });
@@ -77,23 +77,17 @@ async function sendEmail(booking) {
     await transporter.sendMail({
       from: `"DMV Cleaning Service" <${process.env.EMAIL_USER}>`,
       to: booking.email,
-      subject: "✅ Booking Confirmed - DMV Cleaning Service",
+      subject: "✅ Booking Confirmed",
       html: `
-        <div style="font-family: Arial; padding: 20px;">
+        <div style="font-family:Arial;padding:20px">
           <h2>🎉 Booking Confirmed!</h2>
-
           <p><b>Name:</b> ${booking.name}</p>
           <p><b>Service:</b> ${booking.service}</p>
           <p><b>Date:</b> ${booking.date}</p>
           <p><b>Time:</b> ${booking.timeSlot}</p>
-          <p><b>Address:</b> ${booking.address}</p>
-          <p><b>Phone:</b> ${booking.phone}</p>
           <p><b>Total:</b> $${booking.price}</p>
-
           <hr/>
           <p>Status: <b>${booking.paymentStatus}</b></p>
-
-          <h3>We will contact you shortly 👍</h3>
         </div>
       `
     });
@@ -136,7 +130,7 @@ app.get("/api/blocked-hours", async (req, res) => {
   }
 });
 
-/* ================= PAY NOW ================= */
+/* ================= PAY NOW (DEPOSIT) ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot } = req.body;
@@ -178,7 +172,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER (FINAL FIXED) ================= */
+/* ================= PAY LATER (FULL FIX + DEBUG) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -192,21 +186,29 @@ app.post("/api/book-pay-later", async (req, res) => {
       price
     } = req.body;
 
-    console.log("PAY LATER REQUEST:", req.body);
+    console.log("🔥 PAY LATER CLICKED:", req.body);
 
-    if (!name || !email || !service || !date || !timeSlot) {
+    if (!service || !timeSlot || !name || !email) {
       return res.json({
         success: false,
-        message: "Missing required fields"
+        message: "Fill required fields"
       });
     }
 
-    // ONLY BLOCK REAL BOOKINGS
+    if (!date) {
+      return res.json({
+        success: false,
+        message: "Select a date first"
+      });
+    }
+
+    // ❗ BLOCK EVERYTHING (NO DOUBLE BOOKINGS)
     const exists = await Booking.findOne({
       date,
-      timeSlot,
-      paymentStatus: { $ne: "pay_later" }
+      timeSlot
     });
+
+    console.log("EXISTS CHECK:", exists);
 
     if (exists) {
       return res.json({
