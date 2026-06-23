@@ -11,16 +11,37 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
+
+/* ================= SOCKET.IO ================= */
 const io = new Server(server, {
   cors: { origin: "*" }
 });
 
+io.on("connection", (socket) => {
+  console.log("🟢 Admin connected:", socket.id);
+
+  socket.on("disconnect", () => {
+    console.log("🔴 Admin disconnected");
+  });
+});
+
+/* ================= HELPERS ================= */
+function emitUpdate() {
+  Booking.find().then((bookings) => {
+    io.emit("dashboard-update", {
+      totalBookings: bookings.length,
+      bookings
+    });
+  });
+}
+
+/* ================= STRIPE ================= */
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 /* ================= MONGO ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("🔥 MongoDB Connected"))
-  .catch(err => console.log(err));
+  .catch(err => console.log("Mongo Error:", err));
 
 /* ================= MODEL ================= */
 const bookingSchema = new mongoose.Schema({
@@ -41,27 +62,55 @@ const bookingSchema = new mongoose.Schema({
 
 const Booking = mongoose.model("Booking", bookingSchema);
 
-/* ================= SOCKET ================= */
-io.on("connection", (socket) => {
-  console.log("⚡ Client connected:", socket.id);
-});
-
-/* helper */
-function emitUpdate() {
-  io.emit("booking_update");
-}
-
 /* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
+app.use("/api/webhook", express.raw({ type: "application/json" }));
 
-/* ================= BOOKED SLOTS (DATE + HOUR) ================= */
+/* ================= EMAIL SYSTEM ================= */
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
+
+/* 🔥 FULL EMAIL FUNCTION */
+async function sendEmail(booking) {
+  try {
+    await transporter.sendMail({
+      from: `"DMV Cleaning" <${process.env.EMAIL_USER}>`,
+      to: booking.email,
+      subject: "Booking Confirmed ✔",
+      html: `
+        <h2>Thank you for booking!</h2>
+
+        <p><b>Service:</b> ${booking.service}</p>
+        <p><b>Date:</b> ${booking.date}</p>
+        <p><b>Time:</b> ${booking.timeSlot}</p>
+        <p><b>Total:</b> $${booking.price}</p>
+        <p><b>Status:</b> ${booking.paymentStatus}</p>
+
+        <hr/>
+        <p>We will contact you shortly.</p>
+      `
+    });
+
+    console.log("📧 Email sent to:", booking.email);
+
+  } catch (err) {
+    console.log("Email error:", err.message);
+  }
+}
+
+/* ================= BOOKED SLOTS ================= */
 app.get("/api/booked-slots", async (req, res) => {
   const bookings = await Booking.find();
   res.json(bookings);
 });
 
-/* ================= HOURLY BLOCK CHECK ================= */
+/* ================= BLOCKED HOURS ================= */
 app.get("/api/blocked-hours", async (req, res) => {
   const { date } = req.query;
   const bookings = await Booking.find({ date });
@@ -85,6 +134,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
     mode: "payment",
     payment_method_types: ["card"],
     customer_email: email,
+
     metadata: {
       type: "deposit",
       service,
@@ -96,6 +146,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       deposit,
       remaining
     },
+
     line_items: [{
       price_data: {
         currency: "usd",
@@ -106,6 +157,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       },
       quantity: 1
     }],
+
     success_url: `${process.env.BASE_URL}/success.html`,
     cancel_url: `${process.env.BASE_URL}/booking.html`
   });
@@ -116,6 +168,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
 /* ================= WEBHOOK ================= */
 app.post("/api/webhook", async (req, res) => {
   const sig = req.headers["stripe-signature"];
+
   let event;
 
   try {
@@ -131,7 +184,9 @@ app.post("/api/webhook", async (req, res) => {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object;
 
+    /* ================= DEPOSIT ================= */
     if (session.metadata?.type === "deposit") {
+
       const booking = await Booking.create({
         stripeSessionId: session.id,
         name: session.metadata.name,
@@ -146,24 +201,54 @@ app.post("/api/webhook", async (req, res) => {
         paymentStatus: "deposit_paid"
       });
 
-      emitUpdate(); // 🔥 REAL-TIME UPDATE
+      await sendEmail(booking);
+      emitUpdate(); // 🔥 LIVE UPDATE
     }
   }
 
   res.json({ received: true });
 });
 
-/* ================= ADMIN LIVE ================= */
+/* ================= ADMIN DASHBOARD ================= */
 app.get("/api/admin/dashboard", async (req, res) => {
   const bookings = await Booking.find().sort({ createdAt: -1 });
 
   res.json({
     totalBookings: bookings.length,
+    totalDepositRevenue: bookings.reduce((s, b) => s + (b.deposit || 0), 0),
+    totalPendingBalance: bookings.reduce((s, b) => s + (b.remaining || 0), 0),
     bookings
   });
 });
 
-/* ================= START ================= */
-server.listen(process.env.PORT || 5000, () =>
-  console.log("🚀 Server running with WebSockets")
-);
+/* ================= INVOICE ================= */
+app.get("/api/invoice/:id", async (req, res) => {
+  const booking = await Booking.findById(req.params.id);
+  if (!booking) return res.send("Not found");
+
+  const doc = new PDFDocument();
+
+  res.setHeader("Content-Type", "application/pdf");
+  doc.pipe(res);
+
+  doc.fontSize(20).text("DMV CLEANING INVOICE", { align: "center" });
+  doc.moveDown();
+
+  doc.text(`Name: ${booking.name}`);
+  doc.text(`Service: ${booking.service}`);
+  doc.text(`Date: ${booking.date}`);
+  doc.text(`Time: ${booking.timeSlot}`);
+  doc.text(`Total: $${booking.price}`);
+  doc.text(`Deposit: $${booking.deposit}`);
+  doc.text(`Remaining: $${booking.remaining}`);
+  doc.text(`Status: ${booking.paymentStatus}`);
+
+  doc.end();
+});
+
+/* ================= START SERVER ================= */
+const PORT = process.env.PORT || 5000;
+
+server.listen(PORT, () => {
+  console.log("🚀 Server running with WebSockets on port", PORT);
+});

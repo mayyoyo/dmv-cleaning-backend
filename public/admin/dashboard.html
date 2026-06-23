@@ -1,63 +1,56 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Admin Dashboard</title>
-
-<link rel="stylesheet" href="admin-dashboard.css">
-
-<!-- CONFIG FILE -->
-<script src="../config.js"></script>
-
-<script>
-  const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
-</script>
-
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="../admin/admin-dashboard.css">
 </head>
 
 <body>
 
-<header class="header">
-  <h1>🚀 DMV Cleaning Admin Dashboard</h1>
+<h1>🚀 Live Admin Dashboard</h1>
 
-  <div class="stats">
-    <div class="card">
-      <h3>Total Bookings</h3>
-      <p id="totalBookings">0</p>
-    </div>
+<div class="stats">
+  <div>Total Bookings: <span id="total"></span></div>
+</div>
 
-    <div class="card">
-      <h3>Deposit Revenue</h3>
-      <p id="depositRevenue">$0</p>
-    </div>
+<table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Service</th>
+      <th>Date</th>
+      <th>Time</th>
+      <th>Status</th>
+    </tr>
+  </thead>
 
-    <div class="card">
-      <h3>Pending Balance</h3>
-      <p id="pendingBalance">$0</p>
-    </div>
-  </div>
-</header>
+  <tbody id="tableBody"></tbody>
+</table>
 
-<main class="container">
-  <table>
-    <thead>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+const socket = io("https://dmv-cleaning-backend.onrender.com");
+
+socket.on("dashboard-update", (data) => {
+  document.getElementById("total").innerText = data.total;
+
+  const table = document.getElementById("tableBody");
+  table.innerHTML = "";
+
+  data.bookings.forEach(b => {
+    table.innerHTML += `
       <tr>
-        <th>Name</th>
-        <th>Service</th>
-        <th>Date</th>
-        <th>Time</th>
-        <th>Status</th>
-        <th>Price</th>
+        <td>${b.name}</td>
+        <td>${b.service}</td>
+        <td>${b.date}</td>
+        <td>${b.timeSlot}</td>
+        <td>${b.paymentStatus}</td>
       </tr>
-    </thead>
-
-    <tbody id="tableBody"></tbody>
-  </table>
-</main>
-
-<script src="admin-dashboard.js"></script>
+    `;
+  });
+});
+</script>
 
 </body>
 </html>
