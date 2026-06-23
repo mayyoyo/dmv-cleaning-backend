@@ -8,11 +8,9 @@
 
 <link rel="stylesheet" href="./css/booking.css">
 
-<!-- FullCalendar -->
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
-<!-- API -->
 <script>
   const API = "https://dmv-cleaning-backend.onrender.com";
 </script>
@@ -68,7 +66,7 @@
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="handlePayNow()">💳 Pay Now (Deposit)</button>
+<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button>
 <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
@@ -79,7 +77,7 @@
 
 let selectedDate = null;
 
-/* ================= PRICE ================= */
+/* PRICE */
 function getServicePrice(service) {
   if (!service) return 120;
   if (service.includes("$120")) return 120;
@@ -89,16 +87,15 @@ function getServicePrice(service) {
   return 120;
 }
 
-/* ================= POPUP ================= */
+/* POPUP */
 function showPopup() {
   document.getElementById("emailPopup").classList.remove("hidden");
 }
-
 function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
 
-/* ================= CALENDAR ================= */
+/* CALENDAR */
 document.addEventListener("DOMContentLoaded", () => {
 
   const calendar = new FullCalendar.Calendar(
@@ -120,7 +117,7 @@ document.addEventListener("DOMContentLoaded", () => {
   calendar.render();
 });
 
-/* ================= BLOCK HOURS ================= */
+/* BLOCK HOURS */
 async function loadBlockedHours(date) {
   try {
     const res = await fetch(`${API}/api/blocked-hours?date=${date}`);
@@ -131,13 +128,8 @@ async function loadBlockedHours(date) {
     Array.from(select.options).forEach(opt => {
       if (!opt.value) return;
 
-      if (blocked.includes(opt.value)) {
-        opt.disabled = true;
-        opt.style.color = "red";
-      } else {
-        opt.disabled = false;
-        opt.style.color = "black";
-      }
+      opt.disabled = blocked.includes(opt.value);
+      opt.style.color = blocked.includes(opt.value) ? "red" : "black";
     });
 
   } catch (err) {
@@ -178,7 +170,6 @@ async function handlePayNow() {
 
     hidePopup();
 
-    /* FINAL PAY NOW FIX */
     if (data.success && data.url) {
       window.location.href = data.url;
     } else {
@@ -191,8 +182,10 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER ================= */
+/* ================= PAY LATER (FINAL FIXED + DEBUG) ================= */
 async function handlePayLater() {
+
+  console.log("🔥 PAY LATER CLICKED");
 
   const service = document.getElementById("service").value;
   const name = document.getElementById("name").value;
@@ -201,12 +194,21 @@ async function handlePayLater() {
   const address = document.getElementById("address").value;
   const timeSlot = document.getElementById("timeSlot").value;
 
-  if (!service || !selectedDate || !timeSlot || !name || !email) {
-    alert("Fill all required fields");
+  const date = selectedDate;
+
+  console.log("📦 DATA:", {
+    service, name, email, timeSlot, date
+  });
+
+  if (!service || !timeSlot || !name || !email) {
+    alert("Fill required fields");
     return;
   }
 
-  const price = getServicePrice(service);
+  if (!date) {
+    alert("Select a date first");
+    return;
+  }
 
   showPopup();
 
@@ -220,24 +222,26 @@ async function handlePayLater() {
         email,
         address,
         service,
-        date: selectedDate,
+        date,
         timeSlot,
-        price
+        price: 100
       })
     });
 
     const result = await res.json();
 
+    console.log("📩 RESPONSE:", result);
+
     hidePopup();
 
-    /* FINAL PAY LATER FIX */
     if (result.success) {
       window.location.href = "/success.html";
     } else {
-      alert(result.message || "Booking failed");
+      alert(result.message || "Failed");
     }
 
   } catch (err) {
+    console.error("❌ ERROR:", err);
     hidePopup();
     alert("Backend not reachable");
   }
