@@ -2,44 +2,29 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Admin Login</title>
 
-<link rel="stylesheet" href="./admin-login.css">
+<link rel="stylesheet" href="../admin/login.html">
 </head>
 
 <body>
 
 <div class="login-container">
 
-  <div class="login-box">
+  <h1>🔐 Admin Login</h1>
 
-    <h2>🔐 Admin Login</h2>
+  <input id="username" type="text" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
 
-    <input id="username" placeholder="Username" type="text">
-    <input id="password" placeholder="Password" type="password">
+  <button onclick="login()">Login</button>
 
-    <button onclick="login()">Login</button>
-
-    <p id="error"></p>
-
-  </div>
+  <p id="msg"></p>
 
 </div>
 
-<script>
-function login() {
-  const user = document.getElementById("username").value;
-  const pass = document.getElementById("password").value;
-
-  // SIMPLE FRONTEND LOGIN (you can upgrade later)
-  if (user === "admin" && pass === "admin123") {
-    localStorage.setItem("adminAuth", "true");
-    window.location.href = "dashboard.html";
-  } else {
-    document.getElementById("error").innerText = "Invalid login";
-  }
-}
-</script>
+<script src="admin-login.js"></script>
 
 </body>
 </html>

@@ -1,19 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Admin Dashboard</title>
-  <link rel="stylesheet" href="../admin/admin-dashboard.css">
+<meta charset="UTF-8">
+<title>Admin Dashboard</title>
+
+<link rel="stylesheet" href="../admin/dashboard.html">
 </head>
 
 <body>
 
-<h1>🚀 Live Admin Dashboard</h1>
+<h1>🚀 Admin Dashboard</h1>
 
 <div class="stats">
-  <div>Total Bookings: <span id="total"></span></div>
+  <p>Total Bookings: <span id="totalBookings">0</span></p>
+  <p>Deposit Revenue: <span id="depositRevenue">$0</span></p>
+  <p>Pending Balance: <span id="pendingBalance">$0</span></p>
 </div>
 
-<table>
+<table border="1" width="100%">
   <thead>
     <tr>
       <th>Name</th>
@@ -21,36 +25,17 @@
       <th>Date</th>
       <th>Time</th>
       <th>Status</th>
+      <th>Price</th>
+      <th>Actions</th>
     </tr>
   </thead>
 
   <tbody id="tableBody"></tbody>
 </table>
 
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<div id="copyMsg" class="copy-msg">Copied ✔</div>
 
-<script>
-const socket = io("https://dmv-cleaning-backend.onrender.com");
-
-socket.on("dashboard-update", (data) => {
-  document.getElementById("total").innerText = data.total;
-
-  const table = document.getElementById("tableBody");
-  table.innerHTML = "";
-
-  data.bookings.forEach(b => {
-    table.innerHTML += `
-      <tr>
-        <td>${b.name}</td>
-        <td>${b.service}</td>
-        <td>${b.date}</td>
-        <td>${b.timeSlot}</td>
-        <td>${b.paymentStatus}</td>
-      </tr>
-    `;
-  });
-});
-</script>
+<script src="admin-dashboard.js"></script>
 
 </body>
 </html>

@@ -67,15 +67,17 @@
 <button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button>
 <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
-</section>
+<!-- ✅ FIXED INVOICE BUTTON -->
+<a id="download" class="btn" target="_blank">📄 Download Invoice</a>
 
+</section>
 </main>
 
 <script>
 
 let selectedDate = null;
 
-/* ✅ PRICE FUNCTION (FIX) */
+/* ================= PRICE FUNCTION (FIXED) ================= */
 function getServicePrice(service) {
   if (!service) return 120;
   if (service.includes("$120")) return 120;
@@ -93,7 +95,7 @@ function hidePopup() {
   document.getElementById("emailPopup").classList.add("hidden");
 }
 
-/* CALENDAR */
+/* ================= CALENDAR ================= */
 document.addEventListener("DOMContentLoaded", () => {
   const calendar = new FullCalendar.Calendar(
     document.getElementById("calendar"),
@@ -150,7 +152,7 @@ async function handlePayNow() {
   }
 }
 
-/* ================= PAY LATER (FIXED) ================= */
+/* ================= PAY LATER ================= */
 async function handlePayLater() {
 
   const service = document.getElementById("service").value;
@@ -166,7 +168,7 @@ async function handlePayLater() {
     return;
   }
 
-  const price = getServicePrice(service); // 🔥 IMPORTANT FIX
+  const price = getServicePrice(service); // ✅ FIXED PRICE
 
   showPopup();
 
@@ -181,7 +183,7 @@ async function handlePayLater() {
       service,
       date,
       timeSlot,
-      price   // 🔥 FIXED (REAL PRICE NOW)
+      price
     })
   });
 
@@ -190,11 +192,22 @@ async function handlePayLater() {
   hidePopup();
 
   if (result.success) {
+    // 🔥 FIXED: clean redirect
     window.location.href = `/success.html?bookingId=${result.bookingId}`;
   } else {
     alert(result.message || "Failed");
   }
 }
+
+/* ================= INVOICE BUTTON FIX ================= */
+document.getElementById("download").addEventListener("click", () => {
+
+  const bookingId = prompt("Enter Booking ID (or open success page)");
+
+  if (!bookingId) return;
+
+  window.open(`${API}/api/invoice/${bookingId}`, "_blank");
+});
 
 </script>
 

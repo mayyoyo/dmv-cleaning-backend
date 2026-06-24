@@ -1,9 +1,27 @@
-const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
+const API = window.API || "https://dmv-cleaning-backend.onrender.com";
+
+/* ================= COPY ================= */
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+  alert("Copied ✔");
+}
+
+/* ================= DELETE BOOKING ================= */
+async function deleteBooking(id) {
+  if (!confirm("Delete this booking?")) return;
+
+  await fetch(`${API}/api/admin/booking/${id}`, {
+    method: "DELETE",
+    headers: { Authorization: "admin-token" }
+  });
+
+  loadDashboard();
+}
 
 /* ================= LOAD DASHBOARD ================= */
 async function loadDashboard() {
   try {
-    const res = await fetch(`${API}/admin/dashboard`);
+    const res = await fetch(`${API}/api/admin/dashboard`);
     const data = await res.json();
 
     document.getElementById("totalBookings").innerText = data.totalBookings || 0;
@@ -14,15 +32,21 @@ async function loadDashboard() {
     table.innerHTML = "";
 
     data.bookings.forEach(b => {
+
       const row = document.createElement("tr");
 
       row.innerHTML = `
-        <td>${b.name || "-"}</td>
-        <td>${b.service || "-"}</td>
-        <td>${b.date || "-"}</td>
-        <td>${b.timeSlot || "-"}</td>
-        <td>${b.paymentStatus || "pending"}</td>
-        <td>$${b.price || 0}</td>
+        <td onclick="copyText('${b.name}')">${b.name || "-"}</td>
+        <td onclick="copyText('${b.service}')">${b.service || "-"}</td>
+        <td onclick="copyText('${b.date}')">${b.date || "-"}</td>
+        <td onclick="copyText('${b.timeSlot}')">${b.timeSlot || "-"}</td>
+        <td onclick="copyText('${b.paymentStatus}')">${b.paymentStatus || "pending"}</td>
+        <td onclick="copyText('$${b.price || 0}')">$${b.price || 0}</td>
+
+        <td>
+          <button onclick="deleteBooking('${b._id}')">🗑 Delete</button>
+          <button onclick="copyText('${b.name} | ${b.service} | $${b.price || 0}')">📋 Copy</button>
+        </td>
       `;
 
       table.appendChild(row);
@@ -33,6 +57,6 @@ async function loadDashboard() {
   }
 }
 
-/* ================= LIVE AUTO UPDATE ================= */
+/* ================= AUTO REFRESH ================= */
 loadDashboard();
 setInterval(loadDashboard, 5000);

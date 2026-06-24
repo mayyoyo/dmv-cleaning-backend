@@ -238,3 +238,6 @@ if (toggle) {
 
   });
 }
+// 
+document.getElementById("download").href =
+  `${API}/api/invoice/${booking._id}/pdf`;

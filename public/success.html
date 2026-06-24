@@ -11,18 +11,21 @@
 
 <body>
 
+<!-- ✅ ONLY TOP CHECK (AS YOU WANTED) -->
 <script>
-/* ================= SUCCESS CHECK (ONLY TOP CHECK - AS REQUESTED) ================= */
 const params = new URLSearchParams(window.location.search);
-
-const sessionId = params.get("session_id");
 const bookingId = params.get("bookingId");
 
-if (!sessionId && !bookingId) {
-  document.body.innerHTML = "<h2>❌ Missing session or booking ID</h2>";
+if (!bookingId) {
+  document.body.innerHTML = "Missing booking";
 }
 </script>
 
+<h1>Booking Confirmed</h1>
+
+<a id="download" class="btn">📄 Download Invoice</a>
+
+<!-- ================= FULL PAGE ================= -->
 <div class="wrapper">
 
   <div class="success-header">
@@ -70,7 +73,7 @@ if (!sessionId && !bookingId) {
     </div>
 
     <div style="margin:15px 0; text-align:center;">
-      <a id="download" class="btn">📄 Download Invoice</a>
+      <a id="download2" class="btn">📄 Download Invoice</a>
     </div>
 
     <div class="next-steps">
@@ -91,65 +94,50 @@ if (!sessionId && !bookingId) {
   </div>
 </div>
 
+<!-- ================= SCRIPT ================= -->
 <script>
 
-const API = (window.API || "https://dmv-cleaning-backend.onrender.com") + "/api";
+const API = "https://dmv-cleaning-backend.onrender.com/api";
 
 const params2 = new URLSearchParams(window.location.search);
-const sessionId2 = params2.get("session_id");
 const bookingId2 = params2.get("bookingId");
 
 /* ================= LOAD BOOKING ================= */
 async function loadBooking() {
   try {
 
-    let booking = null;
+    const res = await fetch(`${API}/admin/dashboard`);
+    const data = await res.json();
 
-    /* ================= PAY LATER ================= */
-    if (bookingId2) {
-      const res = await fetch(`${API}/admin/dashboard`);
-      const data = await res.json();
+    const booking = data.bookings.find(b => b._id === bookingId2);
 
-      booking = data.bookings.find(b => b._id === bookingId2);
-    }
-
-    /* ================= STRIPE ================= */
-    if (sessionId2 && !booking) {
-      const res = await fetch(`${API}/public-bookings`);
-      const bookings = await res.json();
-
-      booking = bookings.find(b => b.stripeSessionId === sessionId2);
-    }
-
-    /* ================= STILL PROCESSING ================= */
     if (!booking) {
-      document.body.innerHTML =
-        "<h2>⏳ Booking is processing. Please wait...</h2>";
-
-      setTimeout(() => location.reload(), 5000);
+      document.body.innerHTML = "<h2>⏳ Booking not found</h2>";
       return;
     }
 
-    /* ================= FILL DATA ================= */
-    document.getElementById("bookingId").innerText = booking._id || booking.id;
-    document.getElementById("status").innerText = booking.status || booking.paymentStatus;
+    document.getElementById("bookingId").innerText = booking._id;
+    document.getElementById("status").innerText = booking.paymentStatus;
 
-    document.getElementById("name").innerText = booking.name || "";
-    document.getElementById("email").innerText = booking.email || "";
-    document.getElementById("phone").innerText = booking.phone || "";
+    document.getElementById("name").innerText = booking.name;
+    document.getElementById("email").innerText = booking.email;
+    document.getElementById("phone").innerText = booking.phone;
 
-    document.getElementById("service").innerText = booking.service || "";
-    document.getElementById("date").innerText = booking.date || "";
-    document.getElementById("time").innerText = booking.timeSlot || "";
-    document.getElementById("total").innerText = booking.price || 0;
+    document.getElementById("service").innerText = booking.service;
+    document.getElementById("date").innerText = booking.date;
+    document.getElementById("time").innerText = booking.timeSlot;
+    document.getElementById("total").innerText = booking.price;
 
+    /* ✅ FIXED INVOICE LINKS */
     document.getElementById("download").href =
-      `${API}/invoice/${booking._id || booking.id}`;
+      `${API}/invoice/${booking._id}`;
+
+    document.getElementById("download2").href =
+      `${API}/invoice/${booking._id}`;
 
   } catch (err) {
     console.error(err);
-    document.body.innerHTML =
-      "<h2>⚠ Error loading booking</h2>";
+    document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
   }
 }
 
