@@ -12,7 +12,7 @@
 <body>
 
 <script>
-/* ================= SUCCESS CHECK (FIXED) ================= */
+/* ================= SUCCESS CHECK (ONLY TOP CHECK - AS REQUESTED) ================= */
 const params = new URLSearchParams(window.location.search);
 
 const sessionId = params.get("session_id");
@@ -93,7 +93,7 @@ if (!sessionId && !bookingId) {
 
 <script>
 
-const API = window.API || "https://dmv-cleaning-backend.onrender.com/api";
+const API = (window.API || "https://dmv-cleaning-backend.onrender.com") + "/api";
 
 const params2 = new URLSearchParams(window.location.search);
 const sessionId2 = params2.get("session_id");
@@ -105,7 +105,7 @@ async function loadBooking() {
 
     let booking = null;
 
-    /* ================= PAY LATER (BY ID) ================= */
+    /* ================= PAY LATER ================= */
     if (bookingId2) {
       const res = await fetch(`${API}/admin/dashboard`);
       const data = await res.json();
@@ -113,14 +113,12 @@ async function loadBooking() {
       booking = data.bookings.find(b => b._id === bookingId2);
     }
 
-    /* ================= STRIPE (SESSION) ================= */
+    /* ================= STRIPE ================= */
     if (sessionId2 && !booking) {
       const res = await fetch(`${API}/public-bookings`);
       const bookings = await res.json();
 
-      booking = bookings.find(
-        b => b.stripeSessionId === sessionId2
-      );
+      booking = bookings.find(b => b.stripeSessionId === sessionId2);
     }
 
     /* ================= STILL PROCESSING ================= */
@@ -132,7 +130,7 @@ async function loadBooking() {
       return;
     }
 
-    /* ================= FILL UI ================= */
+    /* ================= FILL DATA ================= */
     document.getElementById("bookingId").innerText = booking._id || booking.id;
     document.getElementById("status").innerText = booking.status || booking.paymentStatus;
 
