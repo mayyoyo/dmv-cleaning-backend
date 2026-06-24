@@ -70,7 +70,7 @@ const transporter = nodemailer.createTransport({
 });
 
 /* ================= VERIFY EMAIL ================= */
-transporter.verify((error, success) => {
+transporter.verify((error) => {
   if (error) {
     console.log("❌ EMAIL NOT READY:", error);
   } else {
@@ -78,11 +78,12 @@ transporter.verify((error, success) => {
   }
 });
 
-/* ================= EMAIL FUNCTION ================= */
+/* ================= EMAIL FUNCTION (FIXED DEBUG) ================= */
 async function sendEmail(booking) {
   try {
     console.log("🔥 EMAIL FUNCTION CALLED");
-    console.log("📧 To:", booking.email);
+    console.log("📧 TO:", booking.email);
+    console.log("📧 FROM:", process.env.EMAIL_USER);
 
     const result = await transporter.sendMail({
       from: `"DMV Cleaning Service" <${process.env.EMAIL_USER}>`,
@@ -104,7 +105,8 @@ async function sendEmail(booking) {
     return true;
 
   } catch (err) {
-    console.log("❌ EMAIL ERROR:", err);
+    console.log("❌ EMAIL ERROR FULL STACK:");
+    console.log(err);
     return false;
   }
 }
@@ -119,7 +121,7 @@ function emitUpdate() {
   });
 }
 
-/* ================= TEST EMAIL ROUTE (FIXED) ================= */
+/* ================= TEST EMAIL ================= */
 app.get("/test-email", async (req, res) => {
   try {
     console.log("🔥 TEST EMAIL HIT");
@@ -186,7 +188,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER ================= */
+/* ================= PAY LATER (FIXED PRICE + EMAIL DEBUG READY) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -200,11 +202,14 @@ app.post("/api/book-pay-later", async (req, res) => {
       price
     } = req.body;
 
+    console.log("🔥 PAY LATER REQUEST:", req.body);
+
+    // DEBUG ENV CHECK (IMPORTANT)
+    console.log("EMAIL USER:", process.env.EMAIL_USER);
+    console.log("EMAIL PASS EXISTS:", !!process.env.EMAIL_PASS);
+
     if (!service || !timeSlot || !name || !email || !date) {
-      return res.json({
-        success: false,
-        message: "Missing required fields"
-      });
+      return res.json({ success: false, message: "Missing required fields" });
     }
 
     const exists = await Booking.findOne({
@@ -214,10 +219,7 @@ app.post("/api/book-pay-later", async (req, res) => {
     });
 
     if (exists) {
-      return res.json({
-        success: false,
-        message: "Slot already booked"
-      });
+      return res.json({ success: false, message: "Slot already booked" });
     }
 
     const booking = await Booking.create({
@@ -256,6 +258,33 @@ app.post("/api/book-pay-later", async (req, res) => {
   }
 });
 
+/* ================= INVOICE ROUTE (FIXED) ================= */
+app.get("/api/invoice/:id", async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
+    }
+
+    res.json({
+      id: booking._id,
+      name: booking.name,
+      email: booking.email,
+      phone: booking.phone,
+      service: booking.service,
+      date: booking.date,
+      time: booking.timeSlot,
+      price: booking.price,
+      status: booking.paymentStatus
+    });
+
+  } catch (err) {
+    console.log("INVOICE ERROR:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
+
 /* ================= BLOCKED HOURS ================= */
 app.get("/api/blocked-hours", async (req, res) => {
   try {
@@ -263,9 +292,7 @@ app.get("/api/blocked-hours", async (req, res) => {
 
     const bookings = await Booking.find({ date });
 
-    const blocked = bookings.map(b => b.timeSlot);
-
-    res.json(blocked);
+    res.json(bookings.map(b => b.timeSlot));
 
   } catch (err) {
     console.log("BLOCKED HOURS ERROR:", err.message);
