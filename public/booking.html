@@ -1,5 +1,4 @@
 <!DOCTYPE html>
-
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -8,10 +7,10 @@
 <title>Book Cleaning Service</title>
 
 <link rel="stylesheet" href="./css/booking.css">
-
 <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js" defer></script>
 
+<!-- ✅ YOUR BACKEND API -->
 <script>
   const API = "https://dmv-cleaning-backend.onrender.com";
 </script>
@@ -22,6 +21,10 @@
 
 <header class="navbar">
   <div class="logo">🧼 Smart Booking</div>
+  <div class="nav-links">
+    <a href="index.html">🏠 Home</a>
+    <a href="booking.html">📅 Booking</a>
+  </div>
 </header>
 
 <div id="emailPopup" class="popup hidden">
@@ -38,7 +41,6 @@
 <h2>📅 Book Cleaning Service</h2>
 
 <div id="calendar"></div>
-
 <p id="selectedDate">No date selected</p>
 
 <select id="service" class="input">
@@ -63,10 +65,10 @@
 <input id="email" class="input" placeholder="Email">
 <input id="address" class="input" placeholder="Address">
 
-<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button> <button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
+<button class="btn primary" onclick="handlePayNow()">💳 Pay Now</button>
+<button class="btn" onclick="handlePayLater()">📌 Pay Later</button>
 
 </section>
-
 </main>
 
 <script>
@@ -100,7 +102,6 @@ document.addEventListener("DOMContentLoaded", () => {
     {
       initialView: "dayGridMonth",
       height: 500,
-
       dateClick(info) {
         selectedDate = info.dateStr;
         document.getElementById("selectedDate").innerText =
@@ -152,16 +153,13 @@ async function handlePayNow() {
     }
 
   } catch (err) {
-    console.error(err);
     hidePopup();
     alert("Backend not reachable");
   }
 }
 
-/* ================= PAY LATER (FINAL FIX) ================= */
+/* ================= PAY LATER ================= */
 async function handlePayLater() {
-
-  console.log("🔥 PAY LATER CLICKED");
 
   const service = document.getElementById("service").value;
   const name = document.getElementById("name").value;
@@ -171,15 +169,9 @@ async function handlePayLater() {
   const timeSlot = document.getElementById("timeSlot").value;
 
   const date = selectedDate;
-  const price = getServicePrice(service);
 
-  if (!service || !timeSlot || !name || !email) {
+  if (!service || !timeSlot || !name || !email || !date) {
     alert("Fill required fields");
-    return;
-  }
-
-  if (!date) {
-    alert("Select a date first");
     return;
   }
 
@@ -197,25 +189,24 @@ async function handlePayLater() {
         service,
         date,
         timeSlot,
-        price
+        price: 100
       })
     });
 
     const result = await res.json();
 
-    console.log("RESULT:", result);
-
     hidePopup();
 
+    console.log("RESULT:", result);
+
+    /* ✅ FIXED SAFE REDIRECT */
     if (result.success) {
-      // ✅ SAFE REDIRECT (IMPORTANT FIX)
-      window.location.href = "/success.html";
+      window.location.href = `/success.html?bookingId=${result.bookingId}`;
     } else {
       alert(result.message || "Failed");
     }
 
   } catch (err) {
-    console.error("FETCH ERROR:", err);
     hidePopup();
     alert("Backend not reachable");
   }

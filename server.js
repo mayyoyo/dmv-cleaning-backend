@@ -11,7 +11,7 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
-/* ================= SOCKET.IO ================= */
+/* ================= SOCKET ================= */
 const io = new Server(server, {
   cors: { origin: "*" }
 });
@@ -34,14 +34,13 @@ app.get("/", (req, res) => {
   res.send("API IS LIVE");
 });
 
-/* ================= MONGO ================= */
+/* ================= DATABASE ================= */
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("🔥 MongoDB Connected"))
   .catch(err => console.log("Mongo Error:", err));
 
 /* ================= MODEL ================= */
 const bookingSchema = new mongoose.Schema({
-  stripeSessionId: String,
   name: String,
   email: String,
   phone: String,
@@ -61,7 +60,7 @@ const Booking = mongoose.model("Booking", bookingSchema);
 /* ================= STRIPE ================= */
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-/* ================= EMAIL ================= */
+/* ================= EMAIL TRANSPORTER ================= */
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -70,51 +69,82 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+/* ================= VERIFY EMAIL ================= */
+transporter.verify((error, success) => {
+  if (error) {
+    console.log("❌ EMAIL NOT READY:", error);
+  } else {
+    console.log("✅ EMAIL READY TO SEND");
+  }
+});
+
+/* ================= EMAIL FUNCTION ================= */
 async function sendEmail(booking) {
   try {
-    if (!booking?.email) return;
+    console.log("🔥 EMAIL FUNCTION CALLED");
+    console.log("📧 To:", booking.email);
 
-    await transporter.sendMail({
+    const result = await transporter.sendMail({
       from: `"DMV Cleaning Service" <${process.env.EMAIL_USER}>`,
       to: booking.email,
       subject: "✅ Booking Confirmed",
       html: `
         <div style="font-family:Arial;padding:20px">
-          <h2>🎉 Booking Confirmed!</h2>
-          <p><b>Name:</b> ${booking.name}</p>
-          <p><b>Service:</b> ${booking.service}</p>
-          <p><b>Date:</b> ${booking.date}</p>
-          <p><b>Time:</b> ${booking.timeSlot}</p>
-          <p><b>Total:</b> $${booking.price}</p>
-          <hr/>
-          <p>Status: <b>${booking.paymentStatus}</b></p>
+          <h2>🎉 Booking Confirmed</h2>
+          <p>Name: ${booking.name}</p>
+          <p>Service: ${booking.service}</p>
+          <p>Date: ${booking.date}</p>
+          <p>Time: ${booking.timeSlot}</p>
+          <p>Status: ${booking.paymentStatus}</p>
         </div>
       `
     });
 
-    console.log("📧 Email sent:", booking.email);
+    console.log("📧 EMAIL SENT SUCCESS:", result.response);
+    return true;
 
   } catch (err) {
-    console.log("EMAIL ERROR:", err.message);
+    console.log("❌ EMAIL ERROR:", err);
+    return false;
   }
 }
 
-/* ================= LIVE UPDATE ================= */
+/* ================= SOCKET UPDATE ================= */
 function emitUpdate() {
-  Booking.find().then((bookings) => {
+  Booking.find().then((b) => {
     io.emit("dashboard-update", {
-      totalBookings: bookings.length,
-      bookings
+      totalBookings: b.length,
+      bookings: b
     });
   });
 }
+
+/* ================= TEST EMAIL ROUTE (FIXED) ================= */
+app.get("/test-email", async (req, res) => {
+  try {
+    console.log("🔥 TEST EMAIL HIT");
+
+    const result = await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_USER,
+      subject: "TEST EMAIL",
+      text: "Email system is working"
+    });
+
+    console.log("📧 TEST EMAIL SENT:", result.response);
+
+    res.send("EMAIL SENT SUCCESS");
+  } catch (err) {
+    console.log("❌ TEST EMAIL ERROR:", err);
+    res.send("EMAIL FAILED");
+  }
+});
 
 /* ================= PAY NOW ================= */
 app.post("/api/create-deposit-checkout", async (req, res) => {
   try {
     const { service, email, price, date, timeSlot } = req.body;
 
-    // ✅ ONLY PAID BOOKINGS BLOCK SLOT
     const exists = await Booking.findOne({
       date,
       timeSlot,
@@ -132,27 +162,31 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
       payment_method_types: ["card"],
       customer_email: email,
       metadata: { service, date, timeSlot, price },
+
       line_items: [{
         price_data: {
           currency: "usd",
-          product_data: { name: `${service} Deposit` },
+          product_data: {
+            name: service + " Deposit"
+          },
           unit_amount: Math.round(deposit * 100)
         },
         quantity: 1
       }],
+
       success_url: `${process.env.BASE_URL}/success.html`,
       cancel_url: `${process.env.BASE_URL}/booking.html`
     });
 
-    res.json({ success: true, url: session.url });
+    return res.json({ success: true, url: session.url });
 
   } catch (err) {
     console.log("PAY NOW ERROR:", err.message);
-    res.json({ success: false, message: "Server error" });
+    return res.json({ success: false, message: "Server error" });
   }
 });
 
-/* ================= PAY LATER (FINAL FIXED) ================= */
+/* ================= PAY LATER ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -166,31 +200,18 @@ app.post("/api/book-pay-later", async (req, res) => {
       price
     } = req.body;
 
-    console.log("🔥 PAY LATER REQUEST:", req.body);
-
-    // ✅ VALIDATION
-    if (!service || !timeSlot || !name || !email) {
+    if (!service || !timeSlot || !name || !email || !date) {
       return res.json({
         success: false,
-        message: "Fill required fields"
+        message: "Missing required fields"
       });
     }
 
-    if (!date) {
-      return res.json({
-        success: false,
-        message: "Select a date first"
-      });
-    }
-
-    // ✅ ONLY BLOCK PAID BOOKINGS (CRITICAL FIX)
     const exists = await Booking.findOne({
       date,
       timeSlot,
       paymentStatus: "paid"
     });
-
-    console.log("CHECK SLOT:", exists);
 
     if (exists) {
       return res.json({
@@ -199,7 +220,6 @@ app.post("/api/book-pay-later", async (req, res) => {
       });
     }
 
-    // ✅ CREATE BOOKING
     const booking = await Booking.create({
       name,
       email,
@@ -216,10 +236,11 @@ app.post("/api/book-pay-later", async (req, res) => {
 
     console.log("BOOKING SAVED:", booking);
 
-    await sendEmail(booking);
+    const emailResult = await sendEmail(booking);
+    console.log("EMAIL RESULT:", emailResult);
+
     emitUpdate();
 
-    // ✅ IMPORTANT FIX (FRONTEND NEEDS bookingId)
     return res.json({
       success: true,
       bookingId: booking._id
@@ -240,8 +261,6 @@ app.get("/api/blocked-hours", async (req, res) => {
   try {
     const { date } = req.query;
 
-    if (!date) return res.json([]);
-
     const bookings = await Booking.find({ date });
 
     const blocked = bookings.map(b => b.timeSlot);
@@ -254,9 +273,9 @@ app.get("/api/blocked-hours", async (req, res) => {
   }
 });
 
-/* ================= ADMIN DASHBOARD ================= */
+/* ================= DASHBOARD ================= */
 app.get("/api/admin/dashboard", async (req, res) => {
-  const bookings = await Booking.find().sort({ createdAt: -1 });
+  const bookings = await Booking.find();
 
   res.json({
     totalBookings: bookings.length,
