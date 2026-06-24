@@ -5,14 +5,21 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const { Server } = require("socket.io");
+const nodemailer = require("nodemailer");
 
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 
+/* ================= MIDDLEWARE ================= */
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
+
+/* ================= TEST ROUTE (MUST BE TOP) ================= */
+app.get("/test-email", (req, res) => {
+  res.send("TEST ROUTE WORKING");
+});
 
 /* ================= DATABASE ================= */
 mongoose.connect(process.env.MONGO_URI)
@@ -34,11 +41,10 @@ const Booking = mongoose.model("Booking", {
   paymentStatus: String,
 });
 
-/* ================= EMAIL (OPTIONAL SAFE SETUP) ================= */
+/* ================= EMAIL SETUP ================= */
 let transporter = null;
 
 if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-  const nodemailer = require("nodemailer");
 
   transporter = nodemailer.createTransport({
     service: "gmail",
@@ -48,17 +54,49 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
     }
   });
 
-  transporter.verify((error) => {
-    if (error) {
-      console.log("❌ EMAIL NOT READY:", error);
+  transporter.verify((err) => {
+    if (err) {
+      console.log("❌ EMAIL FAILED:", err.message);
     } else {
       console.log("✅ EMAIL READY TO SEND");
     }
   });
+
+} else {
+  console.log("❌ EMAIL ENV NOT SET");
+}
+
+/* ================= SEND EMAIL ================= */
+async function sendBookingEmail(booking) {
+  if (!transporter) return;
+
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: booking.email,
+      subject: "Booking Confirmed 🧼",
+      text: `
+Hi ${booking.name},
+
+Your booking is confirmed!
+
+Service: ${booking.service}
+Date: ${booking.date}
+Time: ${booking.timeSlot}
+Price: $${booking.price}
+
+DMV Cleaning Services
+`
+    });
+
+    console.log("📧 EMAIL SENT");
+  } catch (err) {
+    console.log("❌ EMAIL ERROR:", err.message);
+  }
 }
 
 /* ================= SOCKET ================= */
-io.on("connection", (socket) => {
+io.on("connection", () => {
   console.log("🟢 Admin connected");
 });
 
@@ -70,7 +108,7 @@ app.post("/api/admin/login", (req, res) => {
     return res.json({ success: true, token: "admin-token" });
   }
 
-  res.json({ success: false, message: "Invalid login" });
+  res.json({ success: false });
 });
 
 /* ================= AUTH ================= */
@@ -81,12 +119,87 @@ function auth(req, res, next) {
   next();
 }
 
-/* ================= DASHBOARD ================= */
+/* ================= BOOK PAY LATER ================= */
+app.post("/api/book-pay-later", async (req, res) => {
+  try {
+    const { name, email, phone, address, service, date, timeSlot } = req.body;
+
+    function getPrice(service) {
+      if (!service) return 120;
+      if (service.includes("$120")) return 120;
+      if (service.includes("$150")) return 150;
+      if (service.includes("$200")) return 200;
+      if (service.includes("$250")) return 250;
+      return 120;
+    }
+
+    const price = getPrice(service);
+
+    const booking = await Booking.create({
+      name,
+      email,
+      phone,
+      address,
+      service,
+      date,
+      timeSlot,
+      price,
+      deposit: 0,
+      remaining: price,
+      paymentStatus: "pay_later"
+    });
+
+    await sendBookingEmail(booking);
+
+    io.emit("dashboard-update");
+
+    res.json({
+      success: true,
+      bookingId: booking._id
+    });
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ success: false });
+  }
+});
+
+/* ================= GET SINGLE BOOKING ================= */
+app.get("/api/booking/:id", async (req, res) => {
+  try {
+    const booking = await Booking.findById(req.params.id);
+
+    if (!booking) {
+      return res.status(404).json({ error: "Not found" });
+    }
+
+    res.json(booking);
+
+  } catch (err) {
+    console.log(err);
+    res.status(500).json({ error: "Server error" });
+  }
+});
+
+/* ================= DEBUG BOOKINGS ================= */
+app.get("/debug-bookings", async (req, res) => {
+  try {
+    const bookings = await Booking.find();
+    res.json(bookings);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ================= ADMIN DASHBOARD ================= */
 app.get("/api/admin/dashboard", auth, async (req, res) => {
   const bookings = await Booking.find();
 
+  const totalRevenue = bookings.reduce((a, b) => a + (b.price || 0), 0);
+
   res.json({
-    total: bookings.length,
+    totalBookings: bookings.length,
+    totalRevenue,
     bookings
   });
 });
@@ -94,97 +207,28 @@ app.get("/api/admin/dashboard", auth, async (req, res) => {
 /* ================= DELETE BOOKING ================= */
 app.delete("/api/admin/booking/:id", auth, async (req, res) => {
   await Booking.findByIdAndDelete(req.params.id);
-
-  const bookings = await Booking.find();
-
-  io.emit("dashboard-update", {
-    total: bookings.length,
-    bookings
-  });
-
   res.json({ success: true });
 });
 
-/* ================= EDIT BOOKING ================= */
-app.put("/api/admin/booking/:id", auth, async (req, res) => {
-  const updated = await Booking.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
-
-  res.json({ success: true, booking: updated });
-});
-
-/* ================= PAY LATER ================= */
-app.post("/api/book-pay-later", async (req, res) => {
-  const { name, email, phone, address, service, date, timeSlot } = req.body;
-
-  function getPrice(service) {
-    if (!service) return 120;
-    if (service.includes("$120")) return 120;
-    if (service.includes("$150")) return 150;
-    if (service.includes("$200")) return 200;
-    if (service.includes("$250")) return 250;
-    return 120;
-  }
-
-  const price = getPrice(service);
-
-  const booking = await Booking.create({
-    name,
-    email,
-    phone,
-    address,
-    service,
-    date,
-    timeSlot,
-    price,
-    deposit: 0,
-    remaining: price,
-    paymentStatus: "pay_later"
-  });
-
-  console.log("🔥 BOOKING SAVED:", booking);
-
-  res.json({ success: true, bookingId: booking._id });
-});
-
-/* ================= INVOICE (HTML PAGE = PRINT PDF) ================= */
+/* ================= INVOICE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
   const booking = await Booking.findById(req.params.id);
 
-  if (!booking) return res.send("Booking not found");
+  if (!booking) return res.send("Not found");
 
   res.send(`
     <html>
-    <head>
-      <title>Invoice</title>
-    </head>
+      <body style="font-family:Arial;padding:20px">
+        <h2>🧾 Invoice</h2>
 
-    <body style="font-family:Arial;padding:20px">
+        <p><b>Name:</b> ${booking.name}</p>
+        <p><b>Service:</b> ${booking.service}</p>
+        <p><b>Date:</b> ${booking.date}</p>
+        <p><b>Time:</b> ${booking.timeSlot}</p>
+        <p><b>Price:</b> $${booking.price}</p>
 
-      <h2>🧾 DMV Cleaning Invoice</h2>
-
-      <p><b>Name:</b> ${booking.name}</p>
-      <p><b>Service:</b> ${booking.service}</p>
-      <p><b>Date:</b> ${booking.date}</p>
-      <p><b>Time:</b> ${booking.timeSlot}</p>
-      <p><b>Price:</b> $${booking.price}</p>
-      <p><b>Status:</b> ${booking.paymentStatus}</p>
-
-      <button onclick="window.print()">🖨 Print / Save PDF</button>
-
-      <button onclick="
-        navigator.clipboard.writeText(
-          'Name: ${booking.name} | Service: ${booking.service} | Price: $${booking.price}'
-        );
-        alert('Copied!');
-      ">
-      📋 Copy Invoice
-      </button>
-
-    </body>
+        <button onclick="window.print()">Print PDF</button>
+      </body>
     </html>
   `);
 });
@@ -194,30 +238,4 @@ const PORT = process.env.PORT || 5000;
 
 server.listen(PORT, "0.0.0.0", () => {
   console.log("🚀 Server running on port", PORT);
-  console.log("🔥 Backend fully started");
-});
-// 
-app.get("/test-email", async (req, res) => {
-  try {
-    if (!transporter) {
-      return res.send("❌ Email not configured");
-    }
-
-    console.log("🔥 TEST EMAIL HIT");
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_USER,
-      to: process.env.EMAIL_USER, // sends to yourself
-      subject: "Test Email ✅",
-      text: "Your email system is working!"
-    });
-
-    console.log("📧 TEST EMAIL SENT");
-
-    res.send("✅ EMAIL SENT SUCCESS");
-
-  } catch (err) {
-    console.log("❌ EMAIL ERROR:", err);
-    res.send("❌ EMAIL FAILED");
-  }
 });

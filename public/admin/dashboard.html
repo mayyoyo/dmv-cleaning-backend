@@ -1,41 +1,66 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
 <title>Admin Dashboard</title>
-
-<link rel="stylesheet" href="../admin/dashboard.html">
 </head>
-
 <body>
 
 <h1>🚀 Admin Dashboard</h1>
 
-<div class="stats">
-  <p>Total Bookings: <span id="totalBookings">0</span></p>
-  <p>Deposit Revenue: <span id="depositRevenue">$0</span></p>
-  <p>Pending Balance: <span id="pendingBalance">$0</span></p>
-</div>
+<h3>Total Bookings: <span id="total"></span></h3>
 
-<table border="1" width="100%">
+<table border="1">
   <thead>
     <tr>
       <th>Name</th>
       <th>Service</th>
       <th>Date</th>
       <th>Time</th>
-      <th>Status</th>
       <th>Price</th>
       <th>Actions</th>
     </tr>
   </thead>
 
-  <tbody id="tableBody"></tbody>
+  <tbody id="table"></tbody>
 </table>
 
-<div id="copyMsg" class="copy-msg">Copied ✔</div>
+<script>
+const API = "https://dmv-cleaning-backend.onrender.com";
 
-<script src="admin-dashboard.js"></script>
+async function load() {
+  const res = await fetch(API + "/api/admin/dashboard");
+  const data = await res.json();
+
+  document.getElementById("total").innerText = data.totalBookings;
+
+  document.getElementById("table").innerHTML =
+    data.bookings.map(b => `
+      <tr>
+        <td>${b.name}</td>
+        <td>${b.service}</td>
+        <td>${b.date}</td>
+        <td>${b.timeSlot}</td>
+        <td>$${b.price}</td>
+        <td>
+          <button onclick="del('${b._id}')">Delete</button>
+          <button onclick="copy('${b.name}','${b.service}','${b.price}')">Copy</button>
+        </td>
+      </tr>
+    `).join("");
+}
+
+async function del(id) {
+  await fetch(API + "/api/admin/" + id, { method: "DELETE" });
+  load();
+}
+
+function copy(name, service, price) {
+  navigator.clipboard.writeText(`${name} | ${service} | $${price}`);
+  alert("Copied");
+}
+
+load();
+</script>
 
 </body>
 </html>

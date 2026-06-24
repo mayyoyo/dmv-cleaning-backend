@@ -1,148 +1,40 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Booking Confirmed</title>
-
-<link rel="stylesheet" href="css/success.css">
-<script src="config.js"></script>
+<title>Success</title>
 </head>
-
 <body>
 
-<!-- ✅ ONLY TOP CHECK (AS YOU WANTED) -->
+<h1>Booking Success</h1>
+
+<div id="info"></div>
+
 <script>
-const params = new URLSearchParams(window.location.search);
-const bookingId = params.get("bookingId");
+const API = "https://dmv-cleaning-backend.onrender.com";
+const bookingId = new URLSearchParams(location.search).get("bookingId");
 
-if (!bookingId) {
-  document.body.innerHTML = "Missing booking";
-}
-</script>
-
-<h1>Booking Confirmed</h1>
-
-<a id="download" class="btn">📄 Download Invoice</a>
-
-<!-- ================= FULL PAGE ================= -->
-<div class="wrapper">
-
-  <div class="success-header">
-    <div class="checkmark">✔</div>
-    <h1>Booking Confirmed</h1>
-    <p>Thank you for choosing DMV Cleaning Services</p>
-  </div>
-
-  <div class="card">
-
-    <div class="top">
-      <h2>🧼 DMV Cleaning Services LLC</h2>
-      <p>📞 703-967-0674</p>
-    </div>
-
-    <div class="details">
-
-      <div class="row">
-        <span>Booking ID</span>
-        <b id="bookingId"></b>
-      </div>
-
-      <div class="row">
-        <span>Status</span>
-        <b id="status"></b>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="row"><span>Name</span><b id="name"></b></div>
-      <div class="row"><span>Email</span><b id="email"></b></div>
-      <div class="row"><span>Phone</span><b id="phone"></b></div>
-
-      <div class="divider"></div>
-
-      <div class="row"><span>Service</span><b id="service"></b></div>
-      <div class="row"><span>Date</span><b id="date"></b></div>
-      <div class="row"><span>Time</span><b id="time"></b></div>
-
-    </div>
-
-    <div class="price-box">
-      <p>Total Due Amount</p>
-      <h2>$<span id="total">0</span></h2>
-    </div>
-
-    <div style="margin:15px 0; text-align:center;">
-      <a id="download2" class="btn">📄 Download Invoice</a>
-    </div>
-
-    <div class="next-steps">
-      <h3>What Happens Next?</h3>
-      <ul>
-        <li>✔ Our team will contact you shortly</li>
-        <li>✔ Please be available at your scheduled time</li>
-        <li>✔ Prepare access to your home</li>
-      </ul>
-    </div>
-
-    <div class="actions">
-      <a href="index.html" class="btn">🏠 Back Home</a>
-      <a href="booking.html" class="btn">📅 Book Again</a>
-      <a href="tel:7039670674" class="btn outline">📞 Call Us</a>
-    </div>
-
-  </div>
-</div>
-
-<!-- ================= SCRIPT ================= -->
-<script>
-
-const API = "https://dmv-cleaning-backend.onrender.com/api";
-
-const params2 = new URLSearchParams(window.location.search);
-const bookingId2 = params2.get("bookingId");
-
-/* ================= LOAD BOOKING ================= */
-async function loadBooking() {
+async function load() {
   try {
+    const res = await fetch(`${API}/api/booking/${bookingId}`);
 
-    const res = await fetch(`${API}/admin/dashboard`);
-    const data = await res.json();
+    if (!res.ok) throw new Error("fail");
 
-    const booking = data.bookings.find(b => b._id === bookingId2);
+    const b = await res.json();
 
-    if (!booking) {
-      document.body.innerHTML = "<h2>⏳ Booking not found</h2>";
-      return;
-    }
+    info.innerHTML = `
+      <p>Name: ${b.name || ""}</p>
+      <p>Service: ${b.service || ""}</p>
+      <p>Date: ${b.date || ""}</p>
+      <p>Time: ${b.timeSlot || ""}</p>
+      <p>Price: $${b.price || 0}</p>
+    `;
 
-    document.getElementById("bookingId").innerText = booking._id;
-    document.getElementById("status").innerText = booking.paymentStatus;
-
-    document.getElementById("name").innerText = booking.name;
-    document.getElementById("email").innerText = booking.email;
-    document.getElementById("phone").innerText = booking.phone;
-
-    document.getElementById("service").innerText = booking.service;
-    document.getElementById("date").innerText = booking.date;
-    document.getElementById("time").innerText = booking.timeSlot;
-    document.getElementById("total").innerText = booking.price;
-
-    /* ✅ FIXED INVOICE LINKS */
-    document.getElementById("download").href =
-      `${API}/invoice/${booking._id}`;
-
-    document.getElementById("download2").href =
-      `${API}/invoice/${booking._id}`;
-
-  } catch (err) {
-    console.error(err);
-    document.body.innerHTML = "<h2>⚠ Error loading booking</h2>";
+  } catch (e) {
+    info.innerHTML = "⚠ Error loading booking";
   }
 }
 
-loadBooking();
-
+load();
 </script>
 
 </body>
