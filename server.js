@@ -78,7 +78,7 @@ transporter.verify((error) => {
   }
 });
 
-/* ================= EMAIL FUNCTION (FIXED DEBUG) ================= */
+/* ================= EMAIL FUNCTION (FULL DEBUG FIXED) ================= */
 async function sendEmail(booking) {
   try {
     console.log("🔥 EMAIL FUNCTION CALLED");
@@ -97,6 +97,7 @@ async function sendEmail(booking) {
           <p>Date: ${booking.date}</p>
           <p>Time: ${booking.timeSlot}</p>
           <p>Status: ${booking.paymentStatus}</p>
+          <p>Price: $${booking.price}</p>
         </div>
       `
     });
@@ -105,8 +106,12 @@ async function sendEmail(booking) {
     return true;
 
   } catch (err) {
-    console.log("❌ EMAIL ERROR FULL STACK:");
+    console.log("❌ EMAIL ERROR FULL DEBUG:");
+    console.log("MESSAGE:", err.message);
+    console.log("CODE:", err.code);
+    console.log("RESPONSE:", err.response);
     console.log(err);
+
     return false;
   }
 }
@@ -134,8 +139,8 @@ app.get("/test-email", async (req, res) => {
     });
 
     console.log("📧 TEST EMAIL SENT:", result.response);
-
     res.send("EMAIL SENT SUCCESS");
+
   } catch (err) {
     console.log("❌ TEST EMAIL ERROR:", err);
     res.send("EMAIL FAILED");
@@ -188,7 +193,7 @@ app.post("/api/create-deposit-checkout", async (req, res) => {
   }
 });
 
-/* ================= PAY LATER (FIXED PRICE + EMAIL DEBUG READY) ================= */
+/* ================= PAY LATER (FIXED PRICE + EMAIL DEBUG) ================= */
 app.post("/api/book-pay-later", async (req, res) => {
   try {
     const {
@@ -198,15 +203,27 @@ app.post("/api/book-pay-later", async (req, res) => {
       address,
       service,
       date,
-      timeSlot,
-      price
+      timeSlot
     } = req.body;
 
-    console.log("🔥 PAY LATER REQUEST:", req.body);
+    /* ✅ STEP 1 — REAL PRICE FIX */
+    function getServicePrice(service) {
+      if (!service) return 120;
+      if (service.includes("$120")) return 120;
+      if (service.includes("$150")) return 150;
+      if (service.includes("$200")) return 200;
+      if (service.includes("$250")) return 250;
+      return 120;
+    }
 
-    // DEBUG ENV CHECK (IMPORTANT)
+    const price = getServicePrice(service);
+
+    /* DEBUG LOGS (IMPORTANT) */
+    console.log("🔥 PAY LATER REQUEST:", req.body);
     console.log("EMAIL USER:", process.env.EMAIL_USER);
     console.log("EMAIL PASS EXISTS:", !!process.env.EMAIL_PASS);
+    console.log("BOOKING EMAIL:", email);
+    console.log("FINAL PRICE:", price);
 
     if (!service || !timeSlot || !name || !email || !date) {
       return res.json({ success: false, message: "Missing required fields" });
@@ -238,7 +255,11 @@ app.post("/api/book-pay-later", async (req, res) => {
 
     console.log("BOOKING SAVED:", booking);
 
+    /* 🔥 EMAIL SEND TEST (IMPORTANT) */
+    console.log("TRYING EMAIL SEND...");
+
     const emailResult = await sendEmail(booking);
+
     console.log("EMAIL RESULT:", emailResult);
 
     emitUpdate();
@@ -258,7 +279,7 @@ app.post("/api/book-pay-later", async (req, res) => {
   }
 });
 
-/* ================= INVOICE ROUTE (FIXED) ================= */
+/* ================= INVOICE ROUTE ================= */
 app.get("/api/invoice/:id", async (req, res) => {
   try {
     const booking = await Booking.findById(req.params.id);
@@ -289,11 +310,8 @@ app.get("/api/invoice/:id", async (req, res) => {
 app.get("/api/blocked-hours", async (req, res) => {
   try {
     const { date } = req.query;
-
     const bookings = await Booking.find({ date });
-
     res.json(bookings.map(b => b.timeSlot));
-
   } catch (err) {
     console.log("BLOCKED HOURS ERROR:", err.message);
     res.json([]);
